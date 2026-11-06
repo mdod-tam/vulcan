@@ -22,6 +22,29 @@ module Admin
       assert_response :success
     end
 
+    test 'index resolves each dependent contact through guardians loaded in bulk, not one query per row' do
+      add_dependent_application = lambda do |number|
+        create(:application, :for_dependent, application_date: Time.current,
+                                             dependent_attrs: { first_name: "Dependent#{number}", last_name: 'User', email: generate(:email),
+                                                                dependent_email: generate(:email), dependent_phone: format('202-555-%04d', number) })
+      end
+      guardian_lookups = lambda do
+        statements = []
+        recorder = ->(*, payload) { statements << payload[:sql] unless payload[:cached] || payload[:name] == 'SCHEMA' }
+        ActiveSupport::Notifications.subscribed(recorder, 'sql.active_record') { get admin_applications_path }
+        assert_response :success
+        # Lazy loads: guardians through the join, and single users by id (one is the signed-in admin).
+        statements.count { |sql| sql.include?('INNER JOIN "guardian_relationships"') || sql.match?(/FROM "users" WHERE "users"\."id" = \$1 LIMIT/) }
+      end
+
+      get admin_applications_path # The first request does one-time work the later ones skip.
+      add_dependent_application.call(1)
+      with_one_dependent = guardian_lookups.call
+      (2..4).each { |number| add_dependent_application.call(number) }
+
+      assert_equal with_one_dependent, guardian_lookups.call
+    end
+
     test 'index attachment statuses omit income when income proof was not required' do
       application = create(
         :application,
@@ -226,6 +249,53 @@ module Admin
       get admin_application_path(refused)
       assert_select '#disability-certification-section span', text: 'Rejected', count: 1
       assert_select '#disability-certification-section span', text: 'Not Provided', count: 0
+    end
+
+    test 'certification history lists only certification changes, newest first, with the reason and the note' do
+      @application.transition_disability_certification_status!(:received, actor: @admin, metadata: { submission_method: 'fax' })
+      @application.transition_disability_certification_status!(
+        :rejected, actor: @admin, metadata: { rejection_reason: 'The signature is missing.' }, notes: 'Phoned the provider'
+      )
+      # Application-level rows can carry a submission method too; they are not certification history.
+      @application.status_changes.create!(from_status: 'in_progress', to_status: 'approved', user: @admin, change_type: :status,
+                                          metadata: { submission_method: 'paper' }, notes: 'Application approved')
+      @application.status_changes.create!(from_status: 'draft', to_status: 'in_progress', user: @admin,
+                                          metadata: { submission_method: 'email' })
+
+      get admin_application_path(@application)
+
+      items = css_select('[data-testid="disability-certification-history"] .history-item').map { |item| item.text.squish }
+      assert_equal 2, items.size
+      assert_match(/Rejected on .+ by #{Regexp.escape(@admin.full_name)}/, items.first)
+      assert_includes items.first, 'Reason: "The signature is missing."'
+      assert_includes items.first, 'Note: "Phoned the provider"'
+      assert_match(/Received on .+ \(via fax\)/, items.last)
+      assert_no_match(/Approved on|Application approved/, items.join(' '))
+    end
+
+    test 'certification history shows a change with no actor and a status that has no special wording' do
+      @application.status_changes.create!(from_status: 'requested', to_status: 'not_requested', change_type: :disability_certification)
+
+      get admin_application_path(@application)
+
+      item = css_select('[data-testid="disability-certification-history"] .history-item').sole.text.squish
+      assert_match(/Not requested on \w+ \d{2}, \d{4} at \d{2}:\d{2} [AP]M\z/, item)
+      assert_no_match(/ by /, item)
+    end
+
+    test 'certification history is empty without certification changes or a file' do
+      get admin_application_path(@application)
+
+      assert_select '[data-testid="disability-certification-history"] h3', text: /History/
+      assert_select '[data-testid="disability-certification-history"] .history-item', count: 0
+    end
+
+    test 'certification history falls back to the file when no status change recorded it' do
+      application = create(:application, :in_progress, :with_disability_certification)
+
+      get admin_application_path(application)
+
+      assert_select '[data-testid="disability-certification-history"] .history-item', count: 1, text: /Submitted on/
     end
 
     test 'certification upload recovery is scoped to the application' do

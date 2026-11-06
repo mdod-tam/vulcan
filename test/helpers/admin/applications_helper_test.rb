@@ -176,6 +176,24 @@ module Admin
       assert_not_includes disability_certification_card_badge(refused), 'Not Provided'
     end
 
+    test 'provider phone and fax line shows only what the provider has' do
+      line = lambda do |phone, fax|
+        certifying_professional_phone_fax_line(Application.new(certifying_professional_phone: phone, certifying_professional_fax: fax))
+      end
+
+      assert_equal '<p class="text-sm text-gray-600">Phone: 202-555-0199 / Fax: 202-555-0100</p>', line.call('202-555-0199', '202-555-0100')
+      assert_equal '<p class="text-sm text-gray-600">Phone: 202-555-0199</p>', line.call('202-555-0199', nil)
+      assert_equal '<p class="text-sm text-gray-600">Fax: 202-555-0100</p>', line.call('', '202-555-0100')
+      assert_nil line.call(nil, '')
+    end
+
+    test 'provider phone and fax line escapes what was typed' do
+      line = certifying_professional_phone_fax_line(Application.new(certifying_professional_phone: '<b>1</b>'))
+
+      assert_includes line, 'Phone: &lt;b&gt;1&lt;/b&gt;'
+      assert_not_includes line, '<b>'
+    end
+
     private
 
     def reject_certification(application, reason, reason_code)

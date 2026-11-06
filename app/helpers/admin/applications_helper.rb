@@ -49,6 +49,16 @@ module Admin
               rel: 'noopener'
     end
 
+    # "Phone: x / Fax: y" for whichever the provider has; nothing when they have neither.
+    def certifying_professional_phone_fax_line(application)
+      parts = { 'Phone' => application.certifying_professional_phone, 'Fax' => application.certifying_professional_fax }
+              .compact_blank
+              .map { |label, value| "#{label}: #{value}" }
+      return if parts.empty?
+
+      tag.p(safe_join(parts, ' / '), class: 'text-sm text-gray-600')
+    end
+
     def disability_certification_submission_method(application)
       return 'unknown' unless application.disability_certification.attached?
 

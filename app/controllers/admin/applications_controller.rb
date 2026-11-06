@@ -34,6 +34,8 @@ module Admin
 
       @pagy, page_of_apps = paginate(scoped)
       page_applications = page_of_apps.to_a
+      queue_view = %i[training_requests evaluation_requests].include?(filtered_status)
+      preload_dependent_guardians(page_applications) unless queue_view
       # The array avoids PostgreSQL JSON DISTINCT errors when the relation has joins.
       attachments_index = preload_attachments_for_applications(page_applications)
       @delivery_attention = EmailDelivery::Visibility.application_attention(page_applications)
@@ -371,9 +373,6 @@ module Admin
       @equipment_audit_records = Equipment::AuditRecords.for(@audit_logs + @equipment_items.flat_map { |item| item.events.to_a })
       load_attachment_data
 
-      certification_service = Applications::CertificationEventsService.new(@application)
-      @certification_events = certification_service.certification_events
-      @certification_requests = certification_service.request_events
       @training_history = @application.training_sessions.includes(:trainer, :product_trained_on).order(:created_at, :id)
       @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
@@ -381,6 +380,18 @@ module Admin
       @remaining_training_sessions = @application.remaining_training_sessions
       load_provider_info_request_data(@application)
       load_certification_delivery_data
+      load_certification_status_changes
+    end
+
+    # The table shows a dependent's contact through their guardians; other applicants never read them.
+    def preload_dependent_guardians(applications)
+      dependents = applications.filter_map(&:user).select(&:dependent?)
+      ActiveRecord::Associations::Preloader.new(records: dependents, associations: :guardians).call
+    end
+
+    def load_certification_status_changes
+      @certification_status_changes = @application.status_changes.disability_certification
+                                                  .includes(:user).order(created_at: :desc, id: :desc).to_a
     end
 
     def load_attachment_data
@@ -391,6 +402,7 @@ module Admin
     def prepare_turbo_stream_data
       @application = reload_application_and_associations(@application)
       load_certification_delivery_data
+      load_certification_status_changes
       load_attachment_data
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_audit_logs

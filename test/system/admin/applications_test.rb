@@ -48,6 +48,25 @@ module Admin
       end
     end
 
+    test 'certification history shows certification changes only, with the rejection reason' do
+      @application.transition_disability_certification_status!(
+        :rejected, actor: @admin, metadata: { submission_method: 'fax', rejection_reason: 'The signature is missing.' },
+                   notes: 'Phoned the provider'
+      )
+      @application.status_changes.create!(from_status: 'in_progress', to_status: 'approved', user: @admin, change_type: :status,
+                                          metadata: { submission_method: 'paper' }, notes: 'Application approved')
+      visit_admin_application_with_retry(@application, user: @admin)
+
+      within '[data-testid="disability-certification-history"]' do
+        assert_selector '.history-item', count: 1, wait: 25
+        assert_text 'Rejected on'
+        assert_text 'Reason: "The signature is missing."'
+        assert_text 'Note: "Phoned the provider"'
+        assert_no_text 'Approved on'
+      end
+      take_screenshot('certification-history-certification-changes-only', html: true, full: true)
+    end
+
     test 'admin can approve disability certification directly via service' do
       assert_equal 'received', @application.disability_certification_status
 
