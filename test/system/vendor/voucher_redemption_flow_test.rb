@@ -90,7 +90,7 @@ module VendorPortal
       @voucher.reload
       @application.reload
       assert_equal 50.0, @voucher.remaining_value, 'Voucher remaining value should be reduced by redemption amount'
-      assert_includes @application.products, @product1, 'Product should be associated with application'
+      assert_includes @application.purchased_products, @product1, 'Product should be a purchased product of the application'
     end
 
     test 'vendor can verify a valid voucher code' do
@@ -139,8 +139,8 @@ module VendorPortal
       assert_text 'Voucher successfully processed'
 
       @application.reload
-      assert_includes @application.products, @product1
-      assert_includes @application.products, @product2
+      assert_includes @application.purchased_products, @product1
+      assert_includes @application.purchased_products, @product2
 
       @voucher.reload
       assert_equal 100.0 - expected_total, @voucher.remaining_value

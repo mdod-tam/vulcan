@@ -289,7 +289,7 @@ module Admin
 
       last_app = user.applications.max_by { |application| application.application_date || Date.new(1) }
       eligibility = adult_eligibility_context(user)
-      product_names = last_app&.products&.pluck(:name) || []
+      product_names = last_app&.purchased_products&.map(&:name) || []
 
       render json: {
         success: true,
@@ -466,7 +466,7 @@ module Admin
 
       users = result.data.limit(candidate_predicate ? 50 : limit).to_a
       users = users.select { |user| user.public_send(candidate_predicate) }.first(limit) if candidate_predicate
-      associations = role_filter == 'constituent' ? [*USER_PRELOADS, { applications: :products }] : USER_PRELOADS
+      associations = role_filter == 'constituent' ? [*USER_PRELOADS, { applications: :purchased_products }] : USER_PRELOADS
       ActiveRecord::Associations::Preloader.new(records: users, associations: associations).call
       users
     end

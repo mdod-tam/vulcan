@@ -190,13 +190,7 @@ class Voucher < ApplicationRecord
         product: product,
         quantity: quantity.to_i
       )
-
-      associate_product_with_application(product)
     end
-  end
-
-  def associate_product_with_application(product)
-    application.products << product unless application.products.include?(product)
   end
 
   def update_voucher_after_redemption(amount, vendor)

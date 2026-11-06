@@ -28,7 +28,7 @@ class VoucherRedemptionTest < ActiveSupport::TestCase
       end
     end
     assert_equal 500, @voucher.reload.remaining_value
-    assert_empty @application.reload.products
+    assert_empty @application.reload.purchased_products
   end
 
   test 'distinct rapid redemptions keep separate required audits' do
@@ -88,8 +88,8 @@ class VoucherRedemptionTest < ActiveSupport::TestCase
     @voucher.redeem!(100, @vendor, product_data)
 
     @application.reload
-    assert_includes @application.products, @product1
-    assert_includes @application.products, @product2
+    assert_includes @application.purchased_products, @product1
+    assert_includes @application.purchased_products, @product2
 
     txn = VoucherTransaction.last
     assert_equal 2, txn.voucher_transaction_products.count

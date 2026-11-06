@@ -92,8 +92,8 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     assert_equal BigDecimal('35.00'), @voucher.remaining_value
     assert_equal 'active', @voucher.status
     assert_equal @vendor.id, @voucher.vendor_id
-    assert_includes @application.reload.products, @product1
-    assert_includes @application.products, @product2
+    assert_includes @application.reload.purchased_products, @product1
+    assert_includes @application.purchased_products, @product2
 
     redeem(35, @product1)
     assert_redirected_to vendor_portal_dashboard_path
@@ -126,7 +126,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       @voucher.reload
       assert_equal BigDecimal('100.00'), @voucher.remaining_value
       assert_nil @voucher.vendor_id
-      assert_empty @application.reload.products
+      assert_empty @application.reload.purchased_products
     end
   end
 

@@ -23,7 +23,6 @@ module Applications
         transaction = create(:voucher_transaction, voucher: voucher, transaction_type: type)
         transaction.voucher_transaction_products.create!(product: create(:product), quantity: 1)
       end
-      application.products << create(:product)
       create(:training_session, application: application, product_trained_on: create(:product))
 
       history = Applications::ProductHistory.new(applications: Application.where(id: application.id))

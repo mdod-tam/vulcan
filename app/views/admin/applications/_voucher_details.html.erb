@@ -130,7 +130,7 @@
     <p class="mt-4 text-sm text-gray-500">No vouchers have been assigned to this application.</p>
   <% end %>
 
-  <% if @application.products.any? %>
+  <% if @application.purchased_products.any? %>
     <div class="mt-8">
       <h3 class="text-lg font-medium text-gray-900 mb-4">Purchased Products</h3>
       <%= render "purchased_products" %>
