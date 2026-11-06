@@ -286,7 +286,7 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :vouchers do
+    resources :vouchers, only: %i[index show] do
       member do
         patch :cancel
       end

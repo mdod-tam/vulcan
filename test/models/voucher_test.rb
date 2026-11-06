@@ -288,6 +288,35 @@ class VoucherTest < ActiveSupport::TestCase
     end
   end
 
+  test 'cancelling a copy loaded before the voucher was redeemed leaves it redeemed' do
+    stale = Voucher.find(@voucher.id)
+    @voucher.update!(status: :redeemed, remaining_value: 0)
+
+    assert_not stale.cancel!(actor: create(:admin))
+
+    assert_predicate @voucher.reload, :voucher_redeemed?
+    assert_nil @voucher.notes
+  end
+
+  test 'cancelling a copy loaded before the voucher expired leaves it expired' do
+    stale = Voucher.find(@voucher.id)
+    @voucher.update!(status: :expired)
+
+    assert_not stale.cancel!(actor: create(:admin))
+
+    assert_predicate @voucher.reload, :voucher_expired?
+    assert_nil @voucher.notes
+  end
+
+  test 'cancellation appends to the notes saved since the voucher was loaded' do
+    stale = Voucher.find(@voucher.id)
+    @voucher.update!(notes: 'Saved first')
+
+    assert stale.cancel!(actor: create(:admin))
+
+    assert_match(/\ASaved first\nCancelled at /, @voucher.reload.notes)
+  end
+
   test 'writing the expired status delivers no mail; the expiration processor sends the notice' do
     perform_enqueued_jobs do
       @voucher.update!(status: :expired)
