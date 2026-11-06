@@ -289,7 +289,7 @@ module Admin
 
       last_app = user.applications.max_by { |application| application.application_date || Date.new(1) }
       eligibility = adult_eligibility_context(user)
-      product_names = last_app&.purchased_products&.pluck(:name) || []
+      product_names = last_app&.purchased_products&.map(&:name) || []
 
       render json: {
         success: true,

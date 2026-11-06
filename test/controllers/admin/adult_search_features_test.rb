@@ -32,6 +32,20 @@ module Admin
       assert json.key?('product_names')
     end
 
+    test 'prefill and search list each purchased product, including products that share a name' do
+      constituent = create(:constituent, email: generate(:email), first_name: 'SharedNameBuyer')
+      application = create(:application, :rejected, user: constituent, application_date: 1.day.ago)
+      2.times { record_voucher_purchase(application, create(:product, name: 'Shared catalog name')) }
+
+      get adult_application_context_admin_user_path(constituent), headers: default_headers, as: :json
+      assert_response :success
+      assert_equal ['Shared catalog name'] * 2, response.parsed_body['product_names']
+
+      get search_admin_users_path(q: 'SharedNameBuyer', role: 'constituent', frame_id: 'adult_search_results'), headers: default_headers
+      assert_response :success
+      assert_select "li[data-user-id='#{constituent.id}'][data-user-products='Shared catalog name, Shared catalog name']"
+    end
+
     test 'adult_application_context returns not found for non-candidate user' do
       staff = create(:admin, email: generate(:email))
 
