@@ -11,6 +11,7 @@ Work that's still open. Each item is small enough to build and test on its own.
 - [UI/UX Enhancements](#uiux-enhancements)
 - [Advanced Reporting](#advanced-reporting)
 - [System Integrations](#system-integrations)
+- [maryland.gov (Drupal) Integration](#marylandgov-drupal-integration)
 - [Audit & Event Tracking](#audit--event-tracking)
 - [Proofs, Statuses, Templates (Tech Debt)](#proofs-statuses-templates-tech-debt)
 - [Mobile Proofs Workflow](#mobile-proofs-workflow)
@@ -132,6 +133,37 @@ Data privacy compliance
 
 DocuSeal go-live requirements
 - [ ] Supply the configured signing template in the submission API payload and verify the request, signing, webhook, and scanned-PDF workflow against the live service. See the [go-live check](../development/docuseal_integration_guide.md#go-live-check).
+
+## maryland.gov (Drupal) Integration
+
+Open decision: how the application is presented on or linked from maryland.gov. This assumes the site runs Drupal; DoIT has not confirmed that. The application-side claims below come from reading config and code on `main`, not from a deployed instance.
+
+Options:
+
+1. Link out. A Drupal menu item points at the application on its own host. The application renders the maryland.gov header and footer itself (see option 4). The link needs no application change; the work is styling and sourcing the header and footer.
+2. Iframe. Drupal embeds the application in a page. Blocked as configured:
+   - The CSP initializer sets `frame_ancestors :self`, and Rails still sends its default `X-Frame-Options: SAMEORIGIN`. Both would have to allow the maryland.gov origin.
+   - `session_token` is `SameSite=Lax`, so a cross-site frame does not receive it. This goes away only on a same-site subdomain.
+   - WebAuthn needs the parent page to delegate `publickey-credentials-create` and `-get` to the frame.
+   - There is no auto-resize, the address bar never changes, and `dialog.showModal()` centers on the frame rather than the visible window.
+   - On the Drupal side, editors need a text format that allows `<iframe>`, and any Drupal CSP has to list our origin in `frame-src`.
+3. Reverse proxy. `maryland.gov/<path>` is routed to the application, so the URL stays on maryland.gov. This is a DoIT web server or CDN change, not Drupal configuration.
+   - Needs no caching on our path, cookies and POSTs passed through, forwarded host and proto headers, and `trusted_proxies` (none is configured) so `request.remote_ip` (rate limits, session records) is not the proxy.
+   - The application assumes it is mounted at `/`: `publicPath: '/assets'` in `esbuild.config.js`, `report_uri '/csp_reports'` in the CSP initializer, and root-relative `fetch` and `Turbo.visit` URLs in the admin Stimulus controllers.
+   - Twilio signature validation uses `request.original_url`, so webhooks should keep our own hostname.
+4. Header and footer from Drupal (extends option 1). Fetch them server-side with `Rails.cache` (Solid Cache in production) and a stale fallback so a Drupal outage does not break sign-in, or vendor a static copy. Markup and CSS only; no DoIT-supplied scripts on authenticated pages. The CSP allows only `'self'` for styles, fonts, and images (plus `data:` and `blob:` for images), so their stylesheet, logo, and fonts must be copied into our assets or their origin added to `style-src`, `font-src`, and `img-src`.
+
+Leaning toward 1 and 4 on a maryland.gov subdomain. The hostname has to be settled before launch: it sets the WebAuthn RP ID (`APPLICATION_HOST` / `WEBAUTHN_RP_ID`), mailer links, and webhook URLs, and changing it afterward orphans enrolled security keys.
+
+Questions for DoIT:
+
+- [ ] Approval: what does DoIT require before approving a new subdomain or a linked application (security review, accessibility audit, hosting standards), and who signs off?
+- [ ] Hostname: can we get a maryland.gov subdomain? Who requests it, who adds the DNS record (a Heroku custom domain needs a CNAME), and what is the lead time? Settle this before real users enroll security keys.
+- [ ] Header and footer: can Drupal expose them (menu JSON or a rendered-block route) or publish a design system (CSS tokens, fonts, logos)? Can we host copies of the stylesheet, logo, and fonts ourselves, or must they load from maryland.gov, which means widening our CSP? Who maintains it, and how are changes announced?
+- [ ] Spanish: is there a Spanish header and footer? Constituent-facing content must be locale-aware; without one we carry our own Spanish strings for it.
+- [ ] CDN/WAF: is one in front of Drupal? If a path-mounted proxy is ever requested, can caching be bypassed for our path, cookies and POSTs pass through, and the original host and proto be forwarded?
+- [ ] CSP: does Drupal enforce one? What would it need to allow if we are framed or it loads assets from us? Can editors use an iframe if we need it as a fallback?
+- [ ] Requirements for linked applications: WCAG level, branding, disclaimers, required analytics tags?
 
 ## Audit & Event Tracking
 
