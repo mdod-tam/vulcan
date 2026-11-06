@@ -8,12 +8,12 @@ module Vouchers
 
     test 'deduplicated logs return the voucher\'s events instead of failing quietly' do
       voucher = create(:voucher, :active)
-      AuditEventService.log(action: 'voucher_updated', actor: create(:admin), auditable: voucher,
-                            metadata: { voucher_id: voucher.id, changes: { 'notes' => [nil, 'Checked'] } })
+      AuditEventService.log(action: 'voucher_cancelled', actor: create(:admin), auditable: voucher,
+                            metadata: { voucher_id: voucher.id, notes: 'Cancelled' })
 
       builder = VoucherAuditLogBuilder.new(voucher)
 
-      assert_includes builder.build_deduplicated_audit_logs.map(&:action), 'voucher_updated'
+      assert_includes builder.build_deduplicated_audit_logs.map(&:action), 'voucher_cancelled'
       assert_empty builder.errors
     end
 

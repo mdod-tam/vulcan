@@ -47,9 +47,9 @@ Vendor eligibility has one rule, `Users::Vendor#can_process_vouchers?` (approved
 
 Vouchers have four states: `active`, `redeemed`, `expired`, and `cancelled`. Full redemption consumes the balance. Expiry is calculated from issue time and the policy validity period. The model checks elapsed expiry during redemption even if the status has not yet changed.
 
-[CheckVoucherExpirationJob](../../app/jobs/check_voucher_expiration_job.rb) is the entry point for batch expiration processing. It warns each voucher once when it enters the expiring-soon window. It expires vouchers past their validity period. [Vouchers::ExpirationProcessorService](../../app/services/vouchers/expiration_processor_service.rb) is the only code that writes `expired` and the only sender of the expired notice, so a voucher is notified once when it expires. Writing the status elsewhere sends nothing. Admin cancellation runs through [Admin::VouchersController](../../app/controllers/admin/vouchers_controller.rb) and `Voucher#cancel!`.
+[CheckVoucherExpirationJob](../../app/jobs/check_voucher_expiration_job.rb) is the entry point for batch expiration processing. It warns each voucher once when it enters the expiring-soon window. It expires vouchers past their validity period. [Vouchers::ExpirationProcessorService](../../app/services/vouchers/expiration_processor_service.rb) is the only code that writes `expired` and the only sender of the expired notice, so a voucher is notified once when it expires. Writing the status elsewhere sends nothing. Admin cancellation runs through [Admin::VouchersController](../../app/controllers/admin/vouchers_controller.rb) and `Voucher#cancel!`, which checks eligibility and writes under the voucher row lock. No admin route edits a voucher's status generically.
 
-Issuance owns `voucher_assigned`, redemption owns `voucher_redeemed`, and the admin controller owns `voucher_cancelled` and `voucher_updated`. Model callbacks record status changes. [VoucherAuditLogBuilder](../../app/services/vouchers/voucher_audit_log_builder.rb) assembles the displayed history.
+Issuance owns `voucher_assigned`, redemption owns `voucher_redeemed`, and `Voucher#cancel!` owns `voucher_cancelled`. Model callbacks record status changes. [VoucherAuditLogBuilder](../../app/services/vouchers/voucher_audit_log_builder.rb) assembles the displayed history.
 
 Assignment, redemption, and expiration messages use [VoucherNotificationsMailer](../../app/mailers/voucher_notifications_mailer.rb).
 
@@ -70,7 +70,7 @@ Recording or correcting a package sends no email, letter, or notification. The a
 
 ## Related tests
 
-The voucher row lock serializes redemptions of the same voucher. A waiting redemption reads the balance left by the preceding transaction. [Concurrency tests](../../test/models/voucher_redemption_concurrency_test.rb) cover overspending and repeated submission IDs with separate database connections.
+The voucher row lock serializes redemptions of the same voucher. A waiting redemption reads the balance left by the preceding transaction. Expiry and cancellation take the same lock and re-check that the voucher is still active, so neither overwrites a redemption or the other. [Concurrency tests](../../test/models/voucher_redemption_concurrency_test.rb) cover overspending and repeated submission IDs with separate database connections; [cancellation tests](../../test/models/voucher_cancellation_concurrency_test.rb) cover a cancellation that races a redemption or an expiry.
 
 - [Voucher model tests](../../test/models/voucher_test.rb) and [redemption tests](../../test/models/voucher_redemption_test.rb)
 - [Issuance job tests](../../test/jobs/issue_initial_voucher_job_test.rb)

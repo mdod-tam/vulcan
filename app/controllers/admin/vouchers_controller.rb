@@ -7,7 +7,7 @@ module Admin
 
     CSV_HEADERS = ['Code', 'Status', 'Initial Value', 'Remaining Value', 'Vendor', 'Created At', 'Expiration Date', 'Last Transaction'].freeze
 
-    before_action :set_voucher, only: %i[show update cancel]
+    before_action :set_voucher, only: %i[show cancel]
     before_action :require_admin!
 
     def index
@@ -31,27 +31,6 @@ module Admin
       @audit_logs = Vouchers::VoucherAuditLogBuilder.new(@voucher).build_deduplicated_audit_logs
     end
 
-    def update
-      if @voucher.update(voucher_params)
-        AuditEventService.log(
-          action: 'voucher_updated',
-          actor: current_user,
-          auditable: @voucher,
-          metadata: { changes: @voucher.saved_changes }
-        )
-        handle_success_response(
-          html_redirect_path: [:admin, @voucher],
-          html_message: 'Voucher updated successfully',
-          turbo_message: 'Voucher updated successfully'
-        )
-      else
-        handle_error_response(
-          html_render_action: :show,
-          error_message: 'Failed to update voucher.'
-        )
-      end
-    end
-
     def cancel
       if @voucher.cancel!(actor: current_user)
         handle_success_response(
@@ -71,10 +50,6 @@ module Admin
 
     def set_voucher
       @voucher = Voucher.find_by(code: params[:code] || params[:id]) || Voucher.find_by(id: params[:id])
-    end
-
-    def voucher_params
-      params.expect(voucher: %i[status expiration_date notes])
     end
 
     def load_status_counts
