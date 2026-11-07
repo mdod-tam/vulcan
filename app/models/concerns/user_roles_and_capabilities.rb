@@ -31,8 +31,7 @@ module UserRolesAndCapabilities
       granted = RoleCapability.where(capability: capability).select(:user_id)
 
       holders = where(type: sti_types(providers)).or(where(type: sti_types(grantees), id: granted))
-      holders.where(merged_into_user_id: nil)
-             .where('users.status IS NULL OR users.status NOT IN (?)', User.statuses.values_at(:inactive, :suspended))
+      holders.in_standing
     end
 
     private

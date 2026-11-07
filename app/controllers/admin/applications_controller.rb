@@ -34,7 +34,7 @@ module Admin
                  scoped.includes(:user, :managing_guardian)
                end
 
-      @pagy, page_of_apps = paginate_or_first_page(scoped, items: 20)
+      @pagy, page_of_apps = paginate_or_first_page(scoped)
       page_applications = page_of_apps.to_a
       queue_view = %i[training_requests evaluation_requests].include?(filtered_status)
       preload_dependent_guardians(page_applications) unless queue_view
@@ -367,6 +367,8 @@ module Admin
     def prepare_application_show
       # The notes list reads each note's author and assignee.
       @application_notes = @application.application_notes.includes(:admin, :assigned_to).recent_first.to_a
+      # Both the new-note form and the Assign menu on each unassigned note list the same admins.
+      @assignable_admins = User.admins.active.to_a
       @guardian_relationship_type = @application.guardian_relationship_type
       load_audit_logs_with_service
       Application.preload_equipment_fulfillment([@application])

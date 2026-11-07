@@ -35,6 +35,17 @@ module Admin
       assert_equal [same_first.id, same_last.id].sort, search('Quenby Valdrith', 'constituent').map(&:id).sort
     end
 
+    test 'a role the paper forms do not send finds nothing, whoever matches the query' do
+      constituent = create(:constituent, last_name: 'RoleProbe')
+      create(:admin, last_name: 'RoleProbe')
+      create(:constituent, last_name: 'RoleProbe', merged_into_user: constituent)
+
+      assert_equal [constituent.id], search('RoleProbe', 'constituent').map(&:id)
+      ['dependent', 'administrator', 'evaluator', '', nil].each do |role|
+        assert_empty search('RoleProbe', role), "role #{role.inspect} must not search"
+      end
+    end
+
     private
 
     def search(query, role)

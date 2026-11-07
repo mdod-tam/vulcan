@@ -2,7 +2,6 @@
 
 # In-app notifications: list, mark as read, and (admins only) refresh email delivery status.
 class NotificationsController < ApplicationController
-  include Pagy::Backend
   include NotificationPreloading
 
   before_action :authenticate_user!
@@ -21,7 +20,7 @@ class NotificationsController < ApplicationController
                     end
 
     @current_scope = scope
-    @pagy, @notifications = pagy(notifications, items: 20)
+    @pagy, @notifications = paginate_or_first_page(notifications)
     preload_notification_message_dependencies(@notifications)
   end
 

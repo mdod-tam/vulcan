@@ -249,6 +249,25 @@ module Admin
                    css_select("[id^='application-note-']").pluck('id')
     end
 
+    test 'show loads the assignable admins once, not once per unassigned note' do
+      admin_list_loads = lambda do
+        statements = []
+        recorder = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+        ActiveSupport::Notifications.subscribed(recorder, 'sql.active_record') { get admin_application_path(@application) }
+        assert_response :success
+        statements.count { |sql| sql.match?(/FROM "users" WHERE "users"\."type" = \$\d+ AND "users"\."status" = \$\d+/) }
+      end
+      add_note = -> { create(:application_note, application: @application, admin: create(:admin), assigned_to: nil) }
+
+      get admin_application_path(@application) # The first request does one-time work the later ones skip.
+      add_note.call
+      with_one_note = admin_list_loads.call
+      4.times { add_note.call }
+
+      assert_equal with_one_note, admin_list_loads.call
+      assert_select 'details summary', text: /Assign/, count: 5
+    end
+
     test 'show lists household size and income with the application details, not in a second financial section' do
       @application.update!(household_size: 3, annual_income: 24_000)
 

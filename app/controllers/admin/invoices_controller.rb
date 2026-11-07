@@ -4,8 +4,6 @@ module Admin
   # Invoice list, detail, and the staff steps after generation. Every change goes through
   # Invoices::Workflow; generation ("Invoice now", retry) goes through Invoices::GenerationService.
   class InvoicesController < Admin::BaseController
-    include Pagy::Backend
-
     before_action :require_admin!
     before_action :set_invoice, only: %i[show approve record_payment withdraw correction_note]
 
@@ -32,7 +30,7 @@ module Admin
 
       respond_to do |format|
         format.html do
-          @pagy, @invoices = pagy(scope, limit: 25)
+          @pagy, @invoices = paginate_or_first_page(scope, limit: 25)
           load_billing_overview
           @vendors = Users::Vendor.order(:business_name, :id)
         end

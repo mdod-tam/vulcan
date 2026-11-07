@@ -3,7 +3,6 @@
 module VendorPortal
   # A vendor's purchases: list, CSV export, detail, and fulfillment mode.
   class TransactionsController < BaseController
-    include Pagy::Backend
     include PurchasePage
 
     # How a vendor may say a purchase reaches the customer. Unspecified is only the starting state.
@@ -19,7 +18,7 @@ module VendorPortal
 
       respond_to do |format|
         format.html do
-          @pagy, @transactions = pagy(transactions_scope, limit: 20)
+          @pagy, @transactions = paginate_or_first_page(transactions_scope, limit: 20)
           render :index, status: @filter_errors.any? ? :unprocessable_content : :ok
         end
         format.csv do

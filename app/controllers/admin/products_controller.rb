@@ -4,12 +4,11 @@ module Admin
   class ProductsController < ApplicationController
     before_action :require_admin!
     before_action :set_product, only: %i[show edit update archive unarchive]
-    include Pagy::Backend
 
     def index
       scope = filtered_products_scope
       @products = params[:show_archived] ? scope : scope.active
-      @pagy, @products = pagy(@products, items: 20)
+      @pagy, @products = paginate_or_first_page(@products)
       @products_by_type = group_products_by_type(@products)
     end
 

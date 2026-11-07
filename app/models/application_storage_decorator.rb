@@ -50,38 +50,31 @@ class ApplicationStorageDecorator
   end
 
   def income_proof_attached?
-    if application.association(:income_proof_attachment).loaded?
-      application.income_proof_attachment.present?
-    else
-      attachment_exists?('income_proof')
-    end
+    proof_attached?('income_proof')
   end
 
   def residency_proof_attached?
-    if application.association(:residency_proof_attachment).loaded?
-      application.residency_proof_attachment.present?
-    else
-      attachment_exists?('residency_proof')
-    end
+    proof_attached?('residency_proof')
   end
 
   def id_proof_attached?
-    if application.association(:id_proof_attachment).loaded?
-      application.id_proof_attachment.present?
-    else
-      attachment_exists?('id_proof')
-    end
+    proof_attached?('id_proof')
   end
 
   def disability_certification_attached?
-    if application.association(:disability_certification_attachment).loaded?
-      application.disability_certification_attachment.present?
-    else
-      attachment_exists?('disability_certification')
-    end
+    proof_attached?('disability_certification')
   end
 
   private
+
+  # A loaded attachment association answers directly. Otherwise the controller's attachment names answer.
+  def proof_attached?(name)
+    if application.association(:"#{name}_attachment").loaded?
+      application.public_send(:"#{name}_attachment").present?
+    else
+      attachment_exists?(name)
+    end
+  end
 
   # The controller supplies attachment names. Missing preload data requires a database query.
   def attachment_exists?(name)

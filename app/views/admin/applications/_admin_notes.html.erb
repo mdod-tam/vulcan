@@ -15,7 +15,7 @@
         <div>
           <%= f.label :assigned_to_id, "Assign to", class: "form-label" %>
           <%= f.select :assigned_to_id,
-                       options_for_select([["No assignment", nil]] + User.where(type: "Users::Administrator").active.map { |u| [u.full_name, u.id] }),
+                       options_for_select([["No assignment", nil]] + @assignable_admins.map { |u| [u.full_name, u.id] }),
                        {},
                        class: "form-input mt-1" %>
         </div>
@@ -82,7 +82,7 @@
                       Assign
                     </summary>
                     <div class="absolute right-0 mt-1 w-48 bg-white border border-gray-300 rounded-md shadow-elevation-4 z-10">
-                      <% User.where(type: "Users::Administrator").active.each do |admin| %>
+                      <% @assignable_admins.each do |admin| %>
                         <%= button_to admin.full_name, admin_application_note_path(@application, note),
                                       method: :patch, params: { assigned_to_id: admin.id },
                                       class: 'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-primary-50 ' \

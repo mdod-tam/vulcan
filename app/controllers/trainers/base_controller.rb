@@ -7,8 +7,6 @@ module Trainers
 
     around_action :with_viewer_locale
 
-    include Pagy::Backend
-
     before_action :require_trainer
 
     private

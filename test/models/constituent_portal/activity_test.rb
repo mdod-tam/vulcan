@@ -118,5 +118,55 @@ module ConstituentPortal
       assert_equal :rejection, activities.second.activity_type
       assert_equal :resubmission, activities.third.activity_type
     end
+
+    test 'a submission says which proof was attached and how, in the viewer locale' do
+      english = { 'web' => 'via web', 'paper' => 'via paper', 'secure_form' => 'via secure form', 'email' => 'via email' }
+      spanish = { 'web' => 'por la web', 'paper' => 'en papel', 'secure_form' => 'mediante un formulario seguro',
+                  'email' => 'por correo electrónico' }
+
+      english.each do |method, phrase|
+        event = submission_event('income', method)
+
+        assert_equal "Income proof attached #{phrase}", Activity.from_submission_event(event).description
+        I18n.with_locale(:es) do
+          assert_equal "Comprobante de ingresos adjuntado #{spanish.fetch(method)}", Activity.from_submission_event(event).description
+        end
+      end
+    end
+
+    test 'each proof type is named as the secure-form messages name it, and an unknown method still names the proof' do
+      residency = submission_event('residency', 'web')
+      identity = submission_event('id', 'web')
+      unknown = submission_event('income', 'fax')
+
+      assert_equal 'Proof of Maryland residency attached via web', Activity.from_submission_event(residency).description
+      assert_equal 'Proof of identity attached via web', Activity.from_submission_event(identity).description
+      assert_equal 'Income proof attached', Activity.from_submission_event(unknown).description
+      I18n.with_locale(:es) do
+        assert_equal 'Comprobante de residencia en Maryland adjuntado por la web', Activity.from_submission_event(residency).description
+        assert_equal 'Comprobante de ingresos adjuntado', Activity.from_submission_event(unknown).description
+      end
+    end
+
+    test 'a review says whether the proof was approved or rejected, in the viewer locale' do
+      admin = create(:admin)
+      approved = create(:proof_review, application: @application, admin: admin, proof_type: 'income', status: 'approved')
+      rejected = create(:proof_review, application: @application, admin: admin, proof_type: 'id', status: 'rejected',
+                                       rejection_reason: 'Too blurry')
+
+      assert_equal 'Income proof approved', Activity.from_proof_review(approved).description
+      assert_equal 'Proof of identity rejected', Activity.from_proof_review(rejected).description
+      I18n.with_locale(:es) do
+        assert_equal 'Comprobante de ingresos aprobado', Activity.from_proof_review(approved).description
+        assert_equal 'Comprobante de identidad rechazado', Activity.from_proof_review(rejected).description
+      end
+    end
+
+    private
+
+    def submission_event(proof_type, method)
+      Event.create!(action: "#{proof_type}_proof_attached", user: @application.user, auditable: @application,
+                    metadata: { proof_type: proof_type, submission_method: method })
+    end
   end
 end

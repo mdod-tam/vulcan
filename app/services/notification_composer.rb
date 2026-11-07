@@ -216,12 +216,7 @@ class NotificationComposer
 
   def application_label(application)
     label = "Application ##{application.id}"
-    applicant_name = if application.respond_to?(:constituent_full_name)
-                       application.constituent_full_name
-                     else
-                       application.user&.full_name
-                     end
-    applicant_name = applicant_name&.strip
+    applicant_name = application.constituent_full_name.strip
 
     applicant_name.present? ? "#{label} (#{applicant_name})" : label
   end

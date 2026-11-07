@@ -30,6 +30,10 @@ module Admin
       'Trainer' => 'Users::Trainer'
     }.freeze
 
+    # The paper intake forms search for these two roles only. Each picks its candidates in SQL, so the limit counts
+    # only eligible users. Any other role finds nothing.
+    PAPER_SEARCH_CANDIDATES = { 'constituent' => :paper_applicant_candidates, 'guardian' => :paper_guardian_candidates }.freeze
+
     # Everything the index, show and search views read about a user. Each reflection caches separately, so
     # :guardians is listed beside the join collections that dependent contact resolution does not read.
     USER_PRELOADS = [
@@ -46,7 +50,7 @@ module Admin
       load_user_metrics
 
       filtered_scope = apply_user_filters(User.preload(*USER_PRELOADS))
-      @pagy, @users = paginate_or_first_page(filtered_scope, items: 25)
+      @pagy, @users = paginate_or_first_page(filtered_scope)
 
       respond_to do |format|
         format.html
@@ -455,10 +459,10 @@ module Admin
     end
 
     def users_for_paper_search(query, role_filter, limit: 10)
-      # Constituent and guardian searches pick their candidates in SQL, so the limit counts only eligible users.
-      candidate_scope = { 'constituent' => :paper_applicant_candidates, 'guardian' => :paper_guardian_candidates }[role_filter]
-      candidates = candidate_scope ? User.public_send(candidate_scope) : User.all
-      result = Users::FilterService.new(candidates, q: query, role: candidate_scope ? nil : role_filter).apply_filters
+      candidate_scope = PAPER_SEARCH_CANDIDATES[role_filter]
+      return [] unless candidate_scope
+
+      result = Users::FilterService.new(User.public_send(candidate_scope), q: query).apply_filters
       return [] unless result.success?
 
       users = result.data.limit(limit).to_a

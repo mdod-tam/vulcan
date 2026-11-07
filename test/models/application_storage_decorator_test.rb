@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class ApplicationStorageDecoratorTest < ActiveSupport::TestCase
+  PROOF_NAMES = %w[income_proof residency_proof id_proof disability_certification].freeze
+
   test 'id proof attachment status uses preloaded attachment index' do
     application = create(:application)
     application.association(:id_proof_attachment).reset
@@ -20,6 +22,43 @@ class ApplicationStorageDecoratorTest < ActiveSupport::TestCase
 
     assert_no_sql_queries do
       assert_not decorator.id_proof_attached?
+    end
+  end
+
+  test 'each attachment predicate answers from the preloaded names, and only for its own name' do
+    PROOF_NAMES.each do |preloaded|
+      application = create(:application)
+      PROOF_NAMES.each { |name| application.association(:"#{name}_attachment").reset }
+      decorator = ApplicationStorageDecorator.new(application, Set[preloaded])
+
+      assert_no_sql_queries do
+        PROOF_NAMES.each do |asked|
+          assert_equal asked == preloaded, decorator.public_send(:"#{asked}_attached?"),
+                       "#{asked}_attached? with only #{preloaded} preloaded"
+        end
+      end
+    end
+  end
+
+  test 'a loaded attachment association answers before the preloaded names do' do
+    PROOF_NAMES.each do |attached|
+      application = create(:application, :"with_#{attached}")
+      application.reload
+      PROOF_NAMES.each { |name| application.public_send(:"#{name}_attachment") }
+      decorator = ApplicationStorageDecorator.new(application, Set.new)
+
+      assert_no_sql_queries do
+        PROOF_NAMES.each do |asked|
+          assert_equal asked == attached, decorator.public_send(:"#{asked}_attached?"),
+                       "#{asked}_attached? with only #{attached} attached and no names preloaded"
+        end
+      end
+
+      claims_all = ApplicationStorageDecorator.new(application, Set.new(PROOF_NAMES))
+      assert_no_sql_queries do
+        assert_equal [attached], PROOF_NAMES.select { |name| claims_all.public_send(:"#{name}_attached?") },
+                     'a loaded association must win over a preloaded name that claims more'
+      end
     end
   end
 

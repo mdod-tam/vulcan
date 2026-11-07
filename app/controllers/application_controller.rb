@@ -3,6 +3,7 @@
 class ApplicationController < ActionController::Base
   include Authentication
   include Pagy::Frontend
+  include PageRecovery
 
   protect_from_forgery with: :exception
 
