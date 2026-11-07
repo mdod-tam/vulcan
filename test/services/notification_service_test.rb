@@ -13,6 +13,32 @@ class NotificationServiceTest < ActiveSupport::TestCase
     Current.reset
   end
 
+  test 'temporary password metadata is rejected before persistence or delivery with safe diagnostics' do
+    secret = 'notification-secret-must-not-persist'
+    error = nil
+    payloads = []
+    subscriber = ->(*args) { payloads << args.last }
+    logs = capture_rails_logs do
+      ActiveSupport::Notifications.subscribed(subscriber, 'notification_service.error') do
+        assert_no_difference 'Notification.count' do
+          assert_no_enqueued_jobs do
+            error = assert_raises(ActiveRecord::RecordInvalid) do
+              NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent, actor: @admin,
+                                                      notifiable: @application, metadata: { temp_password: secret })
+            end
+          end
+        end
+      end
+    end
+
+    assert_includes error.message, 'temp_password'
+    audit = @application.events.find_by!(action: 'notification_creation_failed')
+    assert_equal 'ActiveRecord::RecordInvalid', audit.metadata['error_class']
+    [error.message, logs, payloads.to_json, audit.metadata.to_json].each do |diagnostics|
+      assert_not_includes diagnostics, secret
+    end
+  end
+
   test 'notification creation diagnostics omit private exception details from logs and instrumentation' do
     invalid_record = User.new
     invalid_record.errors.add(:base, 'Private Patient private-notification@example.test at 410-555-0199')

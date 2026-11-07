@@ -31,7 +31,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       FeatureFlag.where(name: EmailDelivery.category_control(:account_security)).delete_all
       SmsService.expects(:send_message).never
       assert_difference -> { Event.where(action: 'email_delivery_configuration_error').count }, 1 do
-        assert_difference -> { Event.where(action: 'account_access_instructions_configuration_error', user: @user).count }, 1 do
+        assert_difference -> { Event.where(action: 'account_access_instructions_configuration_error', auditable: @user).count }, 1 do
           post password_path, params: { contact: @user.public_send(contact) }
         end
       end
@@ -69,7 +69,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_send_account_access_email_for_existing_email
-    assert_difference -> { Event.where(action: 'account_access_instructions_sent', user: @user).count }, 1 do
+    sign_out
+    assert_difference -> { Event.where(action: 'account_access_instructions_sent', auditable: @user).count }, 1 do
       assert_enqueued_emails 1 do
         post password_path, params: { contact: @user.email }
       end
@@ -77,6 +78,32 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to sign_in_path
     assert_equal account_access_confirmation_message, flash[:notice]
+    event = @user.audit_events.find_by!(action: 'account_access_instructions_sent')
+    assert_equal @system_audit_actor, event.user
+    assert_equal @user, event.auditable
+    assert_equal 'public_unauthenticated', event.metadata['public_audit_actor']
+  end
+
+  test 'missing system actor does not attribute anonymous account access to the account holder' do
+    sign_out
+    Current.set(user: @system_audit_actor) do
+      @system_audit_actor.update!(email: 'unconfigured-audit@example.test')
+    end
+
+    logs = capture_rails_logs do
+      assert_no_difference 'User.count' do
+        assert_no_difference -> { Event.where(action: 'account_access_instructions_sent').count } do
+          assert_enqueued_emails 1 do
+            post password_path, params: { contact: @user.email }
+          end
+        end
+      end
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal account_access_confirmation_message, flash[:notice]
+    assert_includes logs, "skipped audit 'account_access_instructions_sent'"
+    assert_not_includes logs, @user.email
   end
 
   def test_should_send_account_access_sms_for_existing_phone
@@ -91,7 +118,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
                     context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
               .returns(true)
 
-    assert_difference -> { Event.where(action: 'account_access_instructions_sent', user: @user).count }, 1 do
+    assert_difference -> { Event.where(action: 'account_access_instructions_sent', auditable: @user).count }, 1 do
       assert_no_enqueued_emails do
         post password_path, params: { contact: @user.phone }
       end
@@ -126,7 +153,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     SmsService.expects(:send_message).raises(StandardError, 'invalid number')
 
-    assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', user: @user).count }, 1 do
+    assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', auditable: @user).count }, 1 do
       post password_path, params: { contact: @user.phone }
     end
 
@@ -141,7 +168,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     SmsService.expects(:send_message).raises(StandardError.new("provider echoed #{reset_url}"))
 
     logs = capture_rails_logs do
-      assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', user: @user).count }, 1 do
+      assert_difference -> { Event.where(action: 'account_access_instructions_delivery_failed', auditable: @user).count }, 1 do
         post password_path, params: { contact: @user.phone }
       end
     end
@@ -205,6 +232,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_failed_reset_submissions_stay_in_the_form_locale
+    @user.update_columns(failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
     token = @user.generate_token_for(:password_reset)
     sign_out if respond_to?(:sign_out)
 
@@ -220,6 +248,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert_equal 'No se pudo actualizar la contraseña. Contraseña tiene muy pocos caracteres (mínimo 12).', flash.now[:alert]
     assert_equal @original_password_digest, @user.reload.password_digest
+    assert_predicate @user, :account_locked?
+    assert_equal UserAuthentication::MAX_LOGIN_ATTEMPTS, @user.failed_attempts
   end
 
   def test_successful_reset_redirects_to_sign_in_in_the_form_locale
@@ -266,7 +296,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       post password_path, params: { contact: @user.phone }
     end
 
-    assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', user: @user).count
+    assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', auditable: @user).count
     assert_cache_prefix_present('auth_rate_limit:account_access:user_ip:')
     assert_cache_prefix_absent('account_access:')
   ensure
@@ -315,6 +345,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_update_password_with_valid_token_without_current_password
+    @user.update_columns(failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current,
+                         totp_failed_attempts: 3, totp_attempt_window_started_at: Time.current)
     token = @user.generate_token_for(:password_reset)
     sign_out if respond_to?(:sign_out)
 
@@ -333,6 +365,10 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
     assert_equal 'Password successfully updated.', flash[:notice]
     assert @user.reload.authenticate('TokenReset*Password123')
+    assert_not_predicate @user, :account_locked?
+    assert_equal 0, @user.failed_attempts
+    assert_equal 3, @user.totp_failed_attempts
+    assert_empty @user.sessions
   end
 
   def test_password_reset_token_cannot_be_reused_after_successful_update
@@ -647,7 +683,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     SmsService.expects(:send_message).never
 
-    assert_difference -> { Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count }, 1 do
+    assert_difference -> { Event.where(action: 'account_access_instructions_delivery_unavailable', auditable: user).count }, 1 do
       assert_no_enqueued_emails do
         post password_path, params: { contact: user.phone }
       end
@@ -682,8 +718,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
       travel AuditEventService::DEDUP_WINDOW + 1.second if index < limit
     end
 
-    assert_equal limit, Event.where(action: 'account_access_instructions_delivery_unavailable', user: user).count
-    assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', user: user).count
+    assert_equal limit, Event.where(action: 'account_access_instructions_delivery_unavailable', auditable: user).count
+    assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', auditable: user).count
     assert_cache_prefix_present('auth_rate_limit:account_access:user_ip:')
     assert_cache_prefix_absent('account_access:')
   ensure

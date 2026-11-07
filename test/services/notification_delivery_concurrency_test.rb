@@ -12,7 +12,7 @@ class NotificationDeliveryConcurrencyTest < ActiveSupport::TestCase
     @release_route = Queue.new
     @user = create(:constituent)
     @notification = Notification.create!(recipient: @user, notifiable: @user, action: 'w9_approved',
-                                         metadata: { 'temp_password' => '[REDACTED]', 'workflow' => 'preserved' })
+                                         metadata: { 'workflow' => 'preserved' })
     @request_id = SecureRandom.uuid
   end
 
@@ -109,7 +109,6 @@ class NotificationDeliveryConcurrencyTest < ActiveSupport::TestCase
     assert_equal 'none', @notification.metadata['actual_delivery_channel']
     key = outcome == :suppressed ? 'delivery_suppressed' : 'delivery_error'
     assert_equal 'test_reason', @notification.metadata.dig(key, 'reason')
-    assert_equal '[REDACTED]', @notification.metadata['temp_password']
     assert_equal 'preserved', @notification.metadata['workflow']
   end
 end

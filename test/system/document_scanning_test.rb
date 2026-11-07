@@ -13,7 +13,7 @@ class DocumentScanningTest < ApplicationSystemTestCase
     JS
     @admin = create(:admin)
     secret = ROTP::Base32.random_base32
-    @admin.totp_credentials.create!(secret: secret, nickname: 'Browser authenticator')
+    @admin.totp_credentials.create!(secret: secret, nickname: 'Browser authenticator', last_used_at: 1.minute.ago)
     visit sign_in_path
     within('form[action="/sign_in"]') do
       fill_in 'contact-input', with: @admin.email

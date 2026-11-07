@@ -7,7 +7,7 @@ class TwoFactorAttemptLimitTest < ActionDispatch::IntegrationTest
   setup do
     Current.reset
     @user = create(:constituent)
-    @credential = @user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    @credential = @user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator', last_used_at: 1.minute.ago)
   end
 
   test 'TOTP failures persist across browser sessions and IP addresses until the account window ends' do

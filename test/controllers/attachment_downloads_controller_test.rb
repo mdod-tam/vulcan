@@ -437,7 +437,7 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
     @authenticated_user = nil
     @test_user_id = nil
     secret = ROTP::Base32.random_base32
-    user.totp_credentials.create!(secret: secret, nickname: 'Authenticator') if user.admin? || user.vendor?
+    user.totp_credentials.create!(secret: secret, nickname: 'Authenticator', last_used_at: 1.minute.ago) if user.admin? || user.vendor?
     post sign_in_path, params: { email: user.email, password: 'password1234' }
     if user.admin? || user.vendor?
       assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')

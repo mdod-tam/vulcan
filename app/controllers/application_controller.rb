@@ -196,6 +196,7 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  # Returns the post-sign-in destination, or nil after aborting a refused sign-in.
   def complete_two_factor_authentication(user)
     # Read the return path before 2FA completion removes it.
     stored_location = TwoFactorAuth.get_return_path(session) || session.delete(:return_to)
@@ -207,11 +208,11 @@ class ApplicationController < ActionController::Base
     if session_record
       # Clear the challenge only after session creation succeeds.
       TwoFactorAuth.complete_authentication_with_challenge_clear(session)
-      redirect_to stored_location || _dashboard_for(user), notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
+      stored_location || _dashboard_for(user)
     else
       # A rejected session must clear temporary 2FA state, including the challenge, to prevent replay.
       TwoFactorAuth.abort_authentication(session)
-      redirect_to sign_in_path, alert: t('alerts.session_fail')
+      nil
     end
   end
 

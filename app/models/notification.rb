@@ -16,6 +16,7 @@ class Notification < ApplicationRecord
   belongs_to :notifiable, polymorphic: true, optional: true
 
   validates :action, presence: true
+  validate :metadata_excludes_temporary_password
 
   scope :unread_notifications, -> { where(read_at: nil) }
   scope :read_notifications, -> { where.not(read_at: nil) }
@@ -134,6 +135,12 @@ class Notification < ApplicationRecord
   end
 
   private
+
+  def metadata_excludes_temporary_password
+    return unless metadata.is_a?(Hash) && (metadata.key?('temp_password') || metadata.key?(:temp_password))
+
+    errors.add(:metadata, 'must not contain temp_password')
+  end
 
   def record_delivery_failure!(error, channel:, route:, message:, details: {})
     with_lock do

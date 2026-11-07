@@ -130,9 +130,9 @@ module UserAuthentication
   end
 
   def check_totp_code(code)
-    credential = matching_totp_credential(code)
-    if credential
-      credential.update!(last_used_at: Time.current)
+    credentials, matched_at = matching_totp_credentials(code)
+    if credentials
+      credentials.each { |credential| credential.update!(last_used_at: Time.at(matched_at).utc) }
       persist_totp_attempt_budget!(attempts: 0, window_started_at: nil)
       :verified
     else
@@ -162,12 +162,18 @@ module UserAuthentication
     raise ActiveRecord::RecordNotSaved, 'TOTP attempt budget could not be persisted' unless updated
   end
 
-  def matching_totp_credential(code)
+  def matching_totp_credentials(code)
     return unless code.is_a?(String) && code.bytesize == 6 && code.match?(/\A[0-9]{6}\z/)
 
-    totp_credentials.detect do |candidate|
-      ROTP::TOTP.new(candidate.secret).verify(code, drift_behind: 30, drift_ahead: 30)
+    # Repeated enrollment could previously store the same seed more than once.
+    totp_credentials.group_by(&:secret).each do |secret, credentials|
+      candidate = credentials.max_by(&:last_used_at)
+      matched_at = ROTP::TOTP.new(secret).verify(
+        code, drift_behind: 30, drift_ahead: 30, after: candidate.last_used_at
+      )
+      return [credentials, matched_at] if matched_at
     end
+    nil
   end
 
   def revoke_sessions_after_password_change

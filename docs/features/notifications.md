@@ -74,6 +74,8 @@ A new mapped action is three things, not one: a recipient contract, a template, 
 
 Reset, verification, and upload links are bearer credentials — anything that stores them durably turns a notification row into a way in. [SecureErrorSanitizer](../../app/services/concerns/secure_error_sanitizer.rb) exists because delivery failures otherwise carry the link into the error message, and `sensitive: true` keeps their SMS out of logs.
 
+`Notification` validation rejects the `temp_password` metadata key on creation and update, including blank or redacted values. The error names the key without including its value. Notification creation fails before delivery is queued; there is no post-delivery password-redaction path.
+
 Recipient, channel, locale, and history are each independently wrong-able, and intentional non-delivery looks identical to broken delivery unless a test distinguishes them. [Notification service tests](../../test/services/notification_service_test.rb), [secure proof-request tests](../../test/services/applications/request_proof_resubmission_test.rb), [delivery locale tests](../../test/services/applications/secure_request_delivery_locale_test.rb), and [webhook tests](../../test/controllers/webhooks/email_events_controller_test.rb) show the shapes.
 
 ## Troubleshooting

@@ -21,6 +21,7 @@ module EmailTemplates
       sample_data = EmailTemplates::SampleData.for_template_name("missing_preview_#{SecureRandom.hex(4)}", locale: 'es')
 
       assert_equal ProgramContact.support_email, sample_data['footer_contact_email']
+      assert_not sample_data.key?('temp_password')
     end
 
     test 'seeded maximum-rejection previews render without a reapply date contract' do

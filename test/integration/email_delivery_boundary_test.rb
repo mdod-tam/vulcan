@@ -200,7 +200,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
     letter_user = create(:constituent, communication_preference: 'letter')
     notifications = [email_user, letter_user].map do |user|
       NotificationService.create_and_deliver!(type: :account_created, recipient: user, actor: @admin, notifiable: user,
-                                              channel: :email, metadata: { 'temp_password' => 'Temp-Password-1' })
+                                              channel: :email)
     end
     turn_global(false)
     Letters::TextTemplateToPdfService.any_instance.expects(:queue_for_printing).once

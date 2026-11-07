@@ -74,17 +74,19 @@
           <%= form_with url: create_credential_two_factor_authentication_path(type: 'totp'), 
                         method: :post, 
                         class: "bg-white p-6 rounded-lg border border-gray-200" do |form| %>
-            <%= form.hidden_field :secret, value: @secret %>
-
             <div class="mb-4">
               <label for="nickname" class="form-label mb-1">Nickname (optional)</label>
-              <%= form.text_field :nickname, id: "nickname", class: "form-input py-3", placeholder: "My Work Phone", aria: { describedby: "nickname-help" } %>
+              <%= form.text_field :nickname,
+                                  value: params[:nickname], id: 'nickname',
+                                  class: 'form-input py-3', placeholder: 'My Work Phone',
+                                  aria: { describedby: 'nickname-help' } %>
               <p id="nickname-help" class="mt-1 text-sm text-gray-500">Give this authenticator a name to help you identify it later.</p>
             </div>
 
             <div class="mb-4">
               <label for="code" class="form-label mb-1">Verification Code</label>
               <%= form.text_field :code,
+                                  value: params[:code].is_a?(String) ? params[:code] : nil,
                                   id: "code",
                                   class: "form-input py-3",
                                   placeholder: "123456",

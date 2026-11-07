@@ -159,7 +159,9 @@ module Admin
     end
 
     def sign_in_resource_admin(admin)
-      credential = admin.totp_credentials.first || admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Browser authenticator')
+      credential = admin.totp_credentials.first || admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Browser authenticator', last_used_at: 1.minute.ago)
+      last_used_at = credential.reload.last_used_at
+      travel_to(last_used_at + 30.seconds) if last_used_at >= 30.seconds.ago
       visit sign_in_path
       within('form[action="/sign_in"]') do
         fill_in 'contact-input', with: admin.email
