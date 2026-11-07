@@ -85,11 +85,16 @@ module ConstituentPortal
                     metadata: { proof_type: 'income', submission_method: 'web' }, created_at: 2.hours.ago)
       create(:proof_review, application: application, admin: create(:admin), proof_type: 'id', status: 'rejected',
                             rejection_reason: 'Too blurry', created_at: 1.hour.ago)
+      result = DisabilityCertificationAttachmentService.reject_certification(
+        application: application, admin: create(:admin), reason: 'Missing signature'
+      )
+      assert result[:success]
 
       get constituent_portal_dashboard_path
       assert_select 'h3', text: 'Recent Activity'
       assert_select 'p', text: 'Income proof attached via web'
       assert_select 'p', text: 'Proof of identity rejected'
+      assert_select 'p', text: 'Disability certification rejected'
       assert_select 'p', text: /Reason:\s+"Too blurry"/
       assert_select 'time', text: 'about 2 hours ago'
 
@@ -98,6 +103,7 @@ module ConstituentPortal
       assert_select 'h3', text: 'Actividad reciente'
       assert_select 'p', text: 'Comprobante de ingresos adjuntado por la web'
       assert_select 'p', text: 'Comprobante de identidad rechazado'
+      assert_select 'p', text: 'Certificación de discapacidad rechazada'
       assert_select 'p', text: /Motivo:\s+"Too blurry"/
       assert_select 'time', text: 'hace alrededor de 2 horas'
     end

@@ -256,6 +256,10 @@ es:
       attached: "%{proof} adjuntado"
       approved: "%{proof} aprobado"
       rejected: "%{proof} rechazado"
+      reviews:
+        disability_certification:
+          approved: "Certificación de discapacidad aprobada"
+          rejected: "Certificación de discapacidad rechazada"
     dependents:
       form:
         # Turbo disables the submitter. These labels explain the wait.

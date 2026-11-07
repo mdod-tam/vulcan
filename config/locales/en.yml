@@ -236,6 +236,10 @@ en:
       attached: "%{proof} attached"
       approved: "%{proof} approved"
       rejected: "%{proof} rejected"
+      reviews:
+        disability_certification:
+          approved: "Disability certification approved"
+          rejected: "Disability certification rejected"
     dependents:
       form:
         # Turbo disables the submitter. These labels explain the wait.

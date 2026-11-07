@@ -100,7 +100,6 @@ class UserCapabilitiesTest < ActiveSupport::TestCase
 
     assert_equal [evaluation], trainer_with_evaluation_grant.assigned_evaluations.to_a
     assert_equal [session], trainer_with_evaluation_grant.assigned_training_sessions.to_a
-    assert_equal [evaluation.constituent], trainer_with_evaluation_grant.assigned_evaluation_constituents.to_a
     assert_not trainer_with_evaluation_grant.destroy
     assert_predicate trainer_with_evaluation_grant.errors, :any?
   end

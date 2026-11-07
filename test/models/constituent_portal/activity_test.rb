@@ -154,9 +154,19 @@ module ConstituentPortal
       rejected = create(:proof_review, application: @application, admin: admin, proof_type: 'id', status: 'rejected',
                                        rejection_reason: 'Too blurry')
 
+      certification_approved = create(:proof_review, application: @application, admin: admin,
+                                                     proof_type: 'disability_certification', status: 'approved')
+      certification_rejected = create(:proof_review, application: @application, admin: admin,
+                                                     proof_type: 'disability_certification', status: 'rejected',
+                                                     rejection_reason: 'Missing signature')
+
+      assert_equal 'Disability certification approved', Activity.from_proof_review(certification_approved).description
+      assert_equal 'Disability certification rejected', Activity.from_proof_review(certification_rejected).description
       assert_equal 'Income proof approved', Activity.from_proof_review(approved).description
       assert_equal 'Proof of identity rejected', Activity.from_proof_review(rejected).description
       I18n.with_locale(:es) do
+        assert_equal 'Certificación de discapacidad aprobada', Activity.from_proof_review(certification_approved).description
+        assert_equal 'Certificación de discapacidad rechazada', Activity.from_proof_review(certification_rejected).description
         assert_equal 'Comprobante de ingresos aprobado', Activity.from_proof_review(approved).description
         assert_equal 'Comprobante de identidad rechazado', Activity.from_proof_review(rejected).description
       end

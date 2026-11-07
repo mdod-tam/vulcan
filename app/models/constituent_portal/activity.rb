@@ -55,8 +55,8 @@ module ConstituentPortal
         created_at: review.created_at,
         activity_type: activity_type,
         proof_type: review.proof_type.to_sym,
-        description: I18n.t("constituent_portal.activity.#{review.status_approved? ? 'approved' : 'rejected'}",
-                            proof: proof_label(review.proof_type)),
+        description: I18n.t("constituent_portal.activity.reviews.#{review.proof_type}.#{review.status}",
+                            default: :"constituent_portal.activity.#{review.status}", proof: proof_label(review.proof_type)),
         details: details
       )
     end

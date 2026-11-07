@@ -154,7 +154,6 @@ class User < ApplicationRecord
   has_many :assigned_evaluations, class_name: 'Evaluation', foreign_key: :evaluator_id,
                                   inverse_of: :evaluator, dependent: :restrict_with_error
   has_many :assigned_training_constituents, through: :assigned_training_sessions, source: :constituent
-  has_many :assigned_evaluation_constituents, through: :assigned_evaluations, source: :constituent
   has_many :recovery_requests, dependent: :restrict_with_exception
   has_many :subject_duplicate_review_cases,
            class_name: 'DuplicateReviewCase',
