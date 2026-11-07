@@ -51,59 +51,52 @@ module UserAuthentication
     end
   end
 
+  # A read only. An expired lock stays on the row until the next failed login or sign-in clears it under the
+  # user lock, so this method writes nothing.
   def account_locked?
-    return false if locked_at.blank?
-    return true if locked_at > LOCK_DURATION.ago
-
-    unlock_account!
-    false
+    locked_at.present? && locked_at > LOCK_DURATION.ago
   end
 
+  # Counts one failed password attempt and applies the lock at MAX_LOGIN_ATTEMPTS. The counter and locked_at
+  # change in one write under the user lock, so concurrent failures cannot lose a count or miss the lock.
+  # An expired lock starts a fresh count.
   def record_failed_login!
-    next_attempt_count = failed_attempts.to_i + 1
+    with_lock do
+      attempts = login_lock_expired? ? 1 : failed_attempts.to_i + 1
+      now = Time.current
 
-    # Skip validations so that invalid legacy profile data cannot block the failed-login count.
-    # rubocop:disable Rails/SkipsModelValidations
-    update_columns(
-      failed_attempts: next_attempt_count,
-      updated_at: Time.current
-    )
-    # rubocop:enable Rails/SkipsModelValidations
-
-    lock_account! if next_attempt_count >= MAX_LOGIN_ATTEMPTS
-  end
-
-  def track_sign_in!(ip)
-    if failed_attempts.to_i >= MAX_LOGIN_ATTEMPTS
-      lock_account!
-      return false
+      # Skip validations and callbacks so that invalid legacy profile data cannot block counting or locking.
+      # Nothing depends on these bookkeeping columns. This code sets updated_at itself.
+      # rubocop:disable-next Rails/SkipsModelValidations
+      update_columns(
+        failed_attempts: attempts,
+        locked_at: (now if attempts >= MAX_LOGIN_ATTEMPTS),
+        updated_at: now
+      )
     end
-
-    # Skip validations so that invalid legacy profile data cannot block sign-in tracking.
-    # No callbacks depend on these columns. This code sets updated_at itself.
-    # rubocop:disable Rails/SkipsModelValidations
-    update_columns(
-      last_sign_in_at: Time.current,
-      last_sign_in_ip: ip,
-      failed_attempts: 0,
-      locked_at: nil,
-      updated_at: Time.current
-    )
-    # rubocop:enable Rails/SkipsModelValidations
   end
 
-  def lock_account!
-    update!(locked_at: Time.current)
-  end
-
-  def unlock_account!
-    # rubocop:disable Rails/SkipsModelValidations
-    update_columns(
-      failed_attempts: 0,
-      locked_at: nil,
-      updated_at: Time.current
-    )
-    # rubocop:enable Rails/SkipsModelValidations
+  # Records a successful sign-in under the user lock and returns true. While the account is locked it writes
+  # nothing and returns false, so the caller must not start a session. An expired lock does not refuse: this
+  # write clears it with the counter.
+  def track_sign_in!(ip)
+    with_lock do
+      if account_locked?
+        false
+      else
+        # Skip validations and callbacks so that invalid legacy profile data cannot block sign-in tracking.
+        # Nothing depends on these bookkeeping columns. This code sets updated_at itself.
+        # rubocop:disable-next Rails/SkipsModelValidations
+        update_columns(
+          last_sign_in_at: Time.current,
+          last_sign_in_ip: ip,
+          failed_attempts: 0,
+          locked_at: nil,
+          updated_at: Time.current
+        )
+        true
+      end
+    end
   end
 
   def second_factor_enabled?
@@ -127,6 +120,10 @@ module UserAuthentication
   end
 
   private
+
+  def login_lock_expired?
+    locked_at.present? && !account_locked?
+  end
 
   def reset_totp_attempt_window
     assign_attributes(totp_failed_attempts: 0, totp_attempt_window_started_at: Time.current)

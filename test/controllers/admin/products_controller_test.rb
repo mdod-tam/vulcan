@@ -84,9 +84,48 @@ module Admin
       assert_equal 'Product unarchived.', flash[:notice]
     end
 
+    def test_archive_of_a_product_that_fails_validation_redirects_with_the_failure_alert
+      @product.update_column(:manufacturer, nil)
+
+      post archive_admin_product_path(@product)
+
+      assert_redirected_to admin_products_path
+      assert_equal I18n.t('admin.products.archive.product_archive_fail'), flash[:alert]
+      assert_nil @product.reload.archived_at
+    end
+
+    def test_unarchive_of_a_product_that_fails_validation_redirects_with_the_failure_alert
+      archived_at = 1.day.ago.change(usec: 0)
+      @product.update_columns(manufacturer: nil, archived_at: archived_at)
+
+      post unarchive_admin_product_path(@product)
+
+      assert_redirected_to admin_products_path
+      assert_equal I18n.t('admin.products.unarchive.product_unarchive_fail'), flash[:alert]
+      assert_equal archived_at, @product.reload.archived_at
+    end
+
     def test_should_filter_by_device_type
+      create(:product, name: 'Pixel Phone', device_types: ['Smartphone'])
+
       get admin_products_path, params: { device_types: ['Tablet'] }
+
       assert_response :success
+      assert_includes response.body, 'iPad Air'
+      assert_not_includes response.body, 'Pixel Phone'
+    end
+
+    def test_filter_matches_each_submitted_device_type_as_one_literal_name
+      create(:product, name: 'Pixel Phone', device_types: ['Smartphone'])
+
+      get admin_products_path, params: { device_types: ['Tablet, Smartphone'] }
+      assert_response :success
+      assert_not_includes response.body, 'iPad Air', 'a comma must not split one submitted type into two'
+      assert_not_includes response.body, 'Pixel Phone'
+
+      get admin_products_path, params: { device_types: ['Tab"let'] }
+      assert_response :success
+      assert_not_includes response.body, 'iPad Air', 'a quote must not change which types are searched'
     end
 
     def test_non_admin_cannot_access

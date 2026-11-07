@@ -131,6 +131,24 @@ module Admin
       assert_no_match evaluator.full_name, response.body
     end
 
+    # The crowd is larger than any fixed candidate window and sorts ahead of the eligible users: merged constituents
+    # by first name, staff by type. Only a search that picks its candidates before the limit lists the right ten.
+    test 'applicant and guardian searches list the first ten eligible users behind more than fifty ineligible matches' do
+      canonical = create(:constituent, last_name: 'Canonical')
+      26.times { |index| create(:constituent, first_name: format('Abe%02d', index), last_name: 'CrowdedSearch', merged_into_user: canonical) }
+      25.times { |index| create(:admin, first_name: format('Abe%02d', index + 26), last_name: 'CrowdedSearch') }
+      eligible = Array.new(12) { |index| create(:constituent, first_name: format('Zed%02d', index), last_name: 'CrowdedSearch') }
+
+      [search_admin_users_path(q: 'CrowdedSearch', role: 'constituent', frame_id: 'adult_search_results'),
+       admin_users_path(q: 'CrowdedSearch', role: 'constituent', turbo_frame_id: 'adult_search_results'),
+       search_admin_users_path(q: 'CrowdedSearch', role: 'guardian', frame_id: 'guardian_search_results')].each do |path|
+        get path, headers: default_headers
+
+        assert_response :success
+        assert_equal eligible.first(10).map(&:id), css_select('li[data-user-id]').map { |item| item['data-user-id'].to_i }, path
+      end
+    end
+
     test 'adult_application_context returns not found for non-constituent with applicant history' do
       evaluator = create(:evaluator, email: generate(:email), hearing_disability: true)
       create(:application, :archived, user: evaluator)

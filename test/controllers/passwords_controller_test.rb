@@ -412,6 +412,49 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_not_equal @original_password_digest, @user.password_digest
   end
 
+  def test_password_update_for_a_locked_account_ends_at_sign_in_without_a_new_session
+    @user.update_columns(failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
+
+    patch password_path, params: {
+      password_challenge: 'password1234',
+      password: 'NewValid*Password123',
+      password_confirmation: 'NewValid*Password123'
+    }
+
+    assert_redirected_to sign_in_path
+    assert_equal 'Password successfully updated. Sign-in is paused for up to 60 minutes after too many failed attempts. ' \
+                 'Try again after that.', flash[:notice]
+    @user.reload
+    assert @user.authenticate('NewValid*Password123')
+    assert_equal 0, @user.sessions.count
+    assert_predicate @user, :account_locked?
+  end
+
+  test 'password update explains a lock applied after the request loaded the user' do
+    constructor = Users::PasswordUpdateService.method(:new)
+    lock_before_service = lambda do |*arguments|
+      # The request has loaded current_user; another login attempt now locks a separate instance.
+      other_request_user = User.find(@user.id)
+      UserAuthentication::MAX_LOGIN_ATTEMPTS.times { other_request_user.record_failed_login! }
+      constructor.call(*arguments)
+    end
+
+    Users::PasswordUpdateService.stub(:new, lock_before_service) do
+      patch password_path, params: {
+        password_challenge: 'password1234',
+        password: 'NewValid*Password123',
+        password_confirmation: 'NewValid*Password123'
+      }
+    end
+
+    assert_redirected_to sign_in_path
+    @user.reload
+    assert @user.authenticate('NewValid*Password123')
+    assert_equal 0, @user.sessions.count
+    assert_predicate @user, :account_locked?
+    assert_equal I18n.t('passwords.updated_while_locked', minutes: 60), flash[:notice]
+  end
+
   def test_should_redirect_turbo_stream_password_update_to_dashboard
     patch password_path,
           params: {

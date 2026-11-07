@@ -90,9 +90,7 @@ module Applications
       pdf.text "Name: #{application.certifying_professional_name || 'N/A'}"
       pdf.text "Email: #{application.certifying_professional_email || 'N/A'}"
       pdf.text "Phone: #{application.certifying_professional_phone || 'N/A'}"
-      if application.respond_to?(:certifying_professional_fax) && application.certifying_professional_fax.present?
-        pdf.text "Fax: #{application.certifying_professional_fax}"
-      end
+      pdf.text "Fax: #{application.certifying_professional_fax}" if application.certifying_professional_fax.present?
       pdf.move_down 20
       pdf.text 'Please complete and return the attached certification.'
 

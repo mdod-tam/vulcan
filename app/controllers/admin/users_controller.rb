@@ -30,6 +30,10 @@ module Admin
       'Trainer' => 'Users::Trainer'
     }.freeze
 
+    # The paper intake forms search for these two roles only. Each picks its candidates in SQL, so the limit counts
+    # only eligible users. Any other role finds nothing.
+    PAPER_SEARCH_CANDIDATES = { 'constituent' => :paper_applicant_candidates, 'guardian' => :paper_guardian_candidates }.freeze
+
     # Everything the index, show and search views read about a user. Each reflection caches separately, so
     # :guardians is listed beside the join collections that dependent contact resolution does not read.
     USER_PRELOADS = [
@@ -46,7 +50,7 @@ module Admin
       load_user_metrics
 
       filtered_scope = apply_user_filters(User.preload(*USER_PRELOADS))
-      @pagy, @users = paginate_users(filtered_scope)
+      @pagy, @users = paginate_or_first_page(filtered_scope)
 
       respond_to do |format|
         format.html
@@ -316,19 +320,14 @@ module Admin
       @total_users_count = User.count
     end
 
+    # The service logs a failed filter. The results frame shows the warning, because the filter form updates only
+    # that frame, and the list is unfiltered and in the default order.
     def apply_user_filters(scope)
       result = Users::FilterService.new(scope, params).apply_filters
       return result.data if result.success?
 
-      Rails.logger.warn 'User filter error'
+      @filter_failed = true
       scope.order(:type, :last_name, :first_name)
-    end
-
-    def paginate_users(scope)
-      pagy(scope, items: 25)
-    rescue StandardError => e
-      Rails.logger.error "Pagination failed: #{e.class.name}"
-      [Pagy.new(count: scope.count, page: 1, items: 25), scope.limit(25)]
     end
 
     def handle_search_frame_request
@@ -460,12 +459,13 @@ module Admin
     end
 
     def users_for_paper_search(query, role_filter, limit: 10)
-      candidate_predicate = { 'constituent' => :paper_applicant_candidate?, 'guardian' => :paper_guardian_candidate? }[role_filter]
-      result = Users::FilterService.new(User.all, q: query, role: candidate_predicate ? nil : role_filter).apply_filters
+      candidate_scope = PAPER_SEARCH_CANDIDATES[role_filter]
+      return [] unless candidate_scope
+
+      result = Users::FilterService.new(User.public_send(candidate_scope), q: query).apply_filters
       return [] unless result.success?
 
-      users = result.data.limit(candidate_predicate ? 50 : limit).to_a
-      users = users.select { |user| user.public_send(candidate_predicate) }.first(limit) if candidate_predicate
+      users = result.data.limit(limit).to_a
       associations = role_filter == 'constituent' ? [*USER_PRELOADS, { applications: :purchased_products }] : USER_PRELOADS
       ActiveRecord::Associations::Preloader.new(records: users, associations: associations).call
       users

@@ -15,7 +15,7 @@ module ConstituentPortal
       end
 
       # Portal submissions and paper attachments share this activity list.
-      submission_events = application.events.where("action LIKE '%_proof_submitted' OR action LIKE '%_proof_attached'").to_a
+      submission_events = application.events.where("action LIKE '%_proof_attached'").to_a
       deduplicated_submissions = Applications::EventDeduplicationService.new.deduplicate(submission_events)
 
       deduplicated_submissions.each do |event|
@@ -35,14 +35,13 @@ module ConstituentPortal
       proof_type = event.metadata['proof_type']
       submission_method = event.metadata['submission_method'] || 'web'
 
-      action_verb = event.action.include?('_attached') ? 'attached' : 'submitted'
-
       new(
         source: event,
         created_at: event.created_at,
         activity_type: is_initial ? :submission : :resubmission,
         proof_type: proof_type.to_sym,
-        description: "#{proof_type.to_s.humanize} proof #{action_verb} via #{submission_method}"
+        description: I18n.t("constituent_portal.activity.attached_via.#{submission_method}",
+                            proof: proof_label(proof_type), default: :'constituent_portal.activity.attached')
       )
     end
 
@@ -56,17 +55,23 @@ module ConstituentPortal
         created_at: review.created_at,
         activity_type: activity_type,
         proof_type: review.proof_type.to_sym,
-        description: "#{review.proof_type.to_s.humanize} proof #{review.status_approved? ? 'approved' : 'rejected'}",
+        description: I18n.t("constituent_portal.activity.#{review.status_approved? ? 'approved' : 'rejected'}",
+                            proof: proof_label(review.proof_type)),
         details: details
       )
     end
 
+    # The secure-form proof names, so the portal and the messages call each proof the same thing.
+    def self.proof_label(proof_type)
+      I18n.t("secure_proof_forms.proof_types.#{proof_type}", default: proof_type.to_s.humanize.downcase).upcase_first
+    end
+    private_class_method :proof_label
+
     def self.initial_submission?(application, event)
       proof_type = event.metadata['proof_type']
-      action_names = ["#{proof_type}_proof_submitted", "#{proof_type}_proof_attached"]
 
       same_type_events = application.events
-                                    .where(action: action_names)
+                                    .where(action: "#{proof_type}_proof_attached")
                                     .order(created_at: :asc)
 
       same_type_events.first.id == event.id

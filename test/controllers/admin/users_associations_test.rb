@@ -53,14 +53,15 @@ module Admin
       assert_select 'p', text: /neither a guardian nor a dependent/
     end
 
-    test 'search results carry the dependent count and guardian badges both search paths render' do
-      get search_admin_users_path(q: 'Family', role: 'guardian')
-      assert_select "li[data-user-id='#{@guardian.id}'][data-user-dependents-count='2']"
-      assert_select "li[data-user-id='#{@guardian.id}'] span", text: '2 dependents'
+    test 'search results carry the dependent count on both search paths' do
+      [search_admin_users_path(q: 'Family', role: 'guardian'),
+       admin_users_path(q: 'Family', role: 'guardian', turbo_frame_id: 'guardian_search_results')].each do |path|
+        get path
 
-      get admin_users_path(q: 'Family', role: 'dependent', turbo_frame_id: 'dependent_search_results')
-      assert_select "li[data-user-id='#{@child.id}'][data-user-dependents-count='0'] span", text: 'Has guardian'
-      assert_select "li[data-user-id='#{@guardian.id}'] span", text: 'Has guardian', count: 0
+        assert_select "li[data-user-id='#{@guardian.id}'][data-user-dependents-count='2']"
+        assert_select "li[data-user-id='#{@guardian.id}'] span", text: '2 dependents'
+        assert_select "li[data-user-id='#{@child.id}'][data-user-dependents-count='0']"
+      end
     end
 
     test 'the index and the search issue the same queries for one row as for a full page' do
@@ -113,7 +114,7 @@ module Admin
     test 'the search and show pages load the relationships ahead of the rows' do
       violations = strict_loading_violations do
         get search_admin_users_path(q: 'Family', role: 'guardian')
-        get admin_users_path(q: 'Family', role: 'dependent', turbo_frame_id: 'dependent_search_results')
+        get admin_users_path(q: 'Family', role: 'constituent', turbo_frame_id: 'adult_search_results')
         get admin_user_path(@child)
         get admin_user_path(@guardian)
         get admin_users_path

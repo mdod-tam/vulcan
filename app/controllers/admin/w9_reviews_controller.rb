@@ -8,7 +8,7 @@ module Admin
     before_action :load_delivery_history, only: %i[new show create]
 
     def index
-      @pagy, @w9_reviews = pagy(@vendor.w9_reviews.includes(:admin).order(created_at: :desc, id: :desc), limit: 20)
+      @pagy, @w9_reviews = paginate_or_first_page(@vendor.w9_reviews.includes(:admin).order(created_at: :desc, id: :desc), limit: 20)
     end
 
     def show

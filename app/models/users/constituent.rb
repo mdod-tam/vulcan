@@ -6,8 +6,6 @@ module Users
     has_many :evaluations
     has_many :assigned_evaluators, through: :evaluations, source: :evaluator
 
-    enum :communication_preference, { email: 0, letter: 1 }
-
     # Voucher identity checks and name-and-birthdate duplicate detection both need it. Required when
     # the record is created or the date is changed, so an older record without one still saves
     # unrelated edits. Unreadable input already has its own error.
@@ -23,7 +21,6 @@ module Users
     validate :self_service_profile_requires_email_backing, on: :update, if: :self_service_profile_update?
 
     scope :needs_evaluation, -> { joins(:applications).where(applications: { status: :approved }) }
-    scope :active, -> { where.not(status: %i[withdrawn rejected expired]) }
     scope :ytd, lambda {
       where(created_at: FiscalYear.start_date_for(FiscalYear.current_start_year)..)
     }

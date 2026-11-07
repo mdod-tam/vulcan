@@ -17,7 +17,7 @@ module Admin
       preload_notification_message_dependencies(@recent_notifications)
 
       # Incomplete notes assigned to the current admin, three per page.
-      @pagy_assigned_notes, @assigned_notes = pagy(
+      @pagy_assigned_notes, @assigned_notes = paginate_or_first_page(
         ApplicationNote
           .where(assigned_to: current_user)
           .incomplete

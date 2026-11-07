@@ -88,6 +88,7 @@
       </div>
 
       <%= turbo_frame_tag "applications_list" do %>
+        <%= render 'admin/shared/filter_failure' if @filter_failed %>
         <div class="overflow-x-auto">
           <% if @applications.present? %>
             <% queue_partial = case params[:filter]

@@ -353,8 +353,8 @@ module Applications
     end
 
     def add_guardian_dependent_index_counts(data)
-      data[:guardian_users_count] = User.respond_to?(:with_dependents) ? User.with_dependents.count : 0
-      data[:dependent_users_count] = User.respond_to?(:with_guardians) ? User.with_guardians.count : 0
+      data[:guardian_users_count] = User.with_dependents.count
+      data[:dependent_users_count] = User.with_guardians.count
       data[:dependent_applications_count] = Application.where.not(managing_guardian_id: nil).count
     rescue NoMethodError => e
       Rails.logger.error "Error in guardian relationship counts: #{e.class.name}"

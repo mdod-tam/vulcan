@@ -2,7 +2,6 @@
 
 module Admin
   class VouchersController < Admin::BaseController
-    include Pagy::Backend
     include TurboStreamResponseHandling
 
     CSV_HEADERS = ['Code', 'Status', 'Initial Value', 'Remaining Value', 'Vendor', 'Created At', 'Expiration Date', 'Last Transaction'].freeze
@@ -15,7 +14,7 @@ module Admin
 
       scope = Voucher.includes(:vendor).order(created_at: :desc)
       scope = apply_filters(scope)
-      @pagy, @vouchers = pagy(scope, items: 25)
+      @pagy, @vouchers = paginate_or_first_page(scope)
 
       respond_to do |format|
         format.html

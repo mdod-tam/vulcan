@@ -2,7 +2,6 @@
 
 module Admin
   class BaseController < ApplicationController
-    include Pagy::Backend
     include NotificationPreloading
     include SafeInstanceVariables
 

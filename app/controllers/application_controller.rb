@@ -3,6 +3,7 @@
 class ApplicationController < ActionController::Base
   include Authentication
   include Pagy::Frontend
+  include PageRecovery
 
   protect_from_forgery with: :exception
 
@@ -127,22 +128,21 @@ class ApplicationController < ActionController::Base
   # Password sign-in resolves the exact submitted identifier and authenticates the submitted password under the same lock.
   # A merge can reassign the identifier. A password change can invalidate the password while this request waits.
   # Authentication before the lock must not authorize a session after either change.
+  #
+  # Sign-in bookkeeping runs under the same lock before the session is saved. A locked account is refused
+  # here for each caller of this method, whatever that caller checked earlier. A session that cannot save
+  # rolls the bookkeeping back.
   def _create_and_set_session_cookie(user, submitted_login_identifier: nil, submitted_password: nil, two_factor_sign_in_token: nil)
     return unless user
 
     session_record = nil
-    ActiveRecord::Base.transaction do
+    # requires_new: the Rollback below must undo the bookkeeping even when a caller already holds a transaction.
+    ActiveRecord::Base.transaction(requires_new: true) do
       locked_user = User.lock_for_merge_integrity!(user).fetch(user.id)
-      next unless locked_user.public_login_active?
+      next unless _sign_in_authorized?(locked_user, submitted_login_identifier:, submitted_password:, two_factor_sign_in_token:)
 
-      if submitted_login_identifier.present?
-        resolved_user = User.find_by_login_identifier(submitted_login_identifier)
-        next unless resolved_user&.id == locked_user.id
-        next unless locked_user.authenticate(submitted_password)
-      end
-
-      next if two_factor_sign_in_token.present? &&
-              User.find_by_token_for(:two_factor_sign_in, two_factor_sign_in_token) != locked_user
+      # A locked account writes nothing, so leaving the transaction here commits nothing.
+      next unless locked_user.track_sign_in!(request.remote_ip)
 
       session_record = locked_user.sessions.new(
         user_agent: request.user_agent,
@@ -150,10 +150,8 @@ class ApplicationController < ActionController::Base
       )
       unless session_record.save
         session_record = nil
-        next
+        raise ActiveRecord::Rollback
       end
-
-      locked_user.track_sign_in!(request.remote_ip)
     end
     return unless session_record
 
@@ -162,6 +160,20 @@ class ApplicationController < ActionController::Base
     session[:return_to] = return_path if return_path.present?
     cookies.signed[:session_token] = _session_cookie_options(session_record.session_token)
     session_record
+  end
+
+  # The checks a sign-in must pass under the user lock, where a merge or password change can no longer move them.
+  # The credential and token checks apply only when the caller supplied that credential.
+  def _sign_in_authorized?(locked_user, submitted_login_identifier:, submitted_password:, two_factor_sign_in_token:)
+    return false unless locked_user.public_login_active?
+
+    if submitted_login_identifier.present?
+      return false unless User.find_by_login_identifier(submitted_login_identifier)&.id == locked_user.id
+      return false unless locked_user.authenticate(submitted_password)
+    end
+
+    two_factor_sign_in_token.blank? ||
+      User.find_by_token_for(:two_factor_sign_in, two_factor_sign_in_token) == locked_user
   end
 
   def _session_cookie_options(token)

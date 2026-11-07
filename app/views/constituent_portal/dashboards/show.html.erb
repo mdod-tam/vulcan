@@ -505,7 +505,7 @@
 
         <div class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
           <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Activity</h3>
+            <h3 class="text-lg leading-6 font-medium text-gray-900"><%= t('constituent_portal.activity.heading') %></h3>
           </div>
           <div class="px-4 py-5 sm:p-6">
             <% if @recent_activities.present? %>
@@ -525,13 +525,13 @@
                               <p class="text-sm text-gray-700"><%= activity.description %></p>
                               <% if activity.details.present? %>
                                 <p class="mt-1 text-sm text-gray-600">
-                                  <span class="text-gray-500">Reason:</span> "<%= activity.details %>"
+                                  <span class="text-gray-500"><%= t('constituent_portal.activity.reason') %></span> "<%= activity.details %>"
                                 </p>
                               <% end %>
                             </div>
                             <div class="text-sm text-gray-500 whitespace-nowrap">
                               <time datetime="<%= activity.created_at.iso8601 %>">
-                                <%= time_ago_in_words(activity.created_at) %> ago
+                                <%= t('constituent_portal.activity.time_ago', time: time_ago_in_words(activity.created_at)) %>
                               </time>
                             </div>
                           </div>
@@ -542,7 +542,7 @@
                 </ul>
               </div>
             <% else %>
-              <p class="text-gray-500 text-sm">No recent activity</p>
+              <p class="text-gray-500 text-sm"><%= t('constituent_portal.activity.empty') %></p>
             <% end %>
           </div>
         </div>

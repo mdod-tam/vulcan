@@ -79,6 +79,29 @@ module ConstituentPortal
       assert_select '[data-testid=application-admission-card]', count: 0
     end
 
+    test 'the Recent Activity card uses the viewer locale for its heading, descriptions, reasons and ages' do
+      application = create(:application, :in_progress, user: @user)
+      Event.create!(action: 'income_proof_attached', user: @user, auditable: application,
+                    metadata: { proof_type: 'income', submission_method: 'web' }, created_at: 2.hours.ago)
+      create(:proof_review, application: application, admin: create(:admin), proof_type: 'id', status: 'rejected',
+                            rejection_reason: 'Too blurry', created_at: 1.hour.ago)
+
+      get constituent_portal_dashboard_path
+      assert_select 'h3', text: 'Recent Activity'
+      assert_select 'p', text: 'Income proof attached via web'
+      assert_select 'p', text: 'Proof of identity rejected'
+      assert_select 'p', text: /Reason:\s+"Too blurry"/
+      assert_select 'time', text: 'about 2 hours ago'
+
+      @user.update!(locale: 'es')
+      get constituent_portal_dashboard_path
+      assert_select 'h3', text: 'Actividad reciente'
+      assert_select 'p', text: 'Comprobante de ingresos adjuntado por la web'
+      assert_select 'p', text: 'Comprobante de identidad rechazado'
+      assert_select 'p', text: /Motivo:\s+"Too blurry"/
+      assert_select 'time', text: 'hace alrededor de 2 horas'
+    end
+
     test 'approved admission and service duration use the viewer locale' do
       @user.update!(locale: 'es')
       create(:application, :approved, user: @user, application_date: 1.year.ago.to_date)

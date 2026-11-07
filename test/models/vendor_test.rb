@@ -17,6 +17,15 @@ class VendorTest < ActiveSupport::TestCase
     assert_empty Users::Vendor.active.where(id: vendor_ids), 'Vendor approval remains distinct from equipment account eligibility'
   end
 
+  test 'a vendor reaches its products through the products_users join table' do
+    vendor = create(:vendor)
+    carried = create(:product, vendor_ids: [vendor.id])
+    create(:product)
+
+    assert_equal [carried], vendor.products.to_a
+    assert_equal [vendor], carried.vendors.to_a
+  end
+
   test 'valid vendor can be created with factory' do
     vendor = create(:vendor, :approved, :with_w9) # Use :with_w9 trait to attach a W9, which sets it to in_progress
 

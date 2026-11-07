@@ -142,7 +142,7 @@ module Trainers
               end
       query = query.where(trainer_id: @trainer_filter.id) if @trainer_filter
       query = filtered_status(query, @current_status)
-      @pagy, @training_sessions = pagy(query.includes(application: :user), items: 20)
+      @pagy, @training_sessions = paginate_or_first_page(query.includes(application: :user))
       render :index
     end
 

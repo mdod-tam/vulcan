@@ -473,10 +473,10 @@ class Application < ApplicationRecord
     proof_type = proof_type.to_s
     events
       .where(
-        "(action = :generic_action AND metadata->>'proof_type' = :proof_type) OR action IN (:legacy_actions)",
+        "(action = :generic_action AND metadata->>'proof_type' = :proof_type) OR action = :attached_action",
         generic_action: 'proof_submitted',
         proof_type: proof_type,
-        legacy_actions: ["#{proof_type}_proof_submitted", "#{proof_type}_proof_attached"]
+        attached_action: "#{proof_type}_proof_attached"
       )
       .order(created_at: :desc)
       .first
