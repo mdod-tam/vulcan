@@ -44,8 +44,6 @@ module Applications
         fingerprint_for_notification(event)
       when Event
         fingerprint_for_event(event)
-      when ->(e) { e.respond_to?(:action) && e.action&.include?('proof_submitted') }
-        fingerprint_for_proof_submission(event)
       when ProofReview
         fingerprint_for_proof_review(event)
       end
@@ -58,10 +56,6 @@ module Applications
       else
         "#{event.from_status}-#{event.to_status}"
       end
-    end
-
-    def fingerprint_for_proof_submission(event)
-      "#{event.metadata['proof_type']}-#{event.metadata['submission_method']}"
     end
 
     def fingerprint_for_proof_review(event)
@@ -107,7 +101,7 @@ module Applications
     def generic_action(event)
       case event
       when Notification, Event
-        certification_status_change_action(event) || event.action.to_s.gsub(/_proof_submitted$/, '_submission')
+        certification_status_change_action(event) || event.action.to_s
       when ApplicationStatusChange
         if event.metadata&.[](:change_type) == 'disability_certification' ||
            event.metadata&.[]('change_type') == 'disability_certification'

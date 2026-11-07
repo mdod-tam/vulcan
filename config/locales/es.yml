@@ -242,6 +242,24 @@ es:
       too_large_strict: "Suba un archivo de menos de %{max_size} MB."
       too_small: "Suba un archivo que no esté vacío."
   constituent_portal:
+    # The dashboard's Recent Activity card: proof submissions and reviews, newest last.
+    activity:
+      heading: "Actividad reciente"
+      empty: "No hay actividad reciente"
+      reason: "Motivo:"
+      time_ago: "hace %{time}"
+      attached_via:
+        web: "%{proof} adjuntado por la web"
+        paper: "%{proof} adjuntado en papel"
+        secure_form: "%{proof} adjuntado mediante un formulario seguro"
+        email: "%{proof} adjuntado por correo electrónico"
+      attached: "%{proof} adjuntado"
+      approved: "%{proof} aprobado"
+      rejected: "%{proof} rechazado"
+      reviews:
+        disability_certification:
+          approved: "Certificación de discapacidad aprobada"
+          rejected: "Certificación de discapacidad rechazada"
     dependents:
       form:
         # Turbo disables the submitter. These labels explain the wait.
@@ -983,6 +1001,7 @@ es:
     invalid_reset_link: "El enlace para restablecer la contraseña no es válido o ha vencido."
     mismatch: "La nueva contraseña y la confirmación no coinciden."
     updated: "Su contraseña se actualizó correctamente."
+    updated_while_locked: "Su contraseña se actualizó correctamente. El inicio de sesión está en pausa hasta por %{minutes} minutos tras demasiados intentos fallidos. Vuelva a intentarlo después."
     update_failed: "No se pudo actualizar la contraseña. %{details}."
     edit:
       reset: "Restablecer contraseña"

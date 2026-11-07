@@ -34,7 +34,6 @@ module Evaluators
       @scheduled_evaluations = Evaluation.active
       @completed_evaluations = Evaluation.completed_sessions
       @followup_evaluations = Evaluation.needing_followup
-      @assigned_constituents = Users::Constituent.where(evaluator_id: Users::Evaluator.select(:id)).to_a.uniq(&:id)
     end
 
     def load_evaluator_data
@@ -43,7 +42,6 @@ module Evaluators
       @scheduled_evaluations = current_user.assigned_evaluations.active
       @completed_evaluations = current_user.assigned_evaluations.completed_sessions
       @followup_evaluations = current_user.assigned_evaluations.needing_followup
-      @assigned_constituents = current_user.assigned_evaluation_constituents.to_a.uniq(&:id)
     end
 
     def load_display_data

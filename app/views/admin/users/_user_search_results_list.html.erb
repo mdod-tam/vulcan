@@ -1,5 +1,5 @@
 <%# This partial is rendered inside a turbo_frame_tag (e.g., "guardian_search_results") %>
-<%# It receives `users` and `role` (e.g., "guardian", "dependent", "constituent") as local variables. %>
+<%# It receives `users` and `role` ("guardian" or "constituent") as local variables. %>
 
 <% if users.any? %>
   <ul class="divide-y divide-gray-200 border border-gray-200 rounded-md max-h-60 overflow-y-auto" data-turbo="false">

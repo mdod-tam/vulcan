@@ -38,6 +38,31 @@ module ConstituentPortal
       end
     end
 
+    test 'show loads an applicant own application and a managing guardian dependent application, and refuses everyone else' do
+      guardian, dependent = guardian_and_dependent
+      managed = create(:application, :draft, user: dependent, managing_guardian: guardian)
+
+      get constituent_portal_application_path(@application)
+      assert_response :success
+
+      get constituent_portal_application_path(managed)
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Application not found', flash[:alert], 'an unrelated constituent must not load a managed dependent application'
+
+      sign_in_for_integration_test(guardian)
+      get constituent_portal_application_path(managed)
+      assert_response :success
+
+      get constituent_portal_application_path(@application)
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Application not found', flash[:alert], "a guardian must not load another constituent's own application"
+
+      sign_in_for_integration_test(dependent)
+      get constituent_portal_application_path(managed)
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal 'Application not found', flash[:alert], 'a dependent whose application a guardian manages does not load it'
+    end
+
     test 'unexpected create failures stay private and preserve the dependent form for retry' do
       guardian, dependent = guardian_and_dependent
       sign_in_for_integration_test(guardian)

@@ -357,7 +357,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     user                      = application.user
     organization_name         = Policy.get('organization_name') || 'MAT Program'
     proof_type_formatted      = format_proof_type(proof_review.proof_type, locale: locale)
-    all_proofs_approved       = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
+    all_proofs_approved       = application.all_proofs_approved?
     all_proofs_approved_text  = all_proofs_approved ? I18n.t('application_notifications.proof_approved.all_proofs_approved', locale: locale) : ''
 
     base_variables = build_base_email_variables(

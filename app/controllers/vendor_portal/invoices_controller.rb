@@ -2,13 +2,11 @@
 
 module VendorPortal
   class InvoicesController < VendorPortal::BaseController
-    include Pagy::Backend
-
     before_action :set_invoice, only: [:show]
 
     # GET /vendor/invoices
     def index
-      @pagy, @invoices = pagy(current_user.invoices.order(created_at: :desc, id: :desc), limit: 20)
+      @pagy, @invoices = paginate_or_first_page(current_user.invoices.order(created_at: :desc, id: :desc), limit: 20)
     end
 
     # GET /vendor/invoices/:id

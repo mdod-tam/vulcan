@@ -73,11 +73,6 @@
             <%= pluralize(user.guardian_relationships_as_guardian.size, 'dependent') %>
           </span>
         <% end %>
-        <% if role == 'dependent' && user.dependent? %>
-          <span class="badge badge-info ml-2">
-            Has guardian
-          </span>
-        <% end %>
       </div>
     <% end %>
 </li>

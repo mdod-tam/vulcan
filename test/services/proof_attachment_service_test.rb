@@ -86,6 +86,19 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'secure_form', event.metadata['submission_method']
   end
 
+  test 'attach_proof logs an attached event for web, paper, secure form and email submissions, not a submitted one' do
+    %i[web paper secure_form email].each do |method|
+      Event.delete_all
+      result = ProofAttachmentService.attach_proof(application: @application, proof_type: 'income',
+                                                   blob_or_file: scanned_upload(@raw_file_upload, user: @constituent),
+                                                   status: :not_reviewed, admin: nil, submission_method: method, metadata: {})
+
+      assert result[:success], "Expected a #{method} attachment to succeed"
+      assert_equal ['income_proof_attached'], Event.where(auditable: @application).pluck(:action).grep(/income_proof_/),
+                   "#{method} must log income_proof_attached only"
+    end
+  end
+
   test 'attach_proof handles errors gracefully' do
     Event.delete_all
     private_detail = 'Private Patient private-proof@example.test at 410-555-0199 token=private-proof-token'

@@ -55,14 +55,23 @@ class PasswordsController < ApplicationController
       submitted_login_identifier: current_user.email,
       submitted_password: params[:password]
     )
+    notice = result.message
     redirect_path = if session_record
                       password_update_redirect_path(user: session_record.user, forced_password_change: forced_password_change)
                     else
+                      # Session creation rechecks a separate User instance; the request's user may be stale.
+                      notice = locked_after_password_update_notice if current_user.reload.account_locked?
                       clear_session_authentication
                       sign_in_path
                     end
-    flash[:notice] = result.message
+    flash[:notice] = notice
     respond_to_password_update_success(redirect_path: redirect_path)
+  end
+
+  # The password changed, but a locked account cannot start a session until the lock expires. The sign-in screen
+  # stays generic, so only someone already signed in learns why this ends at sign-in.
+  def locked_after_password_update_notice
+    t('passwords.updated_while_locked', minutes: UserAuthentication::LOCK_DURATION.in_minutes.to_i)
   end
 
   def respond_to_password_update_success(redirect_path:)

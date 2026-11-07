@@ -5,11 +5,6 @@
     <div class="mb-2">
       <p><strong><%= @application.certifying_professional_name %></strong></p>
       <p>
-        <% if @application.respond_to?(:certifying_professional_address_1) && @application.certifying_professional_address_1.present? %>
-          <%= @application.certifying_professional_address_1 %>
-        <% end %>
-      </p>
-      <p>
         <% if @application.certifying_professional_phone.present? %>
           Phone: <%= @application.certifying_professional_phone %>
         <% end %>

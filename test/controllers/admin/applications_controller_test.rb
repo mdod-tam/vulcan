@@ -70,6 +70,49 @@ module Admin
       end
     end
 
+    test 'index warns inside the results frame when the filters fail, and the next filter clears it' do
+      application = create(:application, :with_residency_proof, application_date: Time.current, user: create(:constituent))
+      warning = I18n.t('alerts.unfiltered_error')
+      frame = { 'Turbo-Frame' => 'applications_list' }
+
+      get admin_applications_path
+      assert_select "[role='alert']", text: warning, count: 0
+
+      Applications::FilterService.any_instance.stubs(:build_filtered_scope).raises(StandardError, 'filter failed')
+      get admin_applications_path
+      assert_response :success
+      assert_select "turbo-frame#applications_list [role='alert']", text: warning, count: 1
+      assert_select "[role='alert']", text: warning, count: 1 # The page shows it once, not also in the layout flash.
+      assert_select "tr#application_#{application.id}"
+
+      get admin_applications_path, headers: frame # The filter form updates only this frame.
+      assert_response :success
+      assert_select "turbo-frame#applications_list [role='alert']", text: warning, count: 1
+      assert_select "tr#application_#{application.id}"
+
+      Applications::FilterService.any_instance.unstub(:build_filtered_scope)
+      get admin_applications_path, params: { status: 'in_progress' }, headers: frame
+      assert_response :success
+      assert_select "[role='alert']", text: warning, count: 0
+    end
+
+    test 'index shows the first page for an invalid page and raises any other pagination error' do
+      get admin_applications_path, params: { page: 'abc' }
+      assert_response :success
+
+      not_about_the_page = Pagy::VariableError.new(Pagy.new(count: 1), :count, 'to be an Integer >= 0', -1)
+      Admin::ApplicationsController.any_instance.stubs(:pagy).raises(not_about_the_page)
+
+      assert_raises(Pagy::VariableError) { get admin_applications_path }
+    end
+
+    test 'index raises when the attachment lookup fails instead of listing every application as No Proofs' do
+      create(:application, :with_residency_proof, application_date: Time.current, user: create(:constituent))
+      Admin::ApplicationsController.any_instance.stubs(:fetch_attachments_data).raises(ActiveRecord::StatementInvalid, 'lookup failed')
+
+      assert_raises(ActiveRecord::StatementInvalid) { get admin_applications_path }
+    end
+
     test 'index shows compact provider info request summary for pending applications' do
       travel_to Time.zone.local(2026, 5, 22, 15, 43) do
         pending_application = create_pending_provider_info_application
@@ -184,6 +227,45 @@ module Admin
     test 'should show application' do
       get admin_application_path(@application)
       assert_response :success
+    end
+
+    test 'show lists notes newest first and loads each note author and assignee in bulk, not one query per note' do
+      lazy_user_loads = lambda do
+        statements = []
+        recorder = ->(*, payload) { statements << payload[:sql] unless payload[:cached] || payload[:name] == 'SCHEMA' }
+        ActiveSupport::Notifications.subscribed(recorder, 'sql.active_record') { get admin_application_path(@application) }
+        assert_response :success
+        statements.count { |sql| sql.match?(/FROM "users" WHERE .*"users"\."id" = \$1.* LIMIT/) }
+      end
+      add_note = -> { create(:application_note, application: @application, admin: create(:admin), assigned_to: create(:admin)) }
+
+      get admin_application_path(@application) # The first request does one-time work the later ones skip.
+      add_note.call
+      with_one_note = lazy_user_loads.call
+      4.times { add_note.call }
+
+      assert_equal with_one_note, lazy_user_loads.call
+      assert_equal @application.application_notes.recent_first.map { |note| "application-note-#{note.id}" },
+                   css_select("[id^='application-note-']").pluck('id')
+    end
+
+    test 'show loads the assignable admins once, not once per unassigned note' do
+      admin_list_loads = lambda do
+        statements = []
+        recorder = ->(*, payload) { statements << payload[:sql] unless payload[:name] == 'SCHEMA' }
+        ActiveSupport::Notifications.subscribed(recorder, 'sql.active_record') { get admin_application_path(@application) }
+        assert_response :success
+        statements.count { |sql| sql.match?(/FROM "users" WHERE "users"\."type" = \$\d+ AND "users"\."status" = \$\d+/) }
+      end
+      add_note = -> { create(:application_note, application: @application, admin: create(:admin), assigned_to: nil) }
+
+      get admin_application_path(@application) # The first request does one-time work the later ones skip.
+      add_note.call
+      with_one_note = admin_list_loads.call
+      4.times { add_note.call }
+
+      assert_equal with_one_note, admin_list_loads.call
+      assert_select 'details summary', text: /Assign/, count: 5
     end
 
     test 'show lists household size and income with the application details, not in a second financial section' do

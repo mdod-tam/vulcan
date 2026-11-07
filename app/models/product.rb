@@ -40,9 +40,6 @@ class Product < ApplicationRecord
   scope :active, -> { where(archived_at: nil) }
   scope :archived, -> { where.not(archived_at: nil) }
   scope :ordered_by_name, -> { order(:manufacturer, :name) }
-  scope :with_selected_types, lambda { |types|
-    where('device_types::text[] && ?::text[]', "{#{Array(types).join(',')}}")
-  }
   scope :by_device_types, ->(types) { where('device_types && ARRAY[?]::text[]', Array(types)) }
   scope :by_manufacturer, ->(manufacturer) { where(manufacturer: manufacturer) }
 

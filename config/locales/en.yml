@@ -222,6 +222,24 @@ en:
       too_large_strict: "Upload a file smaller than %{max_size} MB."
       too_small: "Upload a file that is not empty."
   constituent_portal:
+    # The dashboard's Recent Activity card: proof submissions and reviews, newest last.
+    activity:
+      heading: "Recent Activity"
+      empty: "No recent activity"
+      reason: "Reason:"
+      time_ago: "%{time} ago"
+      attached_via:
+        web: "%{proof} attached via web"
+        paper: "%{proof} attached via paper"
+        secure_form: "%{proof} attached via secure form"
+        email: "%{proof} attached via email"
+      attached: "%{proof} attached"
+      approved: "%{proof} approved"
+      rejected: "%{proof} rejected"
+      reviews:
+        disability_certification:
+          approved: "Disability certification approved"
+          rejected: "Disability certification rejected"
     dependents:
       form:
         # Turbo disables the submitter. These labels explain the wait.
@@ -1125,6 +1143,7 @@ en:
     invalid_reset_link: "Invalid or expired reset link."
     mismatch: "New password and confirmation do not match."
     updated: "Password successfully updated."
+    updated_while_locked: "Password successfully updated. Sign-in is paused for up to %{minutes} minutes after too many failed attempts. Try again after that."
     update_failed: "Unable to update password. %{details}."
     edit:
       reset: "Reset Password"

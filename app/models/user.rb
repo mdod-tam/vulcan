@@ -154,7 +154,6 @@ class User < ApplicationRecord
   has_many :assigned_evaluations, class_name: 'Evaluation', foreign_key: :evaluator_id,
                                   inverse_of: :evaluator, dependent: :restrict_with_error
   has_many :assigned_training_constituents, through: :assigned_training_sessions, source: :constituent
-  has_many :assigned_evaluation_constituents, through: :assigned_evaluations, source: :constituent
   has_many :recovery_requests, dependent: :restrict_with_exception
   has_many :subject_duplicate_review_cases,
            class_name: 'DuplicateReviewCase',
@@ -179,8 +178,6 @@ class User < ApplicationRecord
   has_and_belongs_to_many :products,
                           join_table: 'products_users'
 
-  scope :ordered_by_name, -> { order(:first_name) }
-
   # Paper intake must not trust UI filters or +existing_constituent_id+ alone.
   # A merged duplicate still passes +constituent?+, but new applications belong to its survivor.
   def paper_applicant_candidate?
@@ -189,15 +186,17 @@ class User < ApplicationRecord
     constituent?
   end
 
+  # The same rule in SQL, for searches that must choose candidates before they apply a limit.
+  scope :paper_applicant_candidates, -> { where(type: 'Users::Constituent', merged_into_user_id: nil) }
+
   # Paper guardians supply intake context and may receive notifications. Exclude merged, suspended, and inactive constituents.
   # Duplicate-review flags do not gate intake. Legacy NULL status remains eligible.
   def paper_guardian_candidate?
-    return false unless constituent?
-    return false if merged?
-    return false if suspended? || inactive?
-
-    true
+    constituent? && in_standing?
   end
+
+  # The same rule in SQL.
+  scope :paper_guardian_candidates, -> { paper_applicant_candidates.in_standing }
 
   # Guardian contact and synthetic credentials do not disqualify dependents.
   # Public-login status does not gate this role. Application eligibility is separate.
@@ -212,23 +211,21 @@ class User < ApplicationRecord
   # Shared gate for sign-in, account access, and password-reset tokens.
   # Legacy NULL status predates the enum and remains active.
   def public_login_active?
-    return false if merged?
-    return false if respond_to?(:suspended?) && suspended?
-    return false if respond_to?(:inactive?) && inactive?
-
-    true
+    in_standing?
   end
 
   # Issuance callers requalify persisted recipients under a lock for new forms and resends.
   # This delivery gate does not grant login access or change an issued form's lifecycle.
   def secure_request_delivery_eligible?
-    return false unless constituent?
-    return false if merged?
-    return false if respond_to?(:suspended?) && suspended?
-    return false if respond_to?(:inactive?) && inactive?
-
-    true
+    constituent? && in_standing?
   end
+
+  # Not merged, suspended, or inactive. Legacy NULL status predates the enum and stays in standing.
+  # A plain NOT IN would drop those NULL rows, so the SQL form keeps them explicitly.
+  scope :in_standing, lambda {
+    where(merged_into_user_id: nil)
+      .where('users.status IS NULL OR users.status NOT IN (?)', User.statuses.values_at(:inactive, :suspended))
+  }
 
   def deactivate!(actor:)
     change_login_status!(:inactive, actor: actor)
@@ -248,6 +245,10 @@ class User < ApplicationRecord
   end
 
   private
+
+  def in_standing?
+    !merged? && !suspended? && !inactive?
+  end
 
   def change_login_status!(new_status, actor:)
     raise ArgumentError, 'actor is required' if actor.blank?

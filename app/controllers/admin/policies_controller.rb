@@ -26,10 +26,9 @@ module Admin
     end
 
     def changes
-      @pagy, @policy_changes = pagy(
+      @pagy, @policy_changes = paginate_or_first_page(
         PolicyChange.includes(:policy, :user)
-          .order(created_at: :desc),
-        items: 25
+          .order(created_at: :desc)
       )
     end
 

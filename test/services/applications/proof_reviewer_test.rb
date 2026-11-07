@@ -203,7 +203,7 @@ module Applications
       Event.create!(
         auditable: @application,
         user: @application.user,
-        action: 'income_proof_submitted',
+        action: 'income_proof_attached',
         metadata: { 'proof_type' => 'income', 'submission_method' => 'paper' }
       )
 

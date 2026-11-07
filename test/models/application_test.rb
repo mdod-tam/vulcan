@@ -737,6 +737,24 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_includes application.errors.details[:managing_guardian], error: :invalid
   end
 
+  test 'the accessible_by scope and the accessible_by? predicate agree for an owner, a guardian, a dependent and a stranger' do
+    guardian, dependent, stranger, adult = create_list(:constituent, 4, :with_disabilities)
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+    managed = create(:application, :draft, user: dependent, managing_guardian: guardian)
+    own = create(:application, :draft, user: adult)
+
+    {
+      adult => [own], guardian => [managed], dependent => [], stranger => []
+    }.each do |user, expected|
+      [own, managed].each do |application|
+        assert_equal expected.include?(application), application.accessible_by?(user),
+                     "predicate for #{user.id} on application #{application.id}"
+        assert_equal expected.include?(application), Application.accessible_by(user).exists?(application.id),
+                     "scope for #{user.id} on application #{application.id}"
+      end
+    end
+  end
+
   # escalate_to_dcf!
 
   test 'escalate_to_dcf! transitions to awaiting_dcf and leaves the certification request to staff' do
