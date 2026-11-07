@@ -100,7 +100,6 @@ module EmailTemplates
         'fully_redeemed_message_text' => is_es ? 'Este vale ha sido canjeado en su totalidad.' : 'This voucher has been fully redeemed.',
         'download_form_url' => 'http://example.com/forms/disability_cert.pdf',
         'request_count_message' => is_es ? '(Solicitud #1)' : '(Request #1)',
-        'temp_password' => 'temporaryP@ssw0rd',
         'household_size' => 4,
         'annual_income_formatted' => '$45,000.00',
         'threshold_formatted' => '$55,000.00',

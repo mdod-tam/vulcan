@@ -186,32 +186,7 @@ module TwoFactorVerification
     phone.present? && phone.gsub(/\D/, '').length >= 10
   end
 
-  # Returns nil unless the secret is Base32 (A-Z and 2-7). The secret is rendered into HTML and a
-  # provisioning URL, so only those characters pass.
-  def validate_base32_secret(secret)
-    return nil if secret.blank?
-
-    secret = secret.to_s.strip
-    return nil unless secret.match?(/\A[A-Z2-7]+\z/)
-
-    ROTP::Base32.decode(secret)
-    secret
-  rescue ArgumentError, ROTP::Base32::Base32Error
-    nil
-  end
-
-  # Returns the params secret if it is valid Base32. The failed setup redirect sends one.
-  # Otherwise returns a new random secret.
-  def get_validated_totp_secret(param_secret)
-    if param_secret.present?
-      validated_secret = validate_base32_secret(param_secret)
-      validated_secret || ROTP::Base32.random
-    else
-      ROTP::Base32.random
-    end
-  end
-
-  # Callers must set @secret to a validated secret first.
+  # Callers use the server-selected pending enrollment secret.
   def generate_totp_qr_code
     @totp_uri = ROTP::TOTP.new(@secret, issuer: 'MatVulcan').provisioning_uri(current_user.mfa_account_name)
     @qr_code = RQRCode::QRCode.new(@totp_uri).as_svg(

@@ -16,9 +16,9 @@ class BootstrapAdministratorSignInTest < ActionDispatch::IntegrationTest
     assert_redirected_to setup_two_factor_authentication_path
 
     get new_credential_two_factor_authentication_path(type: 'totp')
-    secret = css_select('input[name="secret"]').sole['value']
+    secret = session[TwoFactorAuth::SESSION_KEYS[:metadata]].with_indifferent_access.fetch(:secret)
     post create_credential_two_factor_authentication_path(type: 'totp'),
-         params: { code: ROTP::TOTP.new(secret).now, secret: secret, nickname: 'Bootstrap factor' }
+         params: { code: ROTP::TOTP.new(secret).now, nickname: 'Bootstrap factor' }
     assert_redirected_to credential_success_two_factor_authentication_path(type: 'totp')
 
     delete sign_out_path

@@ -103,14 +103,11 @@ class AccountRecoveryController < ApplicationController
   end
 
   def log_recovery_attempt(user, status, metadata = {})
-    AuditEventService.log(
+    PublicAuditActor.log_audit(
       action: "security_key_recovery_request_#{status}",
-      actor: user,
       auditable: user,
       metadata: recovery_audit_metadata.merge(metadata)
     )
-  rescue StandardError => e
-    Rails.logger.warn("Unable to audit security key recovery #{status} for user #{user.id}: #{e.class.name}")
   end
 
   def log_unmatched_recovery_rate_limit(rate_limit_scope)

@@ -9,7 +9,7 @@ class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
   setup do
     @secret = ROTP::Base32.random_base32
     @user = create(:constituent, password: 'password1234', password_confirmation: 'password1234')
-    @user.totp_credentials.create!(secret: @secret, nickname: 'Authenticator App', last_used_at: Time.current)
+    @user.totp_credentials.create!(secret: @secret, nickname: 'Authenticator App', last_used_at: 1.minute.ago)
   end
 
   test 'user retired mid-flow cannot complete TOTP 2FA' do

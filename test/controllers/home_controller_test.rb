@@ -44,7 +44,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
     test "signed-in #{role} reaches the existing role destination" do
       user = role == :certifying_professional ? create(:user, :certifying_professional) : create(role)
       secret = ROTP::Base32.random_base32
-      user.totp_credentials.create!(secret: secret, nickname: 'Authenticator')
+      user.totp_credentials.create!(secret: secret, nickname: 'Authenticator', last_used_at: 1.minute.ago)
 
       post sign_in_path, params: { email: user.email, password: 'password1234' }
       assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')

@@ -148,6 +148,33 @@ class PendingTwoFactorPasswordChangeTest < ActionDispatch::IntegrationTest
   end
 
   %i[html json].each do |format|
+    test "successful #{format} completion preserves the return path and clears pending authentication" do
+      user, credential = user_with_totp
+      get edit_profile_path
+      assert_redirected_to sign_in_path
+      start_password_step(user)
+      assert_equal edit_profile_path, session[TwoFactorAuth::SESSION_KEYS[:return_path]]
+
+      assert_difference('Session.count', 1) do
+        post process_verification_two_factor_authentication_path(type: 'totp'),
+             params: { code: ROTP::TOTP.new(credential.secret).now }, **(format == :json ? { as: :json } : {})
+      end
+
+      if format == :json
+        assert_response :success
+        assert_equal 'success', response.parsed_body['status']
+        assert_equal edit_profile_path, response.parsed_body['redirect_url']
+      else
+        assert_redirected_to edit_profile_path
+        assert_equal I18n.t('controllers.application.complete_two_factor_authentication.signin_pass_2fa'), flash[:notice]
+      end
+      assert_equal user, Session.order(:id).last.user
+      assert cookies[:session_token].present?
+      assert_pending_state_cleared
+      get edit_profile_path
+      assert_response :success
+    end
+
     test "password change after factor verification prevents #{format} session issuance" do
       user, credential = user_with_totp
       start_password_step(user)
@@ -178,6 +205,21 @@ class PendingTwoFactorPasswordChangeTest < ActionDispatch::IntegrationTest
       end
       assert cookies[:session_token].blank?
       assert_pending_state_cleared
+
+      travel 30.seconds do
+        assert_no_difference('Session.count') do
+          post process_verification_two_factor_authentication_path(type: 'totp'),
+               params: { code: ROTP::TOTP.new(credential.secret).now }, **(format == :json ? { as: :json } : {})
+        end
+      end
+      if format == :json
+        assert_response :unprocessable_content
+        assert_equal 'user_session', response.parsed_body['error_code']
+      else
+        assert_redirected_to sign_in_path
+      end
+      assert cookies[:session_token].blank?
+      assert_pending_state_cleared
     end
   end
 
@@ -185,7 +227,7 @@ class PendingTwoFactorPasswordChangeTest < ActionDispatch::IntegrationTest
 
   def user_with_totp(role = :constituent)
     user = create(role)
-    credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator', last_used_at: 1.minute.ago)
     [user, credential]
   end
 

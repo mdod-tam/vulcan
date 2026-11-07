@@ -56,6 +56,7 @@ es:
       user_session: "No se encontró la sesión. Vuelva a iniciar sesión."
       invalid_code: "El código de verificación no es válido. Inténtelo de nuevo."
       expired_code: "El código de verificación venció. Solicite uno nuevo."
+      expired_totp_setup: "Su sesión de configuración venció. Escanee el nuevo código QR e inténtelo de nuevo."
       max_attempts_reached: "Se alcanzó el número máximo de intentos. Solicite un código nuevo."
       totp_rate_limited: "Demasiados intentos de verificación. Espere 15 minutos y vuelva a iniciar sesión."
       verification_rate_limited: "Demasiadas solicitudes de verificación. Espere un minuto y vuelva a iniciar sesión."

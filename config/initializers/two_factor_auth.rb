@@ -2,6 +2,8 @@
 
 # Constants and helpers for standardized 2FA session keys
 module TwoFactorAuth
+  TOTP_SETUP_EXPIRY = 10.minutes
+
   # Session keys used across different 2FA methods
   SESSION_KEYS = {
     # Challenge state
@@ -49,6 +51,26 @@ module TwoFactorAuth
       challenge: session[SESSION_KEYS[:challenge]],
       metadata: session[SESSION_KEYS[:metadata]]
     }
+  end
+
+  def self.pending_totp_secret(session, user_id:)
+    data = retrieve_challenge(session)
+    metadata = (data[:metadata] || {}).with_indifferent_access
+    return unless data[:type].to_s == 'totp_setup'
+    return unless metadata[:user_id].to_s == user_id.to_s
+    return unless metadata[:expires_at].to_i > Time.current.to_i
+
+    metadata[:secret].presence
+  end
+
+  def self.start_totp_enrollment(session, user_id:)
+    pending_secret = pending_totp_secret(session, user_id: user_id)
+    return pending_secret if pending_secret
+
+    secret = ROTP::Base32.random
+    store_challenge(session, :totp_setup, nil,
+                    secret: secret, user_id: user_id, expires_at: TOTP_SETUP_EXPIRY.from_now.to_i)
+    secret
   end
 
   def self.clear_challenge(session)

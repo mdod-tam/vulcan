@@ -39,15 +39,7 @@ class TwoFactorCredentialsController < ApplicationController
     when 'webauthn'
       render 'webauthn_credentials/new'
     when 'totp'
-      # Validate a submitted secret before the QR code uses it.
-      @secret = get_validated_totp_secret(params[:secret])
-
-      TwoFactorAuth.store_challenge(
-        session,
-        :totp,
-        nil, # TOTP stores its secret in metadata instead of a challenge.
-        { secret: @secret }
-      )
+      @secret = TwoFactorAuth.start_totp_enrollment(session, user_id: current_user.id)
 
       generate_totp_qr_code
 
@@ -250,7 +242,14 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def create_totp_credential
-    @secret = totp_secret_from_session
+    @secret = TwoFactorAuth.pending_totp_secret(session, user_id: current_user.id)
+    unless @secret
+      clear_challenge
+      redirect_to new_credential_two_factor_authentication_path(type: 'totp'),
+                  alert: t('two_factor_verification.errors.expired_totp_setup'), status: :see_other
+      return
+    end
+
     if totp_setup_code_valid?
       handle_totp_credential_success
     else
@@ -277,23 +276,9 @@ class TwoFactorCredentialsController < ApplicationController
     message = t('two_factor_verification.errors.invalid_code')
     log_totp_setup_failure(message)
 
-    # Rebuild the QR code so the user can retry setup.
-    regenerate_qr_code_for_failed_setup
+    generate_totp_qr_code
 
     handle_error_response(html_render_action: 'totp_credentials/new', error_message: message)
-  end
-
-  def regenerate_qr_code_for_failed_setup
-    # Validate the secret from params or session before it enters the QR code.
-    challenge_data = TwoFactorAuth.retrieve_challenge(session)
-    raw_secret = params[:secret] || challenge_data[:metadata]&.dig(:secret)
-    @secret = validate_base32_secret(raw_secret)
-
-    unless @secret
-      Rails.logger.error('[2FA_CREDENTIAL] Invalid or missing secret when regenerating QR code for failed setup.')
-      @secret = ROTP::Base32.random
-    end
-    generate_totp_qr_code
   end
 
   def render_invalid_phone_error
@@ -384,22 +369,17 @@ class TwoFactorCredentialsController < ApplicationController
     TwoFactorAuth.log_verification_failure(current_user.id, :totp, reason: :invalid_setup_code)
   end
 
-  # The hidden form value supplies the secret when session metadata has none.
-  # Enrollment verifies the code against the selected secret before it saves the credential.
-  def totp_secret_from_session
-    challenge_data = TwoFactorAuth.retrieve_challenge(session)
-    challenge_data[:metadata]&.dig(:secret) || params[:secret]
-  end
-
   def totp_setup_code_valid?
-    totp = ROTP::TOTP.new(@secret)
-    totp.verify(params[:code], drift_behind: 30, drift_ahead: 30)
+    code = params[:code]
+    return false unless code.is_a?(String) && code.match?(/\A[0-9]{6}\z/)
+
+    @matched_totp_at = ROTP::TOTP.new(@secret).verify(code, drift_behind: 30, drift_ahead: 30)
   end
 
   def handle_totp_credential_success
     # The challenge clears only after the credential saves.
     credential = create_totp_credential_record
-    log_totp_credential_created(credential)
+    log_totp_credential_created(credential) if credential.previously_new_record?
     TwoFactorAuth.clear_challenge(session)
 
     success_path = credential_success_two_factor_authentication_path(type: 'totp')
@@ -415,11 +395,15 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def create_totp_credential_record
-    current_user.totp_credentials.create!(
-      secret: @secret,
-      nickname: params[:nickname].presence || 'Authenticator App',
-      last_used_at: Time.current
-    )
+    current_user.with_lock do
+      existing = current_user.totp_credentials.find { |credential| credential.secret == @secret }
+      existing&.update!(last_used_at: [existing.last_used_at, Time.at(@matched_totp_at).utc].max)
+      existing || current_user.totp_credentials.create!(
+        secret: @secret,
+        nickname: params[:nickname].presence || 'Authenticator App',
+        last_used_at: Time.at(@matched_totp_at).utc
+      )
+    end
   end
 
   def log_totp_credential_created(credential)

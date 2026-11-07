@@ -25,6 +25,26 @@ class NotificationTest < ActiveSupport::TestCase
     assert_not_includes @notification.metadata.to_json, 'secret'
   end
 
+  test 'metadata updates reject the temporary password key without persisting or exposing its value' do
+    secret = 'notification-secret-must-not-persist'
+    original_metadata = @notification.metadata.deep_dup
+
+    [secret, nil, '[REDACTED]'].each do |value|
+      error = assert_raises(ActiveRecord::RecordInvalid) do
+        @notification.update_metadata!(:temp_password, value)
+      end
+      assert_includes error.message, 'temp_password'
+      assert_not_includes error.message, secret
+      assert_equal original_metadata, @notification.reload.metadata
+    end
+
+    error = assert_raises(ActiveRecord::RecordInvalid) do
+      @notification.update!(metadata: { 'temp_password' => secret })
+    end
+    assert_not_includes error.message, secret
+    assert_equal original_metadata, @notification.reload.metadata
+  end
+
   %i[suppressed configuration_error].each do |outcome|
     test "a stale failure writer preserves a #{outcome} decision" do
       stale = Notification.find(@notification.id)

@@ -12,6 +12,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   end
 
   setup do
+    ensure_system_audit_actor!
     SmsService.stubs(:send_message).returns(true)
 
     @user = User.create!(
@@ -136,6 +137,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     assert_equal 'code', page.evaluate_script('document.activeElement.id')
     assert_button 'Verify & Complete Setup', disabled: false
     assert_empty @user.reload.totp_credentials
+    take_screenshot('totp-enrollment-retry', html: true, full: true)
 
     find_field('Verification Code').set(ROTP::TOTP.new(known_secret).now)
     click_button 'Verify & Complete Setup'
@@ -144,9 +146,29 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     assert_equal ['Retry Auth App'], @user.reload.totp_credentials.pluck(:nickname)
   end
 
+  test 'expired TOTP enrollment restarts setup and lets the user enroll again' do
+    freeze_time do
+      known_secret = begin_totp_enrollment
+      travel TwoFactorAuth::TOTP_SETUP_EXPIRY
+      find_field('Verification Code').set(ROTP::TOTP.new(known_secret).now)
+      click_button 'Verify & Complete Setup'
+
+      assert_text I18n.t('two_factor_verification.errors.expired_totp_setup')
+      assert_text 'Set up Authenticator App'
+      assert_empty @user.reload.totp_credentials
+      assert_button 'Verify & Complete Setup', disabled: false
+      take_screenshot('totp-enrollment-expired', html: true, full: true)
+
+      find_field('Verification Code').set(ROTP::TOTP.new(known_secret).now)
+      click_button 'Verify & Complete Setup'
+      assert_text 'Authenticator app registered successfully'
+      assert_equal 1, @user.reload.totp_credentials.count
+    end
+  end
+
   test 'user logs in successfully using TOTP' do
     secret = ROTP::Base32.random
-    @user.totp_credentials.create!(secret: secret, nickname: 'Test TOTP', last_used_at: Time.current)
+    @user.totp_credentials.create!(secret: secret, nickname: 'Test TOTP', last_used_at: 1.minute.ago)
 
     system_test_sign_in(@user, verify_path: verify_method_two_factor_authentication_path(type: 'totp'))
 
@@ -279,7 +301,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
   test 'user removes TOTP credential successfully' do
     secret = ROTP::Base32.random
-    credential = @user.totp_credentials.create!(secret: secret, nickname: 'AppToDelete', last_used_at: Time.current)
+    credential = @user.totp_credentials.create!(secret: secret, nickname: 'AppToDelete', last_used_at: 1.minute.ago)
     assert @user.reload.totp_credentials.exists?(nickname: 'AppToDelete')
 
     system_test_sign_in(@user, verify_path: verify_method_two_factor_authentication_path(type: 'totp'))

@@ -95,7 +95,6 @@ module EmailDelivery
       raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
 
       outcome = queue_mail_delivery(mail_delivery)
-      redact_temp_password(notification) if notification.metadata&.dig('temp_password').present?
       raise StandardError, "Mail job for '#{notification.action}' could not be queued" if outcome == :enqueue_failed
 
       if %i[suppressed configuration_error].include?(outcome)
@@ -193,12 +192,6 @@ module EmailDelivery
       end
     rescue StandardError => e
       Rails.logger.warn "NotificationService: Failed to persist routing metadata for Notification ##{notification.id}: #{e.class.name}"
-    end
-
-    def redact_temp_password(notification)
-      notification.update_metadata!('temp_password', '[REDACTED]')
-    rescue StandardError => e
-      Rails.logger.warn "NotificationService: Failed to redact temp_password for Notification ##{notification.id}: #{e.class.name}"
     end
 
     def resolve_mailer(notification)

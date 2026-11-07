@@ -71,7 +71,7 @@ class SessionActivitySystemTest < ApplicationSystemTestCase
 
   test 'vendor can keep working on an unfinished portal profile' do
     user = create(:vendor, :with_terms_accepted)
-    credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Browser authenticator')
+    credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Browser authenticator', last_used_at: 1.minute.ago)
     visit sign_in_path
     within '#sign_in_form form' do
       fill_in 'contact-input', with: user.email

@@ -171,16 +171,13 @@ class PasswordsController < ApplicationController
   end
 
   def log_account_access_attempt(user, delivery_method, status, metadata = {})
-    AuditEventService.log(
+    PublicAuditActor.log_audit(
       action: "account_access_instructions_#{status}",
-      actor: user,
       auditable: user,
       metadata: account_access_audit_metadata.merge(
         { delivery_method: delivery_method.to_s }.merge(metadata)
       )
     )
-  rescue StandardError => e
-    Rails.logger.warn("Unable to audit account access request for user #{user.id}: #{e.class}")
   end
 
   def log_public_account_access_rate_limit(rate_limit_scope)
@@ -294,7 +291,9 @@ class PasswordsController < ApplicationController
       update_succeeded = @user.update(
         password: params[:password],
         password_confirmation: params[:password_confirmation],
-        force_password_change: false
+        force_password_change: false,
+        failed_attempts: 0,
+        locked_at: nil
       )
     end
 

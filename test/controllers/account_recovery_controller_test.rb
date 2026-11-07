@@ -157,7 +157,11 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
-    assert_equal 1, Event.where(action: 'security_key_recovery_request_rate_limited', user: @user).count
+    assert_equal 1, Event.where(action: 'security_key_recovery_request_rate_limited', auditable: @user).count
+    event = @user.audit_events.find_by!(action: 'security_key_recovery_request_rate_limited')
+    assert_equal @system_audit_actor, event.user
+    assert_equal @user, event.auditable
+    assert_equal 'public_unauthenticated', event.metadata['public_audit_actor']
     assert_cache_prefix_present('auth_rate_limit:account_recovery:user_ip:')
     assert_cache_prefix_absent('security_key_recovery:')
   ensure
@@ -200,6 +204,33 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_not_includes event.metadata.values.join(' '), contact
     assert_cache_prefix_present('auth_rate_limit:account_recovery:contact_ip:')
     assert_cache_prefix_absent('security_key_recovery')
+  ensure
+    Rails.cache = old_cache
+  end
+
+  test 'missing system actor preserves recovery throttling without attributing the attempt to the account holder' do
+    old_cache = Rails.cache
+    Rails.cache = ActiveSupport::Cache::MemoryStore.new
+    Current.set(user: @system_audit_actor) do
+      @system_audit_actor.update!(email: 'unconfigured-audit@example.test')
+    end
+    set_auth_rate_limit_policy('account_recovery_rate_limit_ip', 10)
+    set_auth_rate_limit_policy('account_recovery_rate_limit_contact_ip', 10)
+    set_auth_rate_limit_policy('account_recovery_rate_limit_user_ip', 1)
+    set_auth_rate_limit_policy('account_recovery_rate_period', 1)
+    post request_security_key_reset_path, params: { contact: @user.email, details: 'Lost key' }
+
+    logs = capture_rails_logs do
+      assert_no_difference ['RecoveryRequest.count', 'User.count'] do
+        assert_no_difference -> { Event.where(action: 'security_key_recovery_request_rate_limited').count } do
+          post request_security_key_reset_path, params: { contact: @user.email, details: 'Repeated request' }
+        end
+      end
+    end
+
+    assert_redirected_to account_recovery_confirmation_path
+    assert_includes logs, "skipped audit 'security_key_recovery_request_rate_limited'"
+    assert_not_includes logs, @user.email
   ensure
     Rails.cache = old_cache
   end
@@ -293,7 +324,11 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
-    assert_equal 1, Event.where(action: 'security_key_recovery_request_failed', user: @user).count
+    assert_equal 1, Event.where(action: 'security_key_recovery_request_failed', auditable: @user).count
+    event = @user.audit_events.find_by!(action: 'security_key_recovery_request_failed')
+    assert_equal @system_audit_actor, event.user
+    assert_equal @user, event.auditable
+    assert_equal 'public_unauthenticated', event.metadata['public_audit_actor']
     assert_redirected_to account_recovery_confirmation_path
   end
 

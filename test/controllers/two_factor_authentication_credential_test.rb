@@ -44,7 +44,7 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
 
   test 'TOTP enrollment uses the shared invalid-code feedback' do
     get new_credential_two_factor_authentication_path(type: 'totp')
-    secret = css_select('input[name="secret"]').sole['value']
+    secret = session[TwoFactorAuth::SESSION_KEYS[:metadata]].with_indifferent_access.fetch(:secret)
     post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: 'invalid', secret: secret }
     assert_response :unprocessable_content
     assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code')
@@ -53,7 +53,7 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
 
   test 'TOTP enrollment over Turbo answers an invalid code with only a flash stream, then accepts the corrected code' do
     get new_credential_two_factor_authentication_path(type: 'totp')
-    secret = css_select('input[name="secret"]').sole['value']
+    secret = session[TwoFactorAuth::SESSION_KEYS[:metadata]].with_indifferent_access.fetch(:secret)
     headers = { 'Accept' => Mime[:turbo_stream].to_s }
 
     post create_credential_two_factor_authentication_path(type: 'totp'),

@@ -309,21 +309,18 @@ class TwoFactorAuthenticationsController < ApplicationController
   def handle_successful_verification(format)
     @user = find_user_for_two_factor
 
-    format.html { complete_two_factor_authentication(@user) }
+    format.html do
+      if (return_to = complete_two_factor_authentication(@user))
+        redirect_to return_to, notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
+      else
+        redirect_to sign_in_path, alert: t('alerts.session_fail')
+      end
+    end
     format.json do
       # The JSON response supplies a redirect URL instead of an HTTP redirect.
-      stored_location = TwoFactorAuth.get_return_path(session) || session.delete(:return_to)
-      session_record = _create_and_set_session_cookie(
-        @user, two_factor_sign_in_token: session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]]
-      )
-
-      if session_record
-        # Clear the challenge only after session creation succeeds.
-        TwoFactorAuth.complete_authentication_with_challenge_clear(session)
-        return_to = stored_location || _dashboard_for(@user)
+      if (return_to = complete_two_factor_authentication(@user))
         render json: { status: 'success', redirect_url: return_to }
       else
-        TwoFactorAuth.abort_authentication(session)
         render json: { error: t('security_key_verification.feedback.session_failed'), error_code: 'session_failed' },
                status: :unprocessable_content
       end

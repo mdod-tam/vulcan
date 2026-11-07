@@ -11,7 +11,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
   %i[admin constituent vendor evaluator trainer].each do |role|
     test "fully signed-in #{role} receives session activity controls" do
       user = create(role)
-      credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator') unless role == :constituent
+      credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator', last_used_at: 1.minute.ago) unless role == :constituent
       post sign_in_path, params: { email: user.email, password: 'password1234' }
       if credential
         assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
@@ -96,7 +96,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
 
   test 'admin session activity does not mount during a required password change' do
     admin = create(:admin, force_password_change: true)
-    credential = admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    credential = admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator', last_used_at: 1.minute.ago)
     post sign_in_path, params: { email: admin.email, password: 'password1234' }
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
     post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: ROTP::TOTP.new(credential.secret).now }
@@ -226,7 +226,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
 
   test 'a suspended administrator cannot continue an established MFA-authenticated session' do
     admin = create(:admin)
-    credential = admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    credential = admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator', last_used_at: 1.minute.ago)
     post sign_in_path, params: { email: admin.email, password: 'password1234' }
     post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: ROTP::TOTP.new(credential.secret).now }
     session_record = admin.sessions.last
