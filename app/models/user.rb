@@ -179,8 +179,6 @@ class User < ApplicationRecord
   has_and_belongs_to_many :products,
                           join_table: 'products_users'
 
-  scope :ordered_by_name, -> { order(:first_name) }
-
   # Paper intake must not trust UI filters or +existing_constituent_id+ alone.
   # A merged duplicate still passes +constituent?+, but new applications belong to its survivor.
   def paper_applicant_candidate?
@@ -188,6 +186,9 @@ class User < ApplicationRecord
 
     constituent?
   end
+
+  # The same rule in SQL, for searches that must choose candidates before they apply a limit.
+  scope :paper_applicant_candidates, -> { where(type: 'Users::Constituent', merged_into_user_id: nil) }
 
   # Paper guardians supply intake context and may receive notifications. Exclude merged, suspended, and inactive constituents.
   # Duplicate-review flags do not gate intake. Legacy NULL status remains eligible.
@@ -198,6 +199,12 @@ class User < ApplicationRecord
 
     true
   end
+
+  # The same rule in SQL. A plain NOT IN would drop the legacy NULL status rows the predicate keeps.
+  scope :paper_guardian_candidates, lambda {
+    where(type: 'Users::Constituent', merged_into_user_id: nil)
+      .where('users.status IS NULL OR users.status NOT IN (?)', User.statuses.values_at(:inactive, :suspended))
+  }
 
   # Guardian contact and synthetic credentials do not disqualify dependents.
   # Public-login status does not gate this role. Application eligibility is separate.

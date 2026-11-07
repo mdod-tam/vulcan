@@ -482,20 +482,12 @@ module ConstituentPortal
       )
     end
 
+    # The scope is the whole access check: it is the same condition as Application#accessible_by?.
     def set_application
-      @application = find_application_by_standard_query
-      @application = find_application_by_flexible_query if @application.nil?
-      handle_application_not_found if @application.nil?
-      @guardian_relationship_type = @application&.guardian_relationship_type
-    end
+      @application = Application.accessible_by(current_user).find_by(id: params[:id])
+      return handle_application_not_found if @application.nil?
 
-    def find_application_by_standard_query
-      Application.accessible_by(current_user).find_by(id: params[:id])
-    end
-
-    def find_application_by_flexible_query
-      app = Application.find_by(id: params[:id])
-      app&.accessible_by?(current_user) ? app : nil
+      @guardian_relationship_type = @application.guardian_relationship_type
     end
 
     def handle_application_not_found

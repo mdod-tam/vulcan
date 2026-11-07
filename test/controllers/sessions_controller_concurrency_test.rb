@@ -271,6 +271,131 @@ class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
     cleanup_duplicate_review_test_data!(user)
   end
 
+  test 'concurrent failed logins serialize so neither count is lost' do
+    user = create(:constituent, email: "fail-race-#{SecureRandom.hex(4)}@example.com")
+
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_pid_queue = Queue.new
+    holder_thread = on_own_connection do
+      holder_pid_queue << backend_pid
+      ActiveRecord::Base.transaction do
+        User.find(user.id).record_failed_login!
+        holder_ready << true
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+    wait_for_signal(holder_ready, thread: holder_thread)
+
+    contender_pid_queue = Queue.new
+    contender_thread = on_own_connection do
+      contender_pid_queue << backend_pid
+      User.find(user.id).record_failed_login!
+    end
+
+    confirm_blocked_then_release(
+      wait_for_signal(contender_pid_queue, thread: contender_thread),
+      holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+    )
+
+    assert_equal 2, user.reload.failed_attempts
+  ensure
+    cleanup_duplicate_review_test_data!(user)
+  end
+
+  test 'the final failed login commits first: a correct-password sign-in is refused without a session' do
+    user = create(
+      :constituent,
+      email: "lock-wins-#{SecureRandom.hex(4)}@example.com",
+      password: 'Password123!',
+      password_confirmation: 'Password123!',
+      failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS - 1
+    )
+
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_pid_queue = Queue.new
+    holder_thread = on_own_connection do
+      holder_pid_queue << backend_pid
+      ActiveRecord::Base.transaction do
+        User.find(user.id).record_failed_login!
+        holder_ready << true
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+    wait_for_signal(holder_ready, thread: holder_thread)
+
+    contender_pid_queue = Queue.new
+    sign_in_response = nil
+    contender_thread = on_own_connection do
+      contender_pid_queue << backend_pid
+      sign_in_response = run_sign_in(user)
+    end
+
+    confirm_blocked_then_release(
+      wait_for_signal(contender_pid_queue, thread: contender_thread),
+      holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+    )
+
+    assert_equal :redirect, sign_in_response[:action]
+    assert_nil sign_in_response[:notice]
+    assert sign_in_response[:alert].present?
+    assert_nil sign_in_response[:session_cookie], 'a locked account must not receive a signed session cookie'
+    user.reload
+    assert_equal 0, user.sessions.count
+    assert_predicate user, :account_locked?
+    assert_equal UserAuthentication::MAX_LOGIN_ATTEMPTS, user.failed_attempts
+    assert_nil user.last_sign_in_at
+  ensure
+    cleanup_duplicate_review_test_data!(user)
+  end
+
+  test 'a sign-in commits first: the later failed login counts from the cleared counter' do
+    user = create(
+      :constituent,
+      email: "signin-first-#{SecureRandom.hex(4)}@example.com",
+      password: 'Password123!',
+      password_confirmation: 'Password123!',
+      failed_attempts: 3
+    )
+
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_pid_queue = Queue.new
+    sign_in_response = nil
+    holder_thread = on_own_connection do
+      holder_pid_queue << backend_pid
+      ActiveRecord::Base.transaction do
+        sign_in_response = run_sign_in(user)
+        holder_ready << true
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+    wait_for_signal(holder_ready, thread: holder_thread)
+
+    contender_pid_queue = Queue.new
+    contender_thread = on_own_connection do
+      contender_pid_queue << backend_pid
+      User.find(user.id).record_failed_login!
+    end
+
+    confirm_blocked_then_release(
+      wait_for_signal(contender_pid_queue, thread: contender_thread),
+      holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+    )
+
+    assert_equal 'Signed in successfully', sign_in_response[:notice]
+    user.reload
+    assert_equal 1, user.failed_attempts, 'the sign-in cleared the counter before the failed login counted'
+    assert_not_predicate user, :account_locked?
+    assert_equal 1, user.sessions.count
+  ensure
+    cleanup_duplicate_review_test_data!(user)
+  end
+
   private
 
   def build_fixtures

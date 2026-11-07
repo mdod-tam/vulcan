@@ -13,7 +13,7 @@ module ConstituentPortal
       time_base = Time.current.beginning_of_minute
 
       submission1 = Event.create!(
-        action: 'income_proof_submitted',
+        action: 'income_proof_attached',
         user: @application.user,
         auditable: @application,
         metadata: { proof_type: 'income', submission_method: 'web' },
@@ -21,7 +21,7 @@ module ConstituentPortal
       )
 
       submission2 = Event.create!(
-        action: 'income_proof_submitted',
+        action: 'income_proof_attached',
         user: @application.user,
         auditable: @application,
         metadata: { proof_type: 'income', submission_method: 'web' },
@@ -29,7 +29,7 @@ module ConstituentPortal
       )
 
       submission3 = Event.create!(
-        action: 'income_proof_submitted',
+        action: 'income_proof_attached',
         user: @application.user,
         auditable: @application,
         metadata: { proof_type: 'income', submission_method: 'web' },
@@ -38,7 +38,7 @@ module ConstituentPortal
 
       # Different proof type should not be deduplicated
       submission4 = Event.create!(
-        action: 'residency_proof_submitted',
+        action: 'residency_proof_attached',
         user: @application.user,
         auditable: @application,
         metadata: { proof_type: 'residency', submission_method: 'web' },
@@ -47,7 +47,7 @@ module ConstituentPortal
 
       # Different minute should not be deduplicated
       submission5 = Event.create!(
-        action: 'income_proof_submitted',
+        action: 'income_proof_attached',
         user: @application.user,
         auditable: @application,
         metadata: { proof_type: 'income', submission_method: 'web' },
@@ -81,7 +81,7 @@ module ConstituentPortal
       admin_user = create(:admin)
 
       submission = Event.create!(
-        action: 'income_proof_submitted',
+        action: 'income_proof_attached',
         user: @application.user,
         auditable: @application,
         metadata: { proof_type: 'income', submission_method: 'web' },
@@ -100,7 +100,7 @@ module ConstituentPortal
       )
 
       resubmission = Event.create!(
-        action: 'income_proof_submitted',
+        action: 'income_proof_attached',
         user: @application.user,
         auditable: @application,
         metadata: { proof_type: 'income', submission_method: 'web' },

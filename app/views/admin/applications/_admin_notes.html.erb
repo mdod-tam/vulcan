@@ -27,9 +27,9 @@
   </div>
 
   <div>
-    <% if @application.application_notes.any? %>
+    <% if @application_notes.any? %>
       <ul class="space-y-4">
-        <% @application.application_notes.recent_first.each do |note| %>
+        <% @application_notes.each do |note| %>
           <li class="bg-gray-50 p-4 rounded-md">
             <div class="flex justify-between items-start gap-4" id="application-note-<%= note.id %>">
               <div class="flex-1">

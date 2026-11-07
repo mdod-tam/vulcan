@@ -20,9 +20,10 @@ class VendorW9StatusTest < ActiveSupport::TestCase
   test 'an account lockout keeps a rejected W9 rejected' do
     force_w9_status(:rejected)
 
-    @vendor.lock_account!
+    UserAuthentication::MAX_LOGIN_ATTEMPTS.times { @vendor.record_failed_login! }
 
-    assert_predicate @vendor.reload, :w9_status_rejected?
+    assert_predicate @vendor.reload, :account_locked?
+    assert_predicate @vendor, :w9_status_rejected?
   end
 
   test 'a newly attached W9 moves an approved W9 to review' do

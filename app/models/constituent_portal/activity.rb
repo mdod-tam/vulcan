@@ -15,7 +15,7 @@ module ConstituentPortal
       end
 
       # Portal submissions and paper attachments share this activity list.
-      submission_events = application.events.where("action LIKE '%_proof_submitted' OR action LIKE '%_proof_attached'").to_a
+      submission_events = application.events.where("action LIKE '%_proof_attached'").to_a
       deduplicated_submissions = Applications::EventDeduplicationService.new.deduplicate(submission_events)
 
       deduplicated_submissions.each do |event|
@@ -35,14 +35,12 @@ module ConstituentPortal
       proof_type = event.metadata['proof_type']
       submission_method = event.metadata['submission_method'] || 'web'
 
-      action_verb = event.action.include?('_attached') ? 'attached' : 'submitted'
-
       new(
         source: event,
         created_at: event.created_at,
         activity_type: is_initial ? :submission : :resubmission,
         proof_type: proof_type.to_sym,
-        description: "#{proof_type.to_s.humanize} proof #{action_verb} via #{submission_method}"
+        description: "#{proof_type.to_s.humanize} proof attached via #{submission_method}"
       )
     end
 
@@ -63,10 +61,9 @@ module ConstituentPortal
 
     def self.initial_submission?(application, event)
       proof_type = event.metadata['proof_type']
-      action_names = ["#{proof_type}_proof_submitted", "#{proof_type}_proof_attached"]
 
       same_type_events = application.events
-                                    .where(action: action_names)
+                                    .where(action: "#{proof_type}_proof_attached")
                                     .order(created_at: :asc)
 
       same_type_events.first.id == event.id

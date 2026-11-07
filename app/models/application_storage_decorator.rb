@@ -50,10 +50,7 @@ class ApplicationStorageDecorator
   end
 
   def income_proof_attached?
-    if application.respond_to?(:income_proof_attachment_changes_to_save) &&
-       application.income_proof_attachment_changes_to_save.present?
-      true
-    elsif application.association(:income_proof_attachment).loaded?
+    if application.association(:income_proof_attachment).loaded?
       application.income_proof_attachment.present?
     else
       attachment_exists?('income_proof')
@@ -61,10 +58,7 @@ class ApplicationStorageDecorator
   end
 
   def residency_proof_attached?
-    if application.respond_to?(:residency_proof_attachment_changes_to_save) &&
-       application.residency_proof_attachment_changes_to_save.present?
-      true
-    elsif application.association(:residency_proof_attachment).loaded?
+    if application.association(:residency_proof_attachment).loaded?
       application.residency_proof_attachment.present?
     else
       attachment_exists?('residency_proof')
@@ -72,10 +66,7 @@ class ApplicationStorageDecorator
   end
 
   def id_proof_attached?
-    if application.respond_to?(:id_proof_attachment_changes_to_save) &&
-       application.id_proof_attachment_changes_to_save.present?
-      true
-    elsif application.association(:id_proof_attachment).loaded?
+    if application.association(:id_proof_attachment).loaded?
       application.id_proof_attachment.present?
     else
       attachment_exists?('id_proof')
@@ -83,10 +74,7 @@ class ApplicationStorageDecorator
   end
 
   def disability_certification_attached?
-    if application.respond_to?(:disability_certification_attachment_changes_to_save) &&
-       application.disability_certification_attachment_changes_to_save.present?
-      true
-    elsif application.association(:disability_certification_attachment).loaded?
+    if application.association(:disability_certification_attachment).loaded?
       application.disability_certification_attachment.present?
     else
       attachment_exists?('disability_certification')

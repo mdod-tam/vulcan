@@ -7,7 +7,9 @@ module Admin
     include ApplicationDataLoading
     include Admin::ProviderInfoRequestLoading
     include RequestMetadataHelper
+    include LoadsApplication
 
+    # Declared again after the include so that it replaces the concern's all-actions callback with this member list.
     before_action :set_application, only: %i[
       show edit update
       review_proof update_proof_status
@@ -32,7 +34,7 @@ module Admin
                  scoped.includes(:user, :managing_guardian)
                end
 
-      @pagy, page_of_apps = paginate(scoped)
+      @pagy, page_of_apps = paginate_or_first_page(scoped, items: 20)
       page_applications = page_of_apps.to_a
       queue_view = %i[training_requests evaluation_requests].include?(filtered_status)
       preload_dependent_guardians(page_applications) unless queue_view
@@ -363,7 +365,8 @@ module Admin
     end
 
     def prepare_application_show
-      load_application_show_associations(@application)
+      # The notes list reads each note's author and assignee.
+      @application_notes = @application.application_notes.includes(:admin, :assigned_to).recent_first.to_a
       @guardian_relationship_type = @application.guardian_relationship_type
       load_audit_logs_with_service
       Application.preload_equipment_fulfillment([@application])
@@ -400,7 +403,8 @@ module Admin
     end
 
     def prepare_turbo_stream_data
-      @application = reload_application_and_associations(@application)
+      # Turbo stream updates read a fresh application instance.
+      @application = Application.find(@application.id)
       load_certification_delivery_data
       load_certification_status_changes
       load_attachment_data
@@ -416,14 +420,6 @@ module Admin
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_deduplicated_audit_logs
       @secure_request_delivery_owners_by_id = audit_log_builder.delivery_owners_by_id
-    end
-
-    # Each action loads its additional associations.
-    def set_application
-      # The loader queries attachment metadata without variants or updates to association caches.
-      @application = load_application_with_attachments(params[:id])
-    rescue ActiveRecord::RecordNotFound
-      redirect_to admin_applications_path, alert: t('alerts.app_not_found')
     end
 
     # Status is not editable here: it changes only through workflow actions, which go through
@@ -445,24 +441,14 @@ module Admin
       params.expect(application: permitted)
     end
 
+    # The service logs a failed filter and returns the original scope. The results frame shows the warning, because
+    # the filter form updates only that frame.
     def filtered_scope(scope)
       result = Applications::FilterService.new(scope, params).apply_filters
-      if result.is_a?(BaseService::Result)
-        result.success? ? result.data : scope
-      else
-        result
-      end
-    rescue StandardError => e
-      Rails.logger.error "Filter error: #{e.class.name}"
-      flash.now[:alert] = t('alerts.unfiltered_error')
-      scope
-    end
+      return result.data if result.success?
 
-    def paginate(scope)
-      pagy(scope, items: 20)
-    rescue StandardError => e
-      Rails.logger.error "Pagination failed: #{e.class.name}"
-      [Pagy.new(count: scope.count, page: 1), scope.limit(20)]
+      @filter_failed = true
+      scope
     end
 
     def empty_index_chart_metrics

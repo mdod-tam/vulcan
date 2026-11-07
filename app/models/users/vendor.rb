@@ -2,7 +2,6 @@
 
 module Users
   class Vendor < User
-    has_many :products, foreign_key: :user_id
     has_many :vouchers
     has_many :processed_vouchers, -> { where.not(status: :pending) }, class_name: 'Voucher', foreign_key: :vendor_id
     has_many :voucher_transactions

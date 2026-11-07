@@ -62,11 +62,6 @@ module Admin
     def disability_certification_submission_method(application)
       return 'unknown' unless application.disability_certification.attached?
 
-      if application.respond_to?(:disability_certification_submission_method) &&
-         application.disability_certification_submission_method.present?
-        return application.disability_certification_submission_method
-      end
-
       status_change = ApplicationStatusChange.where(application_id: application.id)
                                              .where("metadata->>'change_type' = ? OR to_status = ?",
                                                     'disability_certification', 'received')

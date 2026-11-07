@@ -95,6 +95,40 @@ module Admin
       assert_select 'form[action=?]', deactivate_admin_user_path(user), count: 0
     end
 
+    test 'index warns inside the results frame when the filters fail, and the next filter clears it' do
+      warning = I18n.t('alerts.unfiltered_error')
+      frame = { 'Turbo-Frame' => 'users_list' }
+      failing_filter = { direction: ['asc'] } # An array makes the service's direction handling raise.
+
+      get admin_users_path
+      assert_select "[role='alert']", text: warning, count: 0
+
+      get admin_users_path, params: failing_filter
+      assert_response :success
+      assert_select "turbo-frame#users_list [role='alert']", text: warning, count: 1
+      assert_select "[role='alert']", text: warning, count: 1 # The page shows it once, not also in the layout flash.
+      assert_select 'tbody tr'
+
+      get admin_users_path, params: failing_filter, headers: frame # The filter form updates only this frame.
+      assert_response :success
+      assert_select "turbo-frame#users_list [role='alert']", text: warning, count: 1
+      assert_select 'tbody tr'
+
+      get admin_users_path, params: { direction: 'asc' }, headers: frame
+      assert_response :success
+      assert_select "[role='alert']", text: warning, count: 0
+    end
+
+    test 'index shows the first page for an invalid page and raises any other pagination error' do
+      get admin_users_path, params: { page: 'abc' }
+      assert_response :success
+
+      not_about_the_page = Pagy::VariableError.new(Pagy.new(count: 1), :count, 'to be an Integer >= 0', -1)
+      Admin::UsersController.any_instance.stubs(:pagy).raises(not_about_the_page)
+
+      assert_raises(Pagy::VariableError) { get admin_users_path }
+    end
+
     test 'index and show do not surface reset password buttons' do
       user = create(:constituent)
 

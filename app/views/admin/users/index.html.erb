@@ -154,6 +154,7 @@
       <% end %>
 
       <%= turbo_frame_tag "users_list" do %>
+        <%= render 'admin/shared/filter_failure' if @filter_failed %>
         <%= render partial: 'users_table', locals: { users: @users, pagy: @pagy } %>
       <% end %>
       <div id="staff_access_dialog"></div>

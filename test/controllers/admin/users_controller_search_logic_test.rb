@@ -15,5 +15,30 @@ module Admin
       assert_includes results.map(&:id), constituent.id
       assert_not_includes results.map(&:id), evaluator.id
     end
+
+    test 'each role searches its own candidate rule' do
+      suspended = create(:constituent, status: :suspended, last_name: 'StandingProbe')
+      inactive = create(:constituent, status: :inactive, last_name: 'StandingProbe')
+      active = create(:constituent, status: :active, last_name: 'StandingProbe')
+
+      assert_equal [active.id, inactive.id, suspended.id].sort, search('StandingProbe', 'constituent').map(&:id).sort,
+                   'an applicant may be suspended or inactive'
+      assert_equal [active.id], search('StandingProbe', 'guardian').map(&:id), 'a guardian must be active'
+    end
+
+    test 'an ineligible full-name match does not hide eligible partial matches' do
+      canonical = create(:constituent, last_name: 'Canonical')
+      create(:constituent, first_name: 'Quenby', last_name: 'Valdrith', merged_into_user: canonical)
+      same_first = create(:constituent, first_name: 'Quenby', last_name: 'Orsolay')
+      same_last = create(:constituent, first_name: 'Tavish', last_name: 'Valdrith')
+
+      assert_equal [same_first.id, same_last.id].sort, search('Quenby Valdrith', 'constituent').map(&:id).sort
+    end
+
+    private
+
+    def search(query, role)
+      Admin::UsersController.new.send(:users_for_paper_search, query, role, limit: 10)
+    end
   end
 end

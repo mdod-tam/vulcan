@@ -115,6 +115,44 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
   end
 
+  def test_expired_lock_allows_sign_in_with_valid_password
+    user = create(:constituent, failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: expired_lock_time)
+
+    assert_difference('Session.count', 1) do
+      post sign_in_path, params: { email: user.email, password: 'password1234' }
+    end
+
+    assert_redirected_to constituent_portal_dashboard_path
+    user.reload
+    assert_equal 0, user.failed_attempts
+    assert_nil user.locked_at
+  end
+
+  def test_wrong_password_after_the_lock_expires_starts_a_fresh_count
+    user = create(:constituent, failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: expired_lock_time)
+
+    post sign_in_path, params: { email: user.email, password: 'wrongpassword' }
+
+    user.reload
+    assert_equal 1, user.failed_attempts
+    assert_not user.account_locked?
+  end
+
+  def test_a_session_that_cannot_save_rolls_back_sign_in_bookkeeping
+    user = create(:constituent, failed_attempts: 3)
+    Session.any_instance.stubs(:save).returns(false)
+
+    assert_no_difference('Session.count') do
+      post sign_in_path, params: { email: user.email, password: 'password1234' }
+    end
+
+    assert_redirected_to sign_in_path
+    assert_equal I18n.t('alerts.session_fail'), flash[:alert]
+    user.reload
+    assert_equal 3, user.failed_attempts
+    assert_nil user.last_sign_in_at
+  end
+
   def test_should_sign_in_constituent_without_mfa
     user = create(:constituent)
 
@@ -323,6 +361,10 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def expired_lock_time
+    (UserAuthentication::LOCK_DURATION + 1.minute).ago
+  end
 
   def set_auth_rate_limit_policy(key, value)
     policy = Policy.find_or_initialize_by(key: key)

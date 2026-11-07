@@ -243,7 +243,7 @@ FactoryBot.define do
         # Submission events make needs_proof_type_review? true before any review exists.
         Event.create!(
           user: application.user,
-          action: 'income_proof_submitted',
+          action: 'income_proof_attached',
           auditable: application,
           metadata: {
             application_id: application.id,
@@ -255,7 +255,7 @@ FactoryBot.define do
 
         Event.create!(
           user: application.user,
-          action: 'residency_proof_submitted',
+          action: 'residency_proof_attached',
           auditable: application,
           metadata: {
             application_id: application.id,
