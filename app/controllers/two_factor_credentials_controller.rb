@@ -397,6 +397,7 @@ class TwoFactorCredentialsController < ApplicationController
   def create_totp_credential_record
     current_user.with_lock do
       existing = current_user.totp_credentials.find { |credential| credential.secret == @secret }
+      existing&.update!(last_used_at: [existing.last_used_at, Time.at(@matched_totp_at).utc].max)
       existing || current_user.totp_credentials.create!(
         secret: @secret,
         nickname: params[:nickname].presence || 'Authenticator App',

@@ -69,6 +69,27 @@ class TotpReplayAndEnrollmentTest < ActionDispatch::IntegrationTest
       browser = password_session
       assert_no_difference('Session.count') { verify(browser, code) }
       browser.assert_response :unprocessable_content
+
+      travel 30.seconds
+      later_code = ROTP::TOTP.new(secret).at(30.seconds.from_now)
+      cookies[Rails.application.config.session_options.fetch(:key)] = pending_cookie
+      assert_no_difference('TotpCredential.count') do
+        post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: later_code }
+      end
+      assert_redirected_to credential_success_two_factor_authentication_path(type: 'totp')
+      assert_equal Time.utc(2026, 11, 6, 12, 1), credential.reload.last_used_at, 'A later enrollment retry must consume its matched step'
+      assert_no_difference('Session.count') { verify(browser, later_code) }
+      browser.assert_response :unprocessable_content
+
+      cookies[Rails.application.config.session_options.fetch(:key)] = pending_cookie
+      assert_no_difference('TotpCredential.count') do
+        post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: code }
+      end
+      assert_redirected_to credential_success_two_factor_authentication_path(type: 'totp')
+      assert_equal Time.utc(2026, 11, 6, 12, 1), credential.reload.last_used_at, 'An older enrollment retry must not rewind the consumed step'
+      assert_equal 'My app', credential.nickname
+      assert_no_difference('Session.count') { verify(browser, later_code) }
+      browser.assert_response :unprocessable_content
     end
   end
 
