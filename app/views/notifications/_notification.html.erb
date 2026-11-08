@@ -37,24 +37,24 @@
   <div class="flex-1 min-w-0">
     <div class="flex justify-between">
       <p class="text-sm font-medium text-gray-900 <%= notification.read_at.nil? ? 'font-semibold' : '' %>">
-        <%= notification.message(current_user) %>
+        <%= notification.message(current_user, locale: I18n.locale) %>
       </p>
       <% if notification.read_at.nil? %>
-        <%= button_to mark_as_read_notification_path(notification), method: :post,
-                                                                    class: 'btn btn-secondary btn-sm',
-                                                                    form: { 'data-turbo' => true } do %>
-          <%= t('notification_delivery.mark_as_read', locale: notification_viewer_locale) %>
+        <%= button_to mark_as_read_notification_path(notification, locale: I18n.locale), method: :post,
+                                                                                         class: 'btn btn-secondary btn-sm',
+                                                                                         form: { 'data-turbo' => true } do %>
+          <%= t('notification_delivery.mark_as_read') %>
         <% end %>
       <% end %>
     </div>
 
     <p class="text-xs text-gray-500 mt-1">
-      <%= t('notification_delivery.ago', time: time_ago_in_words(notification.created_at, locale: notification_viewer_locale), locale: notification_viewer_locale) %>
+      <%= t('notification_delivery.ago', time: time_ago_in_words(notification.created_at)) %>
     </p>
 
-    <%= delivery_visibility(notification, locale: notification_viewer_locale, diagnostics: current_user.admin?) %>
+    <%= delivery_visibility(notification, diagnostics: current_user.admin?) %>
     <% if current_user.admin? && notification.email_tracking? %>
-      <%= button_to t('notification_delivery.check_status', locale: notification_viewer_locale), check_email_status_notification_path(notification),
+      <%= button_to t('notification_delivery.check_status'), check_email_status_notification_path(notification, locale: I18n.locale),
                     method: :post, class: 'btn btn-outline mt-2' %>
     <% end %>
   </div>

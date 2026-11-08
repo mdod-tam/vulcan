@@ -119,6 +119,49 @@ module Applications
       end
     end
 
+    test 'repeated follow-up keeps one archive intent and never redispatches its queued or failed notice' do
+      @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
+      review = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
+                          .record!(admin: @admin, rejection_reason: 'Unreadable')
+
+      assert_difference -> { Notification.where(action: 'max_rejections_reached', notifiable: @application).count }, 1 do
+        follow_up(review)
+        follow_up(review)
+      end
+      notice = Notification.find_by!(action: 'max_rejections_reached', notifiable: @application)
+      assert_equal 'queued', notice.delivery_status
+      notice.mark_delivery_failed!(ArgumentError.new('invalid template'))
+
+      assert_no_enqueued_jobs do
+        follow_up(review)
+      end
+      assert_equal 'error', notice.reload.delivery_status
+      assert_equal 1, Notification.where(action: 'max_rejections_reached', notifiable: @application).count
+    end
+
+    test 'archive intent creation failure reports the committed review with its existing follow-up warning' do
+      @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
+      original_create = Notification.method(:create!)
+      fail_archive_intent = lambda do |**attributes|
+        raise ActiveRecord::RecordInvalid, Notification.new if attributes[:action] == 'max_rejections_reached'
+
+        original_create.call(**attributes)
+      end
+      result = nil
+
+      Notification.stub(:create!, fail_archive_intent) do
+        result = ProofReviewService.new(@application, @admin,
+                                        ActionController::Parameters.new(proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable')).call
+      end
+
+      assert result.success?, result.message
+      assert result.data[:warning].present?
+      assert_predicate @application.reload, :status_archived?
+      assert_equal ProofReview::MAX_REJECTIONS + 1, @application.total_rejections
+      assert Event.exists?(action: 'proof_review_follow_up_failed', auditable: @application)
+      assert_not Notification.exists?(action: 'max_rejections_reached', notifiable: @application)
+    end
+
     test 'a paper rejection requests a secure resubmission and queues the rejection letter' do
       @application.user.update!(communication_preference: :letter, phone_type: :voice)
       @application.update!(income_proof_status: :rejected)

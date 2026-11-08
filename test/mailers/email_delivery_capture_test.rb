@@ -64,6 +64,53 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
     assert_equal 'provider-accepted', attempt.provider_message_id
   end
 
+  %i[missing_template render_error].each do |failure|
+    test "an archive notice retains #{failure} and requires a new redelivery intent" do
+      ensure_system_audit_actor!
+      load_seeded_email_templates('application_notifications_max_rejections_reached')
+      EmailTemplate.where(name: 'application_notifications_max_rejections_reached', format: :text).destroy_all if failure == :missing_template
+      application = create(:application, :with_income_proof, user: @user, total_rejections: ProofReview::MAX_REJECTIONS)
+      review = ProofReview.for_decision(application, proof_type: :income, status: :rejected)
+                          .record!(admin: @admin, rejection_reason: 'Unreadable')
+      Applications::ProofDecisionFollowUp.new(review).call
+      notice = Notification.find_by!(action: 'max_rejections_reached', notifiable: application)
+      queued = enqueued_jobs.find { |job| job.dig('email_delivery_context', 'notification_id') == notice.id }
+      assert queued, 'archive notice must carry its originating notification into the worker'
+      assert_equal 'queued', notice.reload.delivery_status
+      EmailTemplate.any_instance.stubs(:render).raises(ArgumentError, 'private render https://example.test?token=secret') if failure == :render_error
+
+      expected_error = failure == :missing_template ? ActiveRecord::RecordNotFound : ArgumentError
+      assert_raises(expected_error) { ActiveJob::Base.execute(queued) }
+
+      assert_predicate application.reload, :status_archived?
+      assert_equal ProofReview::MAX_REJECTIONS + 1, application.total_rejections
+      assert_equal 'error', notice.reload.delivery_status
+      assert_equal expected_error.name, notice.metadata.dig('delivery_error', 'error_class')
+      assert_equal 'preparation', notice.metadata.dig('delivery_error', 'stage')
+      assert_not_includes notice.metadata.to_json, 'private render'
+      assert_not_includes notice.metadata.to_json, 'secret'
+      assert_empty notice.email_delivery_attempts
+
+      EmailTemplate.any_instance.unstub(:render) if failure == :render_error
+      load_seeded_email_templates('application_notifications_max_rejections_reached')
+      @transport.expects(:post).once.returns(@response)
+      # The original context may be canceled by recreated rows. The terminal intent keeps its failure unchanged.
+      ActiveJob::Base.execute(queued)
+      assert_equal 'error', notice.reload.delivery_status
+      assert_equal expected_error.name, notice.metadata.dig('delivery_error', 'error_class')
+      assert_empty notice.email_delivery_attempts
+
+      replacement = NotificationService.create_and_deliver!(type: 'max_rejections_reached', recipient: @user,
+                                                            actor: @admin, notifiable: application, channel: :email)
+      replacement_job = enqueued_jobs.find { |job| job.dig('email_delivery_context', 'notification_id') == replacement.id }
+      ActiveJob::Base.execute(replacement_job)
+
+      assert_equal 'accepted', replacement.email_delivery_attempts.sole.state
+      assert_equal 'error', notice.reload.delivery_status
+      assert_not replacement.reload.local_delivery_outcome?
+    end
+  end
+
   [false, true].each do |parameterized|
     test "#{parameterized ? 'parameterized' : 'ordinary'} mail preserves positional and keyword arguments through the real queue envelope" do
       application = create(:application, :in_progress, user: @user)

@@ -4,9 +4,20 @@ require 'test_helper'
 
 module DocumentSigning
   class SubmissionServiceTest < ActiveSupport::TestCase
+    self.use_transactional_tests = false
+
+    include ConcurrencyTestHelper
+
     setup do
-      @admin = create(:admin)
+      Current.reset
+      @existing_system_actor = User.system_user
       ensure_system_audit_actor!
+      @admin = create(:admin)
+      @original_controls = FeatureFlag.where(name: EmailDelivery::CONTROL_NAMES).pluck(:name, :enabled).to_h
+      EmailDelivery::CONTROL_NAMES.each do |name|
+        FeatureFlag.find_or_create_by!(name: name) { |flag| flag.enabled = true }
+        EmailDelivery::ControlWriter.set(name: name, enabled: true, actor: @admin, operation_id: SecureRandom.uuid)
+      end
       @constituent = create(:constituent, :with_address_and_phone)
       @application = create(:application, :in_progress,
                             user: @constituent,
@@ -26,8 +37,25 @@ module DocumentSigning
       }
     end
 
+    teardown do
+      EmailDelivery::CONTROL_NAMES.each do |name|
+        if @original_controls.key?(name)
+          EmailDelivery::ControlWriter.set(name: name, enabled: @original_controls.fetch(name), actor: @admin, operation_id: SecureRandom.uuid)
+        else
+          FeatureFlag.find_by(name: name)&.destroy!
+        end
+      end
+      cleanup_duplicate_review_test_data!(@constituent, @other_constituent, @admin)
+      cleanup_duplicate_review_test_data!(User.system_user) unless @existing_system_actor
+      Current.reset
+    end
+
     test 'successfully creates document signing submission' do
-      DocumentSigning::SubmissionService.any_instance.stubs(:create_submission!).returns(@mock_submission)
+      Docuseal.expects(:create_submission).with do |payload|
+        assert_not Application.connection.transaction_open?, 'Provider handoff must happen outside a transaction'
+        assert payload[:send_email]
+        true
+      end.returns(@mock_submission)
 
       service = DocumentSigning::SubmissionService.new(
         application: @application,
@@ -129,7 +157,7 @@ module DocumentSigning
     end
 
     test 'handles DocuSeal API errors gracefully' do
-      DocumentSigning::SubmissionService.any_instance.stubs(:create_submission!).raises(StandardError, 'API Error')
+      Docuseal.stubs(:create_submission).raises(StandardError, 'API Error')
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with do |message|
         message.include?('DocumentSigning::SubmissionService: StandardError') &&
@@ -143,7 +171,15 @@ module DocumentSigning
 
       result = service.call
       assert result.failure?
-      assert_equal 'Failed to create document signing request.', result.message
+      assert_match 'DocuSeal may have accepted', result.message
+      assert_match 'before sending another', result.message
+      assert result.data[:recovery_required]
+      assert_not result.data[:retryable]
+      assert_nil @application.reload.document_signing_submission_id
+      event = Event.find_by!(action: 'document_signing_request_unconfirmed', auditable: @application)
+      assert_equal 'unknown', event.metadata['provider_acceptance']
+      assert_equal 'StandardError', event.metadata['error_class']
+      assert_not_includes event.metadata.to_json, 'API Error'
     end
 
     test 'creates audit event on successful submission' do
@@ -164,6 +200,212 @@ module DocumentSigning
       assert_equal @application, event.auditable
       assert_equal 'docuseal', event.metadata['document_signing_service']
       assert_equal 'sub_123456', event.metadata['document_signing_submission_id']
+      assert_equal 'document-signing-docuseal-sub_123456', event.metadata['operation_id']
+    end
+
+    test 'a preloaded second request rechecks the cooldown before contacting DocuSeal' do
+      stale_application = Application.find(@application.id)
+      Docuseal.expects(:create_submission).once.returns(@mock_submission)
+
+      first = SubmissionService.new(application: @application, actor: @admin).call
+      second = SubmissionService.new(application: stale_application, actor: @admin).call
+
+      assert first.success?
+      assert second.failure?
+      assert_match 'Request sent too recently', second.message
+      assert_equal [1, 1], @application.reload.attributes.values_at('document_signing_request_count', 'disability_certification_request_count')
+      assert_equal 1, Event.where(action: 'document_signing_request_sent', auditable: @application).count
+    end
+
+    test 'another session cannot send while the same application is at the provider handoff' do
+      provider_entered = Queue.new
+      release_provider = Queue.new
+      submission = @mock_submission
+      first_result = nil
+      application_id = @application.id
+      admin_id = @admin.id
+      Docuseal.expects(:create_submission).never
+
+      holder = on_own_connection do
+        service = SubmissionService.new(application: Application.find(application_id), actor: User.find(admin_id))
+        service.define_singleton_method(:create_submission!) do
+          provider_entered << true
+          release_provider.pop
+          submission
+        end
+        first_result = service.call
+      end
+      wait_for_signal(provider_entered, thread: holder)
+
+      competing = SubmissionService.new(application: @application, actor: @admin).call
+      assert competing.failure?
+      assert competing.data[:already_running]
+      assert_nil @application.reload.document_signing_submission_id
+
+      @other_constituent = create(:constituent)
+      other_application = create(
+        :application, :in_progress,
+        user: @other_constituent,
+        certifying_professional_email: 'other-doctor@example.com',
+        certifying_professional_name: 'Other Doctor'
+      )
+      other = SubmissionService.new(application: other_application, actor: @admin)
+      other.define_singleton_method(:create_submission!) { { 'id' => 'other-submission', 'submitters' => [{ 'id' => 'other-signer' }] } }
+      assert other.call.success?, 'A different application must not wait for this provider call'
+
+      release_provider << true
+      reap_thread(holder, timeout: 10, suppress_errors: false)
+      assert first_result.success?
+      assert_equal [1, 1], @application.reload.attributes.values_at('document_signing_request_count', 'disability_certification_request_count')
+    ensure
+      release_provider << true if holder&.alive?
+      reap_thread(holder, timeout: 10, suppress_errors: !$ERROR_INFO.nil?) if holder
+    end
+
+    test 'a caller transaction is refused before the provider is contacted' do
+      Docuseal.expects(:create_submission).never
+
+      Application.transaction do
+        result = SubmissionService.new(application: @application, actor: @admin).call
+        assert result.failure?
+        assert_match 'outside a database transaction', result.message
+      end
+
+      assert_nil @application.reload.document_signing_submission_id
+      assert_equal 0, @application.document_signing_request_count
+    end
+
+    test 'failure releases the session lock for a request on another connection' do
+      failed = SubmissionService.new(application: @application, actor: @admin)
+      failed.define_singleton_method(:create_submission!) { raise 'before handoff' }
+      assert failed.call.failure?
+      submission = @mock_submission
+      application_id = @application.id
+      admin_id = @admin.id
+      later_result = nil
+
+      later = on_own_connection do
+        service = SubmissionService.new(application: Application.find(application_id), actor: User.find(admin_id))
+        service.define_singleton_method(:create_submission!) { submission }
+        later_result = service.call
+      end
+      reap_thread(later, timeout: 10, suppress_errors: false)
+      assert later_result.success?
+      assert_equal 'sub_123456', @application.reload.document_signing_submission_id
+    end
+
+    test 'an audit failure rolls back local tracking after provider acceptance and requires recovery' do
+      Docuseal.expects(:create_submission).once.returns(@mock_submission)
+      original = AuditEventService.method(:log)
+      record = lambda do |**attributes|
+        raise 'sent audit unavailable' if attributes[:action] == 'document_signing_request_sent'
+
+        original.call(**attributes)
+      end
+      result = nil
+      assert_no_difference -> { @application.status_changes.count } do
+        result = AuditEventService.stub(:log, record) do
+          SubmissionService.new(application: @application, actor: @admin).call
+        end
+      end
+
+      assert result.failure?
+      assert_equal :rolled_back, result.data[:commit_state]
+      assert_equal :accepted, result.data[:provider_acceptance]
+      assert_not result.data[:retryable]
+      assert_match 'DocuSeal accepted', result.message
+      assert_nil @application.reload.document_signing_submission_id
+      assert_equal [0, 0], @application.attributes.values_at('document_signing_request_count', 'disability_certification_request_count')
+      assert_not Event.exists?(action: 'document_signing_request_sent', auditable: @application)
+      assert_not Event.exists?(action: 'disability_certification_requested', auditable: @application)
+      event = Event.find_by!(action: 'document_signing_request_unconfirmed', auditable: @application)
+      assert_equal 'sub_123456', event.metadata['document_signing_submission_id']
+    end
+
+    test 'an unlock failure closes the session without hiding the committed request' do
+      Docuseal.expects(:create_submission).once.returns(@mock_submission)
+      connection = Application.connection
+      original = connection.method(:select_value)
+      unlock_failure = lambda do |query, *arguments, **options|
+        raise ActiveRecord::StatementInvalid, 'unlock unavailable' if query.include?('pg_advisory_unlock')
+
+        original.call(query, *arguments, **options)
+      end
+      result = connection.stub(:select_value, unlock_failure) do
+        SubmissionService.new(application: @application, actor: @admin).call
+      end
+
+      assert result.success?
+      assert result.data[:warning]
+      assert_equal :committed, result.data[:commit_state]
+      assert_equal 'sub_123456', @application.reload.document_signing_submission_id
+
+      application_id = @application.id
+      admin_id = @admin.id
+      later_result = nil
+      later = on_own_connection do
+        later_result = SubmissionService.new(application: Application.find(application_id), actor: User.find(admin_id)).call
+      end
+      reap_thread(later, timeout: 10, suppress_errors: false)
+      assert later_result.failure?
+      assert_match 'Request sent too recently', later_result.message
+    end
+
+    test 'a completion failure reports a committed request and keeps all local tracking' do
+      Docuseal.expects(:create_submission).once.returns(@mock_submission)
+
+      with_completion_failure do
+        result = SubmissionService.new(application: @application, actor: @admin).call
+        assert result.success?
+        assert result.data[:warning]
+        assert_equal :committed, result.data[:commit_state]
+        assert_not result.data[:retryable]
+        assert_match 'accepted the signing request and it was saved', result.message
+        assert_equal 'sub_123456', @application.reload.document_signing_submission_id
+        assert_equal [1, 1], @application.attributes.values_at('document_signing_request_count', 'disability_certification_request_count')
+        assert_equal 1, @application.status_changes.disability_certification.count
+        assert Event.exists?(action: 'document_signing_request_sent', auditable: @application)
+        assert Event.exists?(action: 'document_signing_follow_up_failed', auditable: @application)
+      end
+    end
+
+    test 'unavailable commit readback reports unknown instead of inviting another provider send' do
+      Docuseal.expects(:create_submission).once.returns(@mock_submission)
+      original = Application.method(:find)
+      reads = 0
+      readback = lambda do |id|
+        reads += 1
+        raise ActiveRecord::ConnectionNotEstablished if reads == 1
+
+        original.call(id)
+      end
+
+      with_completion_failure do
+        result = Application.stub(:find, readback) do
+          SubmissionService.new(application: @application, actor: @admin).call
+        end
+        assert result.failure?
+        assert_equal :unknown, result.data[:commit_state]
+        assert_not result.data[:retryable]
+        assert_match 'before sending another', result.message
+        assert_equal 'sub_123456', @application.reload.document_signing_submission_id
+        event = Event.find_by!(action: 'document_signing_request_unconfirmed', auditable: @application)
+        assert_equal 'unknown', event.metadata['commit_state']
+      end
+    end
+
+    test 'unavailable recovery audit is explicit after an uncertain provider handoff' do
+      Docuseal.expects(:create_submission).once.raises(Net::ReadTimeout)
+      AuditEventService.stubs(:log).raises(ActiveRecord::ConnectionNotEstablished)
+
+      result = SubmissionService.new(application: @application, actor: @admin).call
+
+      assert result.failure?
+      assert result.data[:tracking_failed]
+      assert_not result.data[:retryable]
+      assert_match 'may have accepted', result.message
+      assert_match 'recovery audit could not be recorded', result.message
+      assert_nil @application.reload.document_signing_submission_id
     end
 
     test 'records the requested certification status in the status history and audit log' do
@@ -286,6 +528,17 @@ module DocumentSigning
       assert_equal 0, @application.disability_certification_request_count.to_i
       assert Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
       assert_not Event.exists?(action: 'document_signing_request_sent', auditable: @application)
+    end
+
+    private
+
+    def with_completion_failure
+      application_id = @application.id
+      callback = -> { raise 'completion failed' if id == application_id }
+      Application.set_callback(:commit, :after, callback)
+      yield
+    ensure
+      Application.skip_callback(:commit, :after, callback)
     end
   end
 end

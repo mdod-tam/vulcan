@@ -66,6 +66,12 @@ The service checks durable state when handling transaction errors rather than tr
 
 Inside a transaction the caller holds, such as certification rejection during paper intake, `ReviewCommit` gives no verdict. The caller owns the commit and decides what its own outcome means.
 
+### Initial voucher issuance retries confirmed rollbacks
+
+[`Vouchers::IssuanceService`](../../app/services/vouchers/issuance_service.rb) checks durable voucher state after an issuance error. [`IssueInitialVoucherJob`](../../app/jobs/issue_initial_voucher_job.rb) retries only `IssuanceService::RolledBackFailure`, which confirms that the issuance did not persist. Disabled vouchers, an existing voucher, and an ineligible application remain intentional no-ops.
+
+A committed voucher with incomplete follow-up, or an issuance whose commit cannot be confirmed, creates an `initial_voucher_issuance_attention` audit and a record-only administrator notice. Staff must check voucher and delivery status before issuing another voucher. If attention recording fails, the job fails without automatic reissuance; its safe error context contains the application, voucher when known, job, and commit state for manual recovery. A non-admin initiating actor is preserved on the records, while the internal notice goes to the configured system audit administrator; a missing system actor also requires manual recovery.
+
 ## State, history, and delivery stay together
 
 - Lifecycle changes go through [`Application#transition_status!`](../../app/models/application.rb) and [`#reconcile_workflow_state!`](../../app/models/concerns/application_status_management.rb); a raw status write skips history and follow-up.

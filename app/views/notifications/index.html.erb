@@ -1,29 +1,29 @@
 <main class="container mx-auto px-4 py-8" role="main" id="main-content">
   <div class="max-w-7xl mx-auto">
     <a href="#main-content" class="skip-link">
-      Skip to main content
+      <%= t('constituent_portal.workflow.skip') %>
     </a>
     
     <div class="md:flex md:items-center md:justify-between mb-8">
       <div class="flex-1 min-w-0">
-        <h1 class="text-3xl font-bold" id="page-title">Notifications</h1>
-        <p class="text-gray-600">View and manage your notification history</p>
+        <h1 class="text-3xl font-bold" id="page-title"><%= t('notifications.index.title') %></h1>
+        <p class="text-gray-600"><%= t('notifications.index.description') %></p>
       </div>
       
       <div class="mt-4 flex md:mt-0 md:ml-4 space-x-4">
         <a href="<%= current_user.admin? ? admin_applications_path : constituent_portal_dashboard_path %>"
            class="btn btn-outline"
            data-turbo-frame="_top"
-           aria-label="Return to applications dashboard">
-          Back to Dashboard
+           aria-label="<%= t('notifications.index.back_label') %>">
+          <%= t('constituent_portal.workflow.back') %>
         </a>
         
         <% if current_user.admin? %>
           <div class="flex space-x-2">
-            <%= link_to "My Notifications", notifications_path(scope: 'mine'), 
+            <%= link_to t('notifications.index.mine'), notifications_path(scope: 'mine'),
                 class: class_names('btn', @current_scope == 'mine' ? 'btn-primary' : 'btn-outline') %>
             
-            <%= link_to "All Notifications", notifications_path(scope: 'all'), 
+            <%= link_to t('notifications.index.all'), notifications_path(scope: 'all'),
                 class: class_names('btn', @current_scope == 'all' ? 'btn-primary' : 'btn-outline') %>
           </div>
         <% end %>
@@ -32,7 +32,7 @@
 
     <section aria-labelledby="notifications-list-heading" class="card mb-6">
       <div class="p-4 border-b">
-        <h2 id="notifications-list-heading" class="text-lg font-medium text-gray-900">All Notifications</h2>
+        <h2 id="notifications-list-heading" class="text-lg font-medium text-gray-900"><%= t('notifications.index.all') %></h2>
       </div>
 
       <% if @notifications.present? %>
@@ -54,9 +54,9 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h3 class="mt-2 text-sm font-medium text-gray-900">No notifications</h3>
+          <h3 class="mt-2 text-sm font-medium text-gray-900"><%= t('notifications.index.empty') %></h3>
           <p class="mt-1 text-sm text-gray-500">
-            You don't have any notifications at this time.
+            <%= t('notifications.index.empty_help') %>
           </p>
         </div>
       <% end %>

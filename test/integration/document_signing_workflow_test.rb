@@ -3,10 +3,22 @@
 require 'test_helper'
 
 class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
+  self.use_transactional_tests = false
+
   include AuthenticationTestHelper
+  include ConcurrencyTestHelper
 
   setup do
+    Current.reset
+    @original_scan_ids = DocumentScan.order(:id).pluck(:id)
+    @existing_system_actor = PublicAuditActor.system_audit_actor
+    @configured_system_actor = ensure_system_audit_actor!
     @admin = create(:admin)
+    @original_controls = FeatureFlag.where(name: EmailDelivery::CONTROL_NAMES).pluck(:name, :enabled).to_h
+    EmailDelivery::CONTROL_NAMES.each do |name|
+      FeatureFlag.find_or_create_by!(name: name) { |flag| flag.enabled = true }
+      EmailDelivery::ControlWriter.set(name: name, enabled: true, actor: @admin, operation_id: SecureRandom.uuid)
+    end
     sign_in_for_integration_test(@admin)
 
     # Webhook audit events require a system actor.
@@ -30,6 +42,27 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
 
     @webhook_secret = 'test_webhook_secret'
     Rails.application.credentials.stubs(:webhook_secret).returns(@webhook_secret)
+  end
+
+  teardown do
+    scans = application_docuseal_scans
+    scan_ids = scans.map(&:id)
+    blob_ids = scans.map(&:blob_id)
+    blob_ids.concat(ActiveStorage::Attachment.where(record: @application).pluck(:blob_id)) if @application
+    EmailDelivery::CONTROL_NAMES.each do |name|
+      if @original_controls.key?(name)
+        EmailDelivery::ControlWriter.set(name: name, enabled: @original_controls.fetch(name), actor: @admin, operation_id: SecureRandom.uuid)
+      else
+        FeatureFlag.find_by(name: name)&.destroy!
+      end
+    end
+    cleanup_duplicate_review_test_data!(@application&.user, @admin, @system_user)
+    cleanup_duplicate_review_test_data!(@configured_system_actor) unless @existing_system_actor
+    ActiveStorage::Blob.where(id: blob_ids.uniq).find_each(&:purge)
+    assert_empty DocumentScan.where(id: scan_ids), 'This workflow must remove its provider snapshots'
+    assert_empty ActiveStorage::Blob.where(id: blob_ids.uniq), 'This workflow must remove its stored file bytes'
+    assert_equal @original_scan_ids, DocumentScan.order(:id).pluck(:id), 'Workflow cleanup must preserve other scans and leave none of its own'
+    Current.reset
   end
 
   test 'complete document signing workflow from request to completion' do
@@ -281,6 +314,33 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     assert_equal 1, @application.document_signing_request_count
   end
 
+  test 'a late certification stop keeps a DocuSeal request accepted in the same second' do
+    Docuseal.stubs(:create_submission).returns({ 'id' => 'sub-1', 'submitters' => [{ 'id' => 'subm-1' }] })
+    EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
+                         .then.returns(EmailDelivery::Decision.allowed)
+                         .then.returns(EmailDelivery::Decision.suppressed(:global_disabled))
+    service_class = Class.new(Applications::RequestCertificationUpload) do
+      private
+
+      # Another admin sends a DocuSeal request between preparation and the final check.
+      def deliver_request_email!(request_form, raw_token)
+        result = DocumentSigning::SubmissionService.new(application: application.reload, actor: actor).call
+        raise "DocuSeal request failed: #{result.message}" unless result.success?
+
+        super
+      end
+    end
+
+    travel_to Time.current.change(usec: 100) do
+      service_class.new(application: @application, actor: @admin, deliver_email: true).call
+    end
+
+    @application.reload
+    assert @application.document_signing_status_sent?
+    assert @application.disability_certification_status_requested?
+    assert_not_nil @application.disability_certification_requested_at
+  end
+
   private
 
   def mock_docuseal_download
@@ -292,7 +352,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
   end
 
   def assert_pending_scan(certification_status:, signing_status:, primary: nil)
-    scan = DocumentScan.find_by!(continuation: 'docuseal')
+    scan = application_docuseal_scans.sole
     assert_predicate scan, :pending?
     assert_empty scan.blob.attachments
     @application.reload
@@ -301,6 +361,15 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     assert_equal signing_status, @application.document_signing_status
     assert_not Event.exists?(action: 'document_signing_completed', auditable: @application)
     scan
+  end
+
+  def application_docuseal_scans
+    return [] unless @application
+
+    # Context is encrypted; scope by its decrypted application identity.
+    DocumentScan.where(continuation: 'docuseal').select do |scan|
+      scan.context['application_id'].to_s == @application.id.to_s
+    end
   end
 
   def complete_scan!(scan)

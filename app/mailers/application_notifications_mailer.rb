@@ -166,8 +166,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     Rails.logger.info "Preparing max_rejections_reached email for Application ID: #{application.id}"
     Rails.logger.info "Delivery method: #{ActionMailer::Base.delivery_method}"
 
-    with_mailer_error_handling("max_rejections_reached application=#{application&.id}",
-                               swallow_errors: true) do
+    with_mailer_error_handling("max_rejections_reached application=#{application&.id}") do
       template_name = 'application_notifications_max_rejections_reached'
       locale        = resolve_template_locale(recipient: application.user)
       text_template = find_text_template(template_name, locale: locale)
@@ -270,14 +269,13 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       locale           = resolve_template_locale(recipient: application.user)
       text_template    = find_text_template(template_name, locale: locale)
       variables        = build_proof_received_variables(application, proof_type, template: text_template, locale: locale)
-      subject_override = proc { |subject| subject.gsub(/approved/i, 'received').gsub(/Approved/i, 'Received') }
 
       return noop_letter_delivery if queue_letter_if_preferred(
         application.user, template_name, variables.merge(proof_type: proof_type),
         locale: locale, application: application
       )
 
-      send_email(recipient_email_for(application.user), text_template, variables, { subject_override: subject_override })
+      send_email(recipient_email_for(application.user), text_template, variables)
     end
   end
 

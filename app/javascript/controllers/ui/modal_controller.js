@@ -36,6 +36,8 @@ class ModalController extends Controller {
       return
     }
 
+    dialog.querySelector('[data-modal-errors]')?.replaceChildren()
+
     // A rejection modal takes its proof type from the button that opens it.
     const proofType = event.currentTarget.dataset.proofType
     if (proofType) {

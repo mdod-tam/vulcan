@@ -676,6 +676,57 @@ module Admin
       assert_includes response.body, I18n.t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en)
     end
 
+    test 'failed proof rejection returns an error status and updates feedback without replacing the form' do
+      ProofReviewService.any_instance.expects(:call).returns(
+        BaseService::Result.new(success: false, message: 'The review could not be saved.', data: {})
+      )
+
+      patch update_proof_status_admin_application_path(@application),
+            params: { proof_type: 'income', status: 'rejected', rejection_reason_code: 'other', rejection_reason: 'Keep my explanation' },
+            headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
+
+      assert_response :unprocessable_content
+      assert_select 'turbo-stream', count: 2
+      assert_select 'turbo-stream[action="update"][target="flash"]', text: /The review could not be saved/
+      assert_select 'turbo-stream[action="update"][target="proof-rejection-errors"] [role="alert"]', text: 'The review could not be saved.'
+      assert_equal 'not_reviewed', @application.reload.income_proof_status
+    end
+
+    test 'failed certification rejection updates feedback inside its own dialog with an error status' do
+      Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).returns(
+        BaseService::Result.new(success: false, message: 'The certification review could not be saved.', data: {})
+      )
+
+      patch update_certification_status_admin_application_path(@application),
+            params: { status: 'rejected', rejection_reason_code: 'other', rejection_reason: 'Keep this explanation' },
+            headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
+
+      assert_response :unprocessable_content
+      assert_select 'turbo-stream[action="update"][target="certification-rejection-errors"] [role="alert"]',
+                    text: 'Failed to reject certification: The certification review could not be saved.'
+      assert_select 'turbo-stream[action="update"][target="modals"]', count: 0
+    end
+
+    test 'application history shows actionable voucher and DocuSeal outcomes with closure delivery state' do
+      ensure_system_audit_actor!
+      %w[initial_voucher_issuance_attention document_signing_request_unconfirmed document_signing_follow_up_failed].each do |action|
+        AuditEventService.log(action: action, actor: @admin, auditable: @application,
+                              metadata: { operation_id: SecureRandom.uuid, commit_state: 'unknown', outcome: 'unknown' })
+      end
+      notice = create(:notification, action: 'max_rejections_reached', notifiable: @application,
+                                     recipient: @application.user, actor: @admin)
+      notice.mark_delivery_failed!(KeyError.new('missing archive template'), details: { request_id: 'archive-render-test' })
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_includes response.body, 'Initial Voucher Issuance Needs Review'
+      assert_includes response.body, 'DocuSeal Request Needs Review'
+      assert_includes response.body, 'DocuSeal Follow-Up Needs Review'
+      assert_includes response.body, 'Application Closure Notice'
+      assert_select '[data-delivery-status="failed"]'
+    end
+
     test 'show page displays the correct application status' do
       approved_app = create(:application,
                             user: create(:constituent, email: generate(:email)),

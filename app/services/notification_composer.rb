@@ -7,16 +7,17 @@ class NotificationComposer
   include ActionView::Helpers::UrlHelper
   include ActionView::Helpers::OutputSafetyHelper
 
-  def self.generate(notification_action, notifiable, actor = nil, metadata = {}, viewer: nil)
-    new(notification_action, notifiable, actor, metadata, viewer: viewer).generate
+  def self.generate(notification_action, notifiable, actor = nil, metadata = {}, viewer: nil, locale: nil)
+    new(notification_action, notifiable, actor, metadata, viewer: viewer, locale: locale).generate
   end
 
-  def initialize(action, notifiable, actor, metadata, viewer: nil)
+  def initialize(action, notifiable, actor, metadata, viewer: nil, locale: nil)
     @action = action.to_s
     @notifiable = notifiable
     @actor = actor
     @metadata = metadata || {}
     @viewer = viewer
+    @locale = locale
   end
 
   def generate
@@ -31,24 +32,21 @@ class NotificationComposer
   private
 
   def message_for_voucher_expired
-    I18n.t('notifications.messages.voucher_expired', locale: @viewer&.locale.presence || I18n.locale)
+    translate('voucher_expired')
   end
 
   def application_reference(application = nil)
     application ||= notifiable_application
-    return 'Application missing' unless application&.id
+    return translate('application_missing') unless application&.id
 
-    link_to(
-      application_label(application),
-      application_path_for_viewer(application),
-      class: 'text-primary-600 hover:text-primary-500',
-      aria: { label: "View #{application_label(application)}" }
-    )
+    label = application_label(application)
+    link_to(label, application_path_for_viewer(application), class: 'text-primary-600 hover:text-primary-500',
+                                                             aria: { label: translate('view_application', application: label) })
   end
 
   def sentence_application_reference(application = nil)
-    reference = application_reference(application)
-    reference == 'Application missing' ? 'application missing' : reference
+    application ||= notifiable_application
+    application&.id ? application_reference(application) : translate('sentence_application_missing')
   end
 
   def notifiable_application
@@ -61,45 +59,43 @@ class NotificationComposer
   def message_for_trainer_assigned
     return default_message unless @notifiable.is_a?(TrainingSession)
 
-    session = @notifiable
-    trainer_name = session.trainer.full_name
-    constituent_name = session.constituent.full_name
-    reference = link_to("training session for #{constituent_name}", Rails.application.routes.url_helpers.trainers_training_session_path(session))
-    safe_join([trainer_name, ' assigned to ', reference, '.'])
+    reference = link_to(translate('training_reference', name: @notifiable.constituent.full_name),
+                        Rails.application.routes.url_helpers.trainers_training_session_path(@notifiable))
+    translate('trainer_assigned_html', trainer: @notifiable.trainer.full_name, training: reference)
   end
 
   def message_for_trainer_reassigned
     return default_message unless @notifiable.is_a?(TrainingSession)
 
-    reference = link_to("training for #{@notifiable.constituent.full_name}",
+    reference = link_to(translate('training_transfer_reference', name: @notifiable.constituent.full_name),
                         Rails.application.routes.url_helpers.trainers_training_session_path(@notifiable))
-    safe_join(['Open ', reference, ' was transferred to you.'])
+    translate('trainer_reassigned_html', training: reference)
   end
 
   def message_for_training_trainer_changed
-    trainer_name = @metadata['trainer_name'].presence || 'another trainer'
-    safe_join(['Your training is now with ', trainer_name, '. Any scheduled appointment has not changed.'])
+    trainer_name = @metadata['trainer_name'].presence || translate('another_trainer')
+    translate('training_trainer_changed_html', trainer: trainer_name)
   end
 
   def message_for_training_requested
-    constituent_name = @actor&.full_name || @notifiable&.constituent_full_name || 'A constituent'
-    safe_join([constituent_name, ' requested training for ', sentence_application_reference, '.'])
+    name = @actor&.full_name || @notifiable&.constituent_full_name || translate('a_constituent')
+    translate('training_requested_html', name: name, application: sentence_application_reference)
   end
 
   def message_for_training_scheduled
-    training_session_message('scheduled training')
+    training_session_message('training_scheduled_html')
   end
 
   def message_for_training_rescheduled
-    training_session_message('rescheduled training')
+    training_session_message('training_rescheduled_html')
   end
 
   def message_for_training_cancelled
-    training_session_message('cancelled training')
+    training_session_message('training_cancelled_html')
   end
 
   def message_for_training_completed
-    training_session_message('completed training')
+    training_session_message('training_completed_html')
   end
 
   def message_for_proof_rejected
@@ -119,7 +115,8 @@ class NotificationComposer
   end
 
   def message_for_proof_approved
-    safe_join([ProofNotificationCopy.approved_text(metadata_value('proof_type')), ' for ', sentence_application_reference, '.'])
+    translate('proof_status_html', status: ProofNotificationCopy.approved_text(metadata_value('proof_type'), locale: message_locale),
+                                   application: sentence_application_reference)
   end
 
   def message_for_id_proof_attached
@@ -135,11 +132,11 @@ class NotificationComposer
   end
 
   def message_for_disability_certification_requested
-    safe_join(['Disability certification requested for ', sentence_application_reference, '.'])
+    translate('disability_certification_requested_html', application: sentence_application_reference)
   end
 
   def message_for_cert_upload_requested
-    safe_join(['Secure disability certification upload requested for ', sentence_application_reference, '.'])
+    translate('cert_upload_requested_html', application: sentence_application_reference)
   end
 
   def message_for_proof_resubmission_requested
@@ -154,60 +151,54 @@ class NotificationComposer
   end
 
   def message_for_provider_info_requested
-    safe_join(['Certifying professional information requested for ', sentence_application_reference])
+    translate('provider_info_requested_html', application: sentence_application_reference)
   end
 
   def message_for_disability_certification_received
-    safe_join(['Disability certification received for ', sentence_application_reference])
+    translate('disability_certification_received_html', application: sentence_application_reference)
   end
 
   def message_for_disability_certification_approved
-    safe_join(['Disability certification approved for ', sentence_application_reference])
+    translate('disability_certification_approved_html', application: sentence_application_reference)
   end
 
   def message_for_disability_certification_rejected
-    reason = metadata_value('rejection_reason')
-    reason_text = reason.present? ? " - #{reason}" : ''
-    safe_join(['Disability certification rejected for ', sentence_application_reference, reason_text, '.'])
+    translate('disability_certification_rejected_html', application: sentence_application_reference,
+                                                        reason: ProofNotificationCopy.rejection_reason_suffix(metadata_value('rejection_reason'), locale: message_locale))
   end
 
   def message_for_documents_requested
-    safe_join(['Documents requested for ', sentence_application_reference])
+    translate('documents_requested_html', application: sentence_application_reference)
   end
 
   def message_for_review_requested
-    safe_join(['Staff follow-up requested for ', sentence_application_reference, '.'])
+    translate('review_requested_html', application: sentence_application_reference)
   end
 
   def message_for_security_key_recovery_requested
     requester = @notifiable.respond_to?(:user) ? @notifiable.user : @actor
-    requester_label = requester&.full_name.presence || requester&.email || 'a user'
-
-    safe_join(['Security key recovery requested for ', requester_label, '.'])
+    translate('security_key_recovery_requested_html', name: requester&.full_name.presence || requester&.email || translate('a_user'))
   end
 
   def default_message
     reference = @notifiable.is_a?(Application) ? application_reference : generic_notifiable_reference
-
-    safe_join([@action.humanize, ' notification regarding ', reference, '.'])
+    action = I18n.t("notifications.actions.#{@action}", locale: message_locale, default: @action.humanize)
+    translate('default_html', action: action, record: reference)
   end
 
   def proof_attached_message(proof_type)
-    safe_join([ProofNotificationCopy.attached_text(proof_type), ' for ', sentence_application_reference, '.'])
+    translate('proof_status_html', status: ProofNotificationCopy.attached_text(proof_type, locale: message_locale),
+                                   application: sentence_application_reference)
   end
 
   def proof_rejected_message(proof_type, reason)
-    safe_join([
-                ProofNotificationCopy.rejected_text(proof_type),
-                ' for ',
-                sentence_application_reference,
-                ProofNotificationCopy.rejection_reason_suffix(reason),
-                '.'
-              ])
+    translate('proof_rejected_html', proof: ProofNotificationCopy.proof_label(proof_type, locale: message_locale),
+                                     application: sentence_application_reference, reason: ProofNotificationCopy.rejection_reason_suffix(reason, locale: message_locale))
   end
 
   def proof_requested_message(proof_type)
-    safe_join([ProofNotificationCopy.requested_text(proof_type), ' for ', sentence_application_reference, '.'])
+    translate('proof_status_html', status: ProofNotificationCopy.requested_text(proof_type, locale: message_locale),
+                                   application: sentence_application_reference)
   end
 
   def typed_proof_rejected_message(proof_type)
@@ -215,16 +206,15 @@ class NotificationComposer
   end
 
   def application_label(application)
-    label = "Application ##{application.id}"
-    applicant_name = application.constituent_full_name.strip
-
-    applicant_name.present? ? "#{label} (#{applicant_name})" : label
+    name = application.constituent_full_name.strip
+    key = name.present? ? 'application_named' : 'application'
+    translate(key, id: application.id, name: name)
   end
 
   def generic_notifiable_reference
-    return 'record missing' unless @notifiable
+    return translate('record_missing') unless @notifiable
 
-    label = @notifiable.class.name.demodulize.titleize
+    label = @notifiable.class.model_name.human
     @notifiable.id ? "#{label} ##{@notifiable.id}" : label
   end
 
@@ -293,22 +283,34 @@ class NotificationComposer
     end
   end
 
-  def training_session_message(verb_phrase)
+  def training_session_message(key)
     return default_message unless @notifiable.is_a?(TrainingSession)
 
-    trainer_name = @actor&.full_name.presence ||
-                   @metadata['trainer_name'].presence ||
-                   preloaded_trainer_name ||
-                   'A trainer'
-    constituent_name = notifiable_application&.constituent_full_name.presence ||
-                       @notifiable.constituent&.full_name.presence ||
-                       'a constituent'
-    safe_join([trainer_name, " #{verb_phrase} for ", constituent_name, ' on ', sentence_application_reference, '.'])
+    trainer_name = @actor&.full_name.presence || @metadata['trainer_name'].presence || preloaded_trainer_name || translate('a_trainer')
+    name = notifiable_application&.constituent_full_name.presence || @notifiable.constituent&.full_name.presence || translate('constituent')
+    translate(key, trainer: trainer_name, name: name, application: sentence_application_reference)
+  end
+
+  def message_for_max_rejections_reached
+    translate('max_rejections_reached_html', application: application_reference)
+  end
+
+  def message_for_initial_voucher_issuance_attention
+    translate('initial_voucher_issuance_attention_html', application: application_reference)
+  end
+
+  def message_locale
+    @locale || @viewer&.effective_message_locale || I18n.locale
   end
 
   def preloaded_trainer_name
     return unless @notifiable.association(:trainer).loaded?
 
     @notifiable.trainer&.full_name.presence
+  end
+
+  # Rails escapes interpolations in _html translations while preserving generated links.
+  def translate(key, **variables)
+    ActionController::Base.helpers.t("notifications.messages.#{key}", locale: message_locale, **variables)
   end
 end

@@ -5,6 +5,9 @@
 module ConstituentPortal
   module Proofs
     class ProofsController < ApplicationController
+      include ViewerLocale
+
+      around_action :with_viewer_locale
       include RequestMetadataHelper
 
       before_action :authenticate_user!
@@ -49,7 +52,7 @@ module ConstituentPortal
         return false if application_id.present?
 
         Rails.logger.error "Application ID is nil or empty for user #{current_user.id}"
-        redirect_to constituent_portal_dashboard_path, alert: 'Application not found'
+        redirect_to constituent_portal_dashboard_path, alert: t('constituent_portal.proofs.upload.not_found')
         true
       end
       # rubocop:enable Naming/PredicateMethod
@@ -69,14 +72,14 @@ module ConstituentPortal
 
       def handle_application_not_found(application_id)
         Rails.logger.error "Application not found with ID: #{application_id} for user: #{current_user.id} with dependents: #{current_user.dependents.pluck(:id)}"
-        redirect_to constituent_portal_dashboard_path, alert: 'Application not found'
+        redirect_to constituent_portal_dashboard_path, alert: t('constituent_portal.proofs.upload.not_found')
       end
 
       def ensure_can_submit_proof
         return if @application.can_submit_proof?
 
         redirect_to constituent_portal_application_path(@application),
-                    alert: 'Cannot submit proof at this time'
+                    alert: t('constituent_portal.proofs.upload.unavailable')
         nil
       end
 
@@ -84,14 +87,14 @@ module ConstituentPortal
         return if valid_proof_type? && can_modify_proof?
 
         redirect_to constituent_portal_application_path(@application),
-                    alert: 'Invalid proof type or status'
+                    alert: t('constituent_portal.proofs.upload.invalid')
         false
       end
 
       def check_rate_limit
         RateLimit.check!(:proof_submission, current_user.id)
       rescue RateLimit::ExceededError
-        flash[:alert] = 'Please wait before submitting another proof'
+        flash[:alert] = t('constituent_portal.proofs.upload.wait')
         flash.keep(:alert)
         redirect_to constituent_portal_application_path(@application)
         false
@@ -150,13 +153,13 @@ module ConstituentPortal
       end
 
       def handle_successful_submission
-        flash[:notice] = 'Proof submitted successfully'
+        flash[:notice] = t('constituent_portal.proofs.upload.submitted')
         flash.keep(:notice)
         redirect_to constituent_portal_application_path(@application)
       end
 
       def handle_rate_limit_error
-        flash[:alert] = 'Please wait before submitting another proof'
+        flash[:alert] = t('constituent_portal.proofs.upload.wait')
         flash.keep(:alert)
         redirect_to constituent_portal_application_path(@application)
       end

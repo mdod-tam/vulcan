@@ -126,8 +126,8 @@ class Notification < ApplicationRecord
   end
 
   # The human-readable message for this notification, composed by NotificationComposer.
-  def message(viewer = nil)
-    NotificationComposer.generate(action, notifiable, actor, metadata, viewer: viewer)
+  def message(viewer = nil, locale: nil)
+    NotificationComposer.generate(action, notifiable, actor, metadata, viewer: viewer, locale: locale)
   end
 
   def proof_resubmission_rejected?
@@ -144,7 +144,7 @@ class Notification < ApplicationRecord
 
   def record_delivery_failure!(error, channel:, route:, message:, details: {})
     with_lock do
-      next if local_delivery_outcome? || email_delivery_attempts.exists?
+      next if local_delivery_outcome? || email_delivery_attempts.exists? || letter_handoff_recorded?
 
       failure = details.to_h.deep_stringify_keys.merge(
         'message' => message, 'error_class' => error.class.name, 'channel' => channel.to_s, 'error_at' => Time.current.iso8601
@@ -153,6 +153,11 @@ class Notification < ApplicationRecord
         'actual_delivery_channel' => 'none', 'delivery_route_reason' => route, 'delivery_error' => failure
       ))
     end
+  end
+
+  def letter_handoff_recorded?
+    queued_delivery_status? && metadata.to_h['actual_delivery_channel'] == 'letter' &&
+      metadata.to_h['delivery_route_reason'] == 'queued_for_printing'
   end
 
   def self.metadata_value(metadata, key)

@@ -38,6 +38,10 @@ Proof and W9 rejection-limit warnings are in-app notices for the administrator w
 
 When delivery is requested for these actions, routing metadata records `none` / `no_email_action`. This is expected behavior.
 
+### Application closure notices
+
+The proof archive notice records a `max_rejections_reached` notification for the applicant under the application lock, then dispatches after commit. Its mailer retains managing-guardian contact, language and letter-preference routing. Repeating the same decision's follow-up preserves that intent without dispatching again. A missing delivery status means queue handoff is unconfirmed, not that the notice was sent or that retrying it is safe. An interrupted handoff requires staff investigation and an explicit new notice, rather than another proof rejection.
+
 ### Secure-request recipients
 
 [SecureRequestRecipientResolver](../../app/services/applications/secure_request_recipient_resolver.rb) selects the contact owner and channel for provider-info and proof requests. Each new form stores its delivery owner and source, so the issued link retains that history. Resending creates a replacement using current eligible contact details.

@@ -62,6 +62,8 @@
                         "Proof Resubmission Request Sent"
                       when "cert_upload_requested"
                         "Certification Upload Request Sent"
+                      when 'max_rejections_reached'
+                        'Application Closure Notice'
                       else
                         log.action.titleize.gsub('_', ' ')
                       end
@@ -74,6 +76,12 @@
                         "Follow-Up Step Did Not Finish"
                       when "voucher_assigned"
                         "Voucher Assigned"
+                      when 'initial_voucher_issuance_attention'
+                        'Initial Voucher Issuance Needs Review'
+                      when 'document_signing_request_unconfirmed'
+                        'DocuSeal Request Needs Review'
+                      when 'document_signing_follow_up_failed'
+                        'DocuSeal Follow-Up Needs Review'
                       when "voucher_redeemed"
                         "Voucher Redeemed"
                       when "voucher_expired"
@@ -196,6 +204,9 @@
                       "Staff follow-up requested by constituent"
                     when "documents_requested"
                       "Additional documents requested"
+                    when 'max_rejections_reached'
+                      safe_join(['The application was archived at the rejection limit. ',
+                                 delivery_visibility(log, locale: :en)])
                     when "proof_approved"
                       proof_type = log.metadata.try(:[], 'proof_type') || 'Unknown'
                       "Constituent notified: #{ProofNotificationCopy.approved_text(proof_type)}"
@@ -238,6 +249,16 @@
                       "Disability certification requested#{provider_text} (via #{method})"
                     when "voucher_assigned"
                       voucher_assignment_detail(log.metadata, fallback_time: log.created_at)
+                    when 'initial_voucher_issuance_attention'
+                      if log.metadata['commit_state'] == 'committed'
+                        'A voucher was issued, but follow-up did not finish. Check delivery before issuing another voucher.'
+                      else
+                        'Voucher issuance could not be confirmed. Check the application and voucher records before issuing another voucher.'
+                      end
+                    when 'document_signing_request_unconfirmed'
+                      'The DocuSeal request could not be confirmed. Check DocuSeal and the application before sending another request.'
+                    when 'document_signing_follow_up_failed'
+                      'The DocuSeal request was saved, but follow-up did not finish. Check the request before sending another one.'
                     when "voucher_redeemed"
                       "Voucher #{log.metadata['voucher_code']} redeemed for #{number_to_currency(log.metadata['amount'])} at #{log.metadata['vendor_name']}"
                     when "voucher_expired"

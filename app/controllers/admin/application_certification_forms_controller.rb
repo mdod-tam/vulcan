@@ -25,12 +25,11 @@ module Admin
         service: 'docuseal'
       ).call
 
-      if result.success?
+      if result.data.is_a?(Hash) && result.data.values_at(:delivery_suppressed, :recovery_required, :already_running).any?
+        redirect_to admin_application_path(@application), alert: result.message
+      elsif result.success?
         redirect_to admin_application_path(@application),
                     notice: t('admin.applications.send_document_signing_request.d_sign_request_pass')
-      elsif result.data.is_a?(Hash) && result.data[:delivery_suppressed]
-        # Delivery suppression permits staff to print the form.
-        redirect_to admin_application_path(@application), alert: result.message
       else
         redirect_to admin_application_path(@application),
                     alert: "Failed to send signing request: #{result.message}"

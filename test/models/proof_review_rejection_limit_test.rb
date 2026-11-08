@@ -86,6 +86,11 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
       assert_equal @admin, audit_event.user
       assert_equal 'max_proof_rejections', audit_event.metadata['trigger']
 
+      notification = Notification.find_by!(action: 'max_rejections_reached', notifiable: @application)
+      assert_equal @application.user, notification.recipient
+      assert_equal @admin, notification.actor
+      assert_equal 'queued', notification.delivery_status
+      assert_equal @application.proof_reviews.rejections.sole.id, notification.metadata['proof_review_id']
       assert_max_rejections_mail_count 1
     end
   end
@@ -127,15 +132,25 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
     assert_equal 1, @application.reload.total_rejections
   end
 
-  test 'a failed notice does not fail a review that has committed' do
-    @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1)
-    Applications::ProofDecisionFollowUp.any_instance.stubs(:send_max_rejections_warning).raises(StandardError, 'warning failed')
+  test 'a failed staff warning does not skip the committed archive notice' do
+    @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
+    original_log = AuditEventService.method(:log)
+    fail_staff_warning = lambda do |**attributes|
+      raise StandardError, 'warning failed' if attributes[:action] == 'max_rejections_warning'
 
-    assert_difference -> { ProofReview.count }, 1 do
-      reject(:income)
+      original_log.call(**attributes)
     end
 
-    assert_equal ProofReview::MAX_REJECTIONS, @application.reload.total_rejections
+    AuditEventService.stub(:log, fail_staff_warning) do
+      assert_difference -> { ProofReview.count }, 1 do
+        reject(:income)
+      end
+    end
+
+    assert_equal ProofReview::MAX_REJECTIONS + 1, @application.reload.total_rejections
+    assert_predicate @application, :status_archived?
+    assert_equal 'queued', Notification.find_by!(notifiable: @application, action: 'max_rejections_reached').delivery_status
+    assert_max_rejections_mail_count 1
   end
 
   private
@@ -154,8 +169,6 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
     end
   end
 
-  # The warning at the limit is delivered through the same mailer action as the archive notice,
-  # so a rejection past the limit queues two.
   def assert_max_rejections_mail_count(count)
     assert_equal count, max_rejections_mail_jobs.size
   end

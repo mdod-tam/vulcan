@@ -37,6 +37,9 @@ module EmailDelivery
     test 'notification mapping belongs to the catalog' do
       assert_predicate Catalog.notification_action('w9_rejected'), :audit_only?
       assert_predicate Catalog.notification_action('max_rejections_warning'), :audit_only?
+      assert_predicate Catalog.notification_action('initial_voucher_issuance_attention'), :audit_only?
+      assert_equal 'ApplicationNotificationsMailer#max_rejections_reached', Catalog.notification_action('max_rejections_reached').mail_action
+      assert_equal :notifiable, Catalog.notification_action('max_rejections_reached').adapter
       assert_predicate Catalog.notification_action('vendor_max_w9_rejections_warning'), :audit_only?
       assert_equal 'CertifyingProfessionalMailer#requested', Catalog.notification_action('disability_certification_requested').mail_action
       assert_equal :notifiable_and_notification, Catalog.notification_action('training_requested').adapter

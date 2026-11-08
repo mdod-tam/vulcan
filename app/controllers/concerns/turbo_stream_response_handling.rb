@@ -11,9 +11,11 @@ module TurboStreamResponseHandling
     render turbo_stream: streams
   end
 
-  def handle_turbo_stream_error(message:)
+  def handle_turbo_stream_error(message:, status: :unprocessable_content, error_target: nil)
     flash.now[:error] = message
-    render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
+    streams = [turbo_stream.update('flash', partial: 'shared/flash')]
+    streams << turbo_stream.update(error_target, partial: 'shared/inline_error', locals: { message: message }) if error_target
+    render turbo_stream: streams, status: status
   end
 
   # Updates the flash and each requested partial, including the modal container.
@@ -58,8 +60,8 @@ module TurboStreamResponseHandling
   end
 
   # HTML precedence: html_redirect_path, then html_render_action, then redirect back.
-  # status applies only to html_render_action.
-  def handle_error_response(error_message:, html_redirect_path: nil, html_render_action: nil, status: :unprocessable_content)
+  # Failed HTML renders and Turbo streams share the caller's status.
+  def handle_error_response(error_message:, html_redirect_path: nil, html_render_action: nil, status: :unprocessable_content, turbo_error_target: nil)
     respond_to do |format|
       if html_redirect_path
         format.html { redirect_to html_redirect_path, alert: error_message }
@@ -72,7 +74,7 @@ module TurboStreamResponseHandling
         format.html { redirect_back_or_to root_path, alert: error_message }
       end
 
-      format.turbo_stream { handle_turbo_stream_error(message: error_message) }
+      format.turbo_stream { handle_turbo_stream_error(message: error_message, status: status, error_target: turbo_error_target) }
     end
   end
 end

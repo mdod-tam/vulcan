@@ -4,10 +4,12 @@ module Vouchers
   # Issues an application's voucher with its audit event and assignment notice. The result's data[:voucher] is the
   # new voucher.
   class IssuanceService < BaseService
+    class RolledBackFailure < StandardError; end
+
     # @param application [Application] The application to issue the voucher for
     # @param actor [User] The user the audit event names
     # @param assignment_method [Symbol] How the voucher was assigned (:manual, :manual_approval, :automatic)
-    # @param raise_on_failure [Boolean] Whether an error is re-raised for a retrying caller instead of returning a failure
+    # @param raise_on_failure [Boolean] Whether a confirmed rollback raises RolledBackFailure for a retrying caller
     def initialize(application, actor:, assignment_method: :manual, raise_on_failure: false)
       super()
       @application = application
@@ -36,7 +38,7 @@ module Vouchers
       elsif state == :unknown
         failure('Voucher issuance could not be confirmed. Check the application before retrying.', commit_state: :unknown)
       else
-        raise if @raise_on_failure
+        raise RolledBackFailure, "Voucher issuance rolled back (#{e.class.name})", cause: nil if @raise_on_failure
 
         failure('Voucher could not be issued')
       end

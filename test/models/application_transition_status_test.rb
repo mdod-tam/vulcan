@@ -166,7 +166,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
       clear_enqueued_jobs
       IssueInitialVoucherJob.enqueue_after_approval(application, actor: admin, assignment_method: :manual_approval)
 
-      Vouchers::IssuanceService.any_instance.stubs(:call).raises(StandardError, 'voucher write failed')
+      Vouchers::IssuanceService.any_instance.stubs(:call).raises(Vouchers::IssuanceService::RolledBackFailure, 'Voucher issuance rolled back')
       assert_enqueued_jobs 1, only: IssueInitialVoucherJob do
         assert_no_difference -> { Voucher.where(application: application).count } do
           IssueInitialVoucherJob.perform_now(application.id, admin.id)

@@ -35,15 +35,12 @@ module Applications
 
     delegate :application, :admin, to: :review
 
-    # Sent after the commit. A failure here must not fail a review that has committed.
     def notify_rejection_limit
       total = review.rejection_total
       return unless total
 
       send_max_rejections_warning if total >= ProofReview::MAX_REJECTIONS
-      ApplicationNotificationsMailer.max_rejections_reached(application).deliver_later if total > ProofReview::MAX_REJECTIONS
-    rescue StandardError => e
-      Rails.logger.error "Failed to send rejection limit notices for ProofReview #{review.id}: #{e.class.name}"
+      send_archive_notice if total > ProofReview::MAX_REJECTIONS
     end
 
     def send_max_rejections_warning
@@ -64,6 +61,25 @@ module Applications
         channel: :email,
         deliver: false
       )
+    rescue StandardError => e
+      Rails.logger.error "Failed to record rejection limit warning for ProofReview #{review.id}: #{e.class.name}"
+    end
+
+    def send_archive_notice
+      application.with_lock do
+        operation = operation_id('archive_notice')
+        notices = Notification.where(action: 'max_rejections_reached', notifiable: application)
+        next if notices.exists?(["metadata->>'operation_id' = ?", operation])
+
+        notification = NotificationService.create_and_deliver!(
+          type: 'max_rejections_reached', recipient: application.user, actor: admin, notifiable: application,
+          metadata: { proof_review_id: review.id, operation_id: operation }, channel: :email, deliver: false
+        )
+        # The row records intent. Rendering, artifact creation and enqueue run after this transaction commits.
+        ActiveRecord.after_all_transactions_commit do
+          EmailDelivery::NotificationDispatch.new(notification, channel: :email).call
+        end
+      end
     end
 
     def request_resubmission

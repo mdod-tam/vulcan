@@ -2,6 +2,9 @@
 
 # In-app notifications: list, mark as read, and (admins only) refresh email delivery status.
 class NotificationsController < ApplicationController
+  include ViewerLocale
+
+  around_action :with_viewer_locale
   include NotificationPreloading
 
   before_action :authenticate_user!
@@ -29,7 +32,7 @@ class NotificationsController < ApplicationController
 
     respond_to do |format|
       format.html do
-        redirect_back_or_to notifications_path
+        redirect_back_or_to notifications_path(locale: params[:locale].presence)
       end
       format.turbo_stream do
         render turbo_stream: turbo_stream.replace("notification_#{@notification.id}",
@@ -69,11 +72,11 @@ class NotificationsController < ApplicationController
   rescue ActiveRecord::RecordNotFound
     respond_to do |format|
       format.html do
-        flash[:alert] = 'Notification not found.'
+        flash[:alert] = t('notifications.index.not_found')
         redirect_back_or_to root_path
       end
       format.turbo_stream do
-        flash.now[:alert] = 'Notification not found.'
+        flash.now[:alert] = t('notifications.index.not_found')
         render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
       end
     end

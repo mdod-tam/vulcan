@@ -10,6 +10,9 @@ module EmailDelivery
     # Queue only after the caller's transaction commits.
     self.enqueue_after_transaction_commit = true
 
+    # A failed preparation is terminal for this intent. Staff redelivery creates a new notice and capture.
+    before_perform :stop_terminal_notification, prepend: true
+
     # A mailer param deleted after queueing (a removed user, or one whose role changed) cannot be loaded.
     # The notice is for someone or something that no longer exists, so record it as not sent.
     discard_on ActiveJob::DeserializationError do |job, _error|
@@ -25,7 +28,44 @@ module EmailDelivery
       framework_envelope.fetch(:params)
     end
 
+    def perform(...)
+      super
+    rescue ApplicationMailer::DeliverySkipped
+      raise
+    rescue StandardError => e
+      record_preparation_failure(e)
+      raise
+    end
+
     private
+
+    def stop_terminal_notification
+      throw :abort if delivery_notification&.local_delivery_outcome?
+    end
+
+    def delivery_notification
+      return @delivery_notification if defined?(@delivery_notification)
+
+      notification_id = email_delivery_context&.dig('notification_id')
+      return unless notification_id
+
+      @delivery_notification = Notification.find_by(id: notification_id)
+    end
+
+    def record_preparation_failure(error)
+      notification = delivery_notification
+      return unless notification
+
+      channel = notification.metadata.to_h['actual_delivery_channel']
+      channel = notification.metadata.to_h['channel'] unless channel.in?(%w[email letter])
+      notification.mark_delivery_failed!(
+        error,
+        channel: channel || :email,
+        details: { request_id: email_delivery_context&.dig('request_id'), stage: 'preparation' }
+      )
+    rescue StandardError => e
+      Rails.logger.error "Mail preparation failure tracking failed: #{e.class.name}"
+    end
 
     # ActionMailer::MailDeliveryJob#perform owns this serialized argument contract.
     def framework_envelope

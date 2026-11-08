@@ -66,6 +66,45 @@ module AdminTests
       end
     end
 
+    test 'a rejected save keeps the explanation and an enabled retry inside the open dialog' do
+      visit_admin_application_with_retry(@application, user: @admin)
+      click_review_proof_and_wait('income', timeout: 15)
+      within('#incomeProofReviewModal') { click_button 'Reject' }
+      wait_for_modal_open('proofRejectionModal', timeout: 15)
+      failure = BaseService::Result.new(success: false, message: 'The review could not be saved. Try again.', data: {})
+      ProofReviewService.any_instance.stubs(:call).returns(failure)
+
+      submit_custom_proof_rejection('The document needs a legible signature.')
+
+      within('#proofRejectionModal[open]') do
+        assert_selector '[role="alert"]', text: 'The review could not be saved. Try again.'
+        assert_field 'Reason for Rejection', with: 'The document needs a legible signature.', disabled: false
+        assert_selector 'input[name="rejection_reason_code"][value="other"]', visible: :all
+        assert_button 'Submit', disabled: false
+      end
+      assert_equal 'not_reviewed', @application.reload.income_proof_status
+      take_screenshot('proof-rejection-failed-draft', full: true, html: true)
+
+      ProofReviewService.any_instance.unstub(:call)
+      within('#proofRejectionModal') do
+        reason_button = first('button[data-action="click->rejection-form#selectPredefinedReason"][data-reason-code]', minimum: 1)
+        reason_text = reason_button['data-reason-text']
+        reason_code = reason_button['data-reason-code']
+        reason_button.click
+        assert_field 'Reason for Rejection', with: reason_text
+        assert_selector "input[name='rejection_reason_code'][value='#{reason_code}']", visible: :all
+        find('button[data-action="click->rejection-form#selectOther"]').click
+        fill_in 'Reason for Rejection', with: 'The replacement needs a legible date.'
+        click_button 'Submit'
+      end
+      assert_no_selector '#proofRejectionModal[open]', wait: 15
+      assert_equal 'rejected', @application.reload.income_proof_status
+      assert_equal 'The replacement needs a legible date.', @application.proof_reviews.order(:id).last.rejection_reason
+      take_screenshot('proof-rejection-retry-saved', full: true, html: true)
+    ensure
+      ProofReviewService.any_instance.unstub(:call)
+    end
+
     test 'modal cleanup works when navigating away without letter_opener' do
       # Use test delivery to avoid letter_opener navigation.
       original_delivery_method = ActionMailer::Base.delivery_method

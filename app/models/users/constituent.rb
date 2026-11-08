@@ -65,7 +65,7 @@ module Users
 
     # A constituent's disabilities are checked once they have an application, or when intake asks for the check.
     def must_have_disability
-      errors.add(:base, 'At least one disability must be selected.') unless disability_selected?
+      errors.add(:base, :disability_required) unless disability_selected?
     end
 
     def validate_disability?

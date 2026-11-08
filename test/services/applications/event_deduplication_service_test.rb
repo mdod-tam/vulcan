@@ -28,6 +28,19 @@ module Applications
       assert_equal events.map(&:id).sort, EventDeduplicationService.new.deduplicate(events).map(&:id).sort
     end
 
+    test 'keeps distinct voucher and signing attention operations while collapsing a repeated operation' do
+      %w[initial_voucher_issuance_attention document_signing_request_unconfirmed document_signing_follow_up_failed].each do |action|
+        events = %w[first-operation second-operation first-operation].map do |operation_id|
+          Event.create!(user: @admin, auditable: @application, action: action,
+                        metadata: { operation_id: operation_id }, created_at: Time.current.beginning_of_minute)
+        end
+
+        result = EventDeduplicationService.new.deduplicate(events)
+        assert_equal 2, result.size
+        assert_equal %w[first-operation second-operation], result.map { |event| event.metadata['operation_id'] }.sort
+      end
+    end
+
     test 'retains separate profile edits when the masks match in the same minute' do
       events = %w[Before After Before].map do |name|
         AuditEventService.log(action: 'profile_updated_by_admin', actor: @admin, auditable: @application.user,

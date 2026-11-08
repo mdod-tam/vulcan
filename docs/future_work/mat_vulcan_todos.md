@@ -45,11 +45,13 @@ Customer import — post-import reconciliation
 
 Signed-in portal locale routing
 
-- [ ] Some constituent pages follow the signed-in user's language and the rest don't.
-  `ViewerLocale#with_viewer_locale` uses `params[:locale]`, then the account's message locale. The
-  dashboard, products, training sessions, and `request_training` use it. Dependents, proof
-  resubmission, and the other application actions still render in `I18n.default_locale`, so their
-  Spanish strings can't be reached. Apply the policy in one place instead of controller by controller.
+- [x] Apply `ViewerLocale#with_viewer_locale` to the application, dependent, proof-resubmission,
+  and notification actions, matching the existing dashboard, products, and training-session policy:
+  supported request locale, then the account's effective message locale, then the default.
+- [ ] Consolidate portal callback registration at an audience boundary if further portal controllers
+  are introduced. Keep language changes scoped to signed-in viewers; public account lookup must not
+  select its response language from a matched account. Other existing portal copy outside the
+  dependent form, proof-upload form, and notification history still needs a translation inventory.
 
 MFA enrollment localization
 
@@ -169,6 +171,11 @@ Questions for DoIT:
 
 - [x] Route invoice generation and notification-failure audits through `AuditEventService`, retaining domain actors and distinct notice-operation identities.
 - [x] Route delivery audits through `AuditEventService`, enforce Outcome action/request identity, preserve Feedback receipt guards, and make legacy mail removal resumable through durable request/confirmation audits across the application and queue stores.
+- [ ] When a third database-unique audit identity is needed, consolidate the Outcome and LegacyMailJobs
+  insert/savepoint/named-constraint recovery in `AuditEventService` (for example, `log_uniquely`).
+  Preserve metadata privacy, return the existing action/identity event, and re-raise unrelated
+  constraint violations. This is a follow-up, not a PR 274 requirement. Evaluator assignment's
+  user-facing conflict and letter delivery's domain retry/cleanup remain at their own owners.
 - [ ] Event browsing: settle the query shape and the indexes it needs.
 - [ ] Controller: `Admin::EventsController#index` (filters, pagination).
 - [ ] CSV export: service + controller action, scoped to the filters.
