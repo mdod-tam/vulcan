@@ -14,6 +14,8 @@ class RegistrationMailerTest < ActionMailer::TestCase
       mail = RegistrationMailer.with(registration_verification: verification).email_verification.message
       assert_equal ['correo@example.test'], mail.to
       assert_equal 'Confirme su correo electrónico para continuar con MAT', mail.subject
+      assert_includes mail.body.to_s, I18n.l(verification.expires_at, format: :long, locale: :es)
+      assert_includes mail.body.to_s, verification.expires_at.zone
       url = URI.parse(mail.body.to_s[%r{https?://\S+}])
       token = URI.decode_www_form(url.query).to_h.fetch('token')
       assert_equal verification, RegistrationVerification.resolve(token)

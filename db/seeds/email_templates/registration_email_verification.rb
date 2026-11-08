@@ -11,10 +11,11 @@ EmailTemplate.create_or_find_by!(name: 'registration_email_verification', format
     Confirm your email and continue:
     %<verification_url>s
 
-    This link expires 20 minutes after it was requested. Confirming your email does not sign you in to an existing account.
+    Finish creating your account before this link expires: %<expires_at>s.
+    Confirming your email does not sign you in to an existing account.
 
     If you did not request this, ignore this email. Your account has not been changed.
   TEXT
-  template.variables = { 'required' => %w[verification_url], 'optional' => [] }
+  template.variables = { 'required' => %w[verification_url expires_at], 'optional' => [] }
   template.version = 1
 end

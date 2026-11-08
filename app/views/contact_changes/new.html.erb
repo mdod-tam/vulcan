@@ -17,7 +17,9 @@
     <div>
       <%= form.label :phone_type, t('contact_changes.phone_type'), class: 'form-label' %>
       <%= form.select :phone_type, [[t('contact_changes.text'), 'text'], [t('contact_changes.voice'), 'voice'],
-                                    [t('contact_changes.videophone'), 'videophone']], {}, class: 'form-input' %>
+                                    [t('contact_changes.videophone'), 'videophone']], {},
+                      class: 'form-input', aria: { describedby: 'contact-staff-help' } %>
+      <p id="contact-staff-help" class="text-sm mt-2"><%= render 'staff_help' %></p>
     </div>
     <%= form.submit t('contact_changes.request'), class: 'btn btn-primary' %>
   <% end %>

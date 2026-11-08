@@ -1,15 +1,16 @@
 # frozen_string_literal: true
 
 class RegistrationVerification < ApplicationRecord
-  LIFETIME = 20.minutes
+  LIFETIME = 60.minutes
   TOKEN_PURPOSE = :registration_email
+  EMAIL_MAX_LENGTH = 254
 
   encrypts :email
   belongs_to :created_user, class_name: 'User', optional: true
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
 
   before_validation :normalize_email, on: :create
-  validates :email, presence: true
+  validates :email, presence: true, length: { maximum: EMAIL_MAX_LENGTH }
   validates :locale, inclusion: { in: %w[en es] }
   validates :expires_at, presence: true
   validates :delivery_status, inclusion: { in: %w[pending queued submitted not_sent failed] }

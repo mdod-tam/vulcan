@@ -1,22 +1,42 @@
 <a href="#signup-form" class="skip-link"><%= t('portal_self_service.registrations.skip_to_form') %></a>
 <div class="flex items-center justify-center bg-gray-100 px-4 py-12">
   <section class="card p-6 sm:p-8 w-full max-w-md" aria-labelledby="signup-heading">
-    <h1 id="signup-heading" class="text-2xl font-semibold mb-4"><%= t('portal_self_service.registrations.title') %></h1>
-    <p class="mb-4"><%= t('registration_verification.introduction') %></p>
+    <h1 id="signup-heading" class="text-2xl font-semibold mb-4">
+      <%= t(@verification_requested ? 'registration_verification.check_email_title' : 'portal_self_service.registrations.title') %>
+    </h1>
+    <% if @verification_requested %>
+      <p class="mb-2"><%= t('registration_verification.requested_email', email: @verification.email) %></p>
+      <p class="mb-4"><%= t('registration_verification.next_step', minutes: RegistrationVerification::LIFETIME.in_minutes.to_i) %></p>
+      <p class="mb-4"><%= t('registration_verification.delivery_help') %></p>
+    <% else %>
+      <p class="mb-4"><%= t('registration_verification.introduction') %></p>
+    <% end %>
     <%= form_with scope: :user, url: sign_up_path, id: 'signup-form' do |form| %>
       <%= form.hidden_field :locale, value: @verification.locale %>
-      <div class="mb-4">
-        <%= form.label :email, t('portal_self_service.registrations.email_label'), class: 'form-label required-label' %>
-        <%= form.email_field :email, value: @verification.email, required: true, autocomplete: 'email', autofocus: true,
-                                     class: 'form-input', aria: { invalid: @verification.errors[:email].any?, describedby: 'email-help' } %>
-        <p id="email-help" class="form-hint"><%= t('registration_verification.email_help') %></p>
-        <% if @verification.errors[:email].any? %>
-          <p role="alert" class="mt-1 text-sm text-danger-600"><%= t('registration_verification.invalid_email') %></p>
-        <% end %>
-      </div>
-      <%= form.submit t('registration_verification.send_link'), class: 'btn btn-primary w-full',
-                                                                data: { turbo_submits_with: t('registration_verification.sending') } %>
+      <% if @verification_requested %>
+        <%= form.hidden_field :email, value: @verification.email %>
+        <%= form.submit t('registration_verification.resend'),
+                        class: 'btn btn-primary w-full', data: { turbo_submits_with: t('registration_verification.sending') } %>
+      <% else %>
+        <div class="mb-4">
+          <%= form.label :email, t('portal_self_service.registrations.email_label'), class: 'form-label required-label' %>
+          <%= form.email_field :email, value: @verification.email, required: true, autocomplete: 'email', autofocus: true,
+                                       maxlength: RegistrationVerification::EMAIL_MAX_LENGTH,
+                                       class: 'form-input', aria: { invalid: @verification.errors[:email].any?, describedby: 'email-help' } %>
+          <p id="email-help" class="form-hint"><%= t('registration_verification.email_help') %></p>
+          <% if @verification.errors[:email].any? %>
+            <p role="alert" class="mt-1 text-sm text-danger-600"><%= t('registration_verification.invalid_email') %></p>
+          <% end %>
+        </div>
+        <%= form.submit t('registration_verification.send_link'), class: 'btn btn-primary w-full',
+                                                                  data: { turbo_submits_with: t('registration_verification.sending') } %>
+      <% end %>
+    <% end %>
+    <% if @verification_requested %>
+      <p class="mt-4 text-sm"><%= link_to t('registration_verification.change_email'), sign_up_path(locale: public_form_locale_param) %></p>
+      <p class="mt-4 text-sm"><%= t('registration_verification.support_html', email: mail_to(ProgramContact.support_email, class: 'underline')) %></p>
     <% end %>
     <p class="mt-4 text-sm"><%= link_to t('portal_self_service.registrations.sign_in_link'), sign_in_path(locale: public_form_locale_param) %></p>
+    <p class="mt-4 text-sm"><%= link_to t('portal_self_service.account_access.title'), new_password_path(locale: public_form_locale_param) %></p>
   </section>
 </div>

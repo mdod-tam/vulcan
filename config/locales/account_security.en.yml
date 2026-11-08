@@ -44,8 +44,8 @@ en:
     pending: 'Requested contact: %{value}'
     removal: Remove phone number
     old_active: Your current contact stays active until you complete this change.
-    staff_help: For a number that cannot receive text messages, contact %{email} or %{phone}.
-      Staff must verify your identity and the new number.
+    staff_help_html: For a number that cannot receive text messages, staff must verify your
+      identity and the new number. Contact %{email} or %{phone} for help.
     code: Text message verification code
     verify: Confirm ownership
     confirmed: Contact ownership confirmed.
@@ -54,15 +54,17 @@ en:
     canceled: Contact change canceled.
     complete: Complete change and sign out
     resend: Resend confirmations
+    check_status: Check confirmation status
     cancel: Cancel this change
-    both_emails: Confirm both your current and new email addresses, then return to this page.
-      If you cannot access your old address, contact the MAT Team.
-    check_email: Confirm the email we sent to your new address, then return to this page.
+    both_emails: Confirm both your current and new email addresses, then return here and check
+      confirmation status. If you cannot access your old address, contact the MAT Team.
+    check_email: Confirm the email we sent to your new address, then return here and check
+      confirmation status.
     confirm_title: Confirm this email address
     confirm_explanation: Confirm only if you requested this account contact change. This confirmation
       does not sign you in or change the contact by itself.
     return_to_browser: Return to the signed-in browser where you requested the change to complete
-      it.
+      it. Choose Check confirmation status to continue.
     invalid_link: This confirmation is invalid, expired or no longer current.
     use_verified_flow: Use the verified email or phone change process to update account contacts.
     view_pending: View pending contact change
@@ -73,6 +75,13 @@ en:
       could not be queued. Sign in with your updated contact. Contact the MAT Team if you need
       help.
   registration_verification:
+    check_email_title: Check your email
+    requested_email: 'Email address: %{email}'
+    next_step: Open the verification link in your email to choose a password and finish creating your account. A new link expires %{minutes} minutes after the request; finish the form before then.
+    delivery_help: Delivery can take a few minutes. Check your spam or junk folder before requesting another link. Repeated requests are limited.
+    resend: Send another verification link
+    change_email: Correct or change email address
+    support_html: 'Still need help? Contact the MAT Team at %{email}.'
     introduction: Enter your email address to receive a link and finish creating your account.
     email_help: You will choose your password after confirming your email. This step does not
       sign you in.

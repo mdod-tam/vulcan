@@ -6,7 +6,9 @@ class RegistrationsController < ApplicationController
   before_action :prevent_registration_caching
 
   def new
-    @verification = RegistrationVerification.new(locale: public_form_locale_param || I18n.default_locale)
+    @verification = RegistrationVerification.new(email: session[:registration_email],
+                                                 locale: public_form_locale_param || I18n.default_locale)
+    @verification_requested = params[:check_email] == 'true' && @verification.email.present?
   end
 
   def create
@@ -17,8 +19,9 @@ class RegistrationsController < ApplicationController
     return render :new, status: :unprocessable_content unless @verification.valid?
 
     issue_verification
-    redirect_to sign_up_path(locale: public_form_locale_param), status: :see_other,
-                                                                notice: t('registration_verification.check_email')
+    session[:registration_email] = @verification.email
+    redirect_to sign_up_path(locale: public_form_locale_param, check_email: true),
+                status: :see_other, notice: t('registration_verification.check_email')
   end
 
   private

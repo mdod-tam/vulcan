@@ -1,0 +1,3 @@
+<%= t('contact_changes.staff_help_html',
+      email: mail_to(ProgramContact.support_email, class: 'underline'),
+      phone: link_to(ProgramContact.support_phone, "tel:#{ProgramContact.support_phone}", class: 'underline')) %>

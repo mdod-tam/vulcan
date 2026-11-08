@@ -22,7 +22,7 @@ class AuthRateLimit
     sign_in_attempt: { ip: 20 },
     account_access: { ip: 5, contact_ip: 5, user_ip: 5 },
     account_recovery: { contact_ip: 5, ip: 5, user_ip: 3 },
-    registration: { ip: 5, contact: 3 },
+    registration: { ip: 30, contact: 3 },
     contact_change: { ip: 10, contact: 3, user_ip: 5 },
     sms_verification: { contact: 10 }
   }.freeze

@@ -86,7 +86,9 @@ class AccountContactSecurityTest < ApplicationSystemTestCase
     assert_equal original_email, user.reload.email
     assert_equal authority.id, user.sessions.sole.id
 
-    visit contact_change_path(change)
+    assert_no_button translated('contact_changes.complete')
+    click_button translated('contact_changes.check_status')
+    assert_current_path contact_change_path(change)
     assert_button translated('contact_changes.complete'), disabled: false
     take_screenshot('contact-confirmed-ready-to-complete', html: true, full: true)
     perform_enqueued_jobs do
@@ -135,6 +137,9 @@ class AccountContactSecurityTest < ApplicationSystemTestCase
     click_button translated('reauthentication.submit', locale)
     assert_current_path new_contact_change_path
     assert_not_equal digest, authority.reload.session_token_digest
+    assert_selector '#contact_change_request_phone_type[aria-describedby="contact-staff-help"]'
+    assert_selector "#contact-staff-help a[href='mailto:#{ProgramContact.support_email}']"
+    assert_selector "#contact-staff-help a[href='tel:#{ProgramContact.support_phone}']"
 
     select translated('contact_changes.phone', locale), from: 'contact_change_request_kind'
     select translated('contact_changes.voice', locale), from: 'contact_change_request_phone_type'
@@ -159,8 +164,10 @@ class AccountContactSecurityTest < ApplicationSystemTestCase
     assert change.staff_assistance?
     assert_no_selector 'input[name=code]'
     assert_no_button translated('contact_changes.complete', locale)
-    assert_text ProgramContact.support_email
-    assert_text ProgramContact.support_phone
+    assert_no_button translated('contact_changes.resend', locale)
+    assert_no_button translated('contact_changes.check_status', locale)
+    assert_link ProgramContact.support_email, href: "mailto:#{ProgramContact.support_email}"
+    assert_link ProgramContact.support_phone, href: "tel:#{ProgramContact.support_phone}"
     take_screenshot('contact-staff-assistance-es-narrow', html: true, full: true)
     assert_no_horizontal_overflow
 

@@ -20,6 +20,10 @@ class RegistrationsTest < ApplicationSystemTestCase
     fill_in 'Email Address', with: email
     perform_enqueued_jobs { click_button I18n.t('registration_verification.send_link') }
     assert_text I18n.t('registration_verification.check_email')
+    assert_selector 'h1', text: I18n.t('registration_verification.check_email_title')
+    assert_text email
+    assert_button I18n.t('registration_verification.resend')
+    assert_link I18n.t('registration_verification.change_email')
     assert_nil User.find_by_email(email)
     take_screenshot('registration-email-sent', html: true)
 
@@ -116,5 +120,24 @@ class RegistrationsTest < ApplicationSystemTestCase
     assert_selector 'input[name="user[email]"]'
     assert_no_selector 'input[type=password]'
     take_screenshot('registration-expired-es', html: true)
+  end
+
+  test 'Spanish waiting page can resend and correct its address on a narrow screen' do
+    page.current_window.resize_to(390, 844)
+    visit sign_up_path(locale: :es)
+    fill_in 'user_email', with: 'typo-browser@example.test'
+    click_button I18n.t('registration_verification.send_link', locale: :es)
+    assert_selector 'h1', text: I18n.t('registration_verification.check_email_title', locale: :es)
+    assert_text 'typo-browser@example.test'
+    click_button I18n.t('registration_verification.resend', locale: :es)
+    assert_text I18n.t('registration_verification.check_email', locale: :es)
+    take_screenshot('registration-waiting-es-narrow', html: true, full: true)
+    click_link I18n.t('registration_verification.change_email', locale: :es)
+    assert_field 'user_email', with: 'typo-browser@example.test'
+    fill_in 'user_email', with: 'corrected-browser@example.test'
+    click_button I18n.t('registration_verification.send_link', locale: :es)
+    assert_text 'corrected-browser@example.test'
+    assert_no_text 'typo-browser@example.test'
+    take_screenshot('registration-corrected-es-narrow', html: true, full: true)
   end
 end

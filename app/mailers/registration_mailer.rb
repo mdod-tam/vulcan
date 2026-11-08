@@ -11,7 +11,10 @@ class RegistrationMailer < ApplicationMailer
 
     template = find_text_template('registration_email_verification', locale: @verification.locale)
     verification_url = edit_registration_verification_url(token: @verification.proof_token, **CanonicalPublicUrlOptions.call)
-    send_email(@verification.email, template, { verification_url: verification_url }, required_delivery: true, message_stream: 'outbound')
+    deadline = @verification.expires_at.in_time_zone
+    expires_at = "#{I18n.l(deadline, format: :long, locale: @verification.locale)} #{deadline.zone}"
+    send_email(@verification.email, template, { verification_url: verification_url, expires_at: expires_at },
+               required_delivery: true, message_stream: 'outbound')
   end
 
   private

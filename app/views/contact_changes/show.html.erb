@@ -8,7 +8,7 @@
     <p class="mb-4"><%= t('contact_changes.pending', value: @contact_change.proposed_value.presence || t('contact_changes.removal')) %></p>
     <p class="mb-4"><%= t('contact_changes.old_active') %></p>
     <% if @contact_change.staff_assistance? %>
-      <p class="mb-4"><%= t('contact_changes.staff_help', email: ProgramContact.support_email, phone: ProgramContact.support_phone) %></p>
+      <p class="mb-4"><%= render 'staff_help' %></p>
     <% elsif @contact_change.sms? && !@contact_change.new_confirmed_at %>
       <%= form_with url: verify_sms_contact_change_path(@contact_change), class: 'space-y-3 mb-6' do |form| %>
         <%= form.label :code, t('contact_changes.code'), class: 'form-label' %>
@@ -17,11 +17,14 @@
       <% end %>
     <% elsif !@contact_change.ready? %>
       <p class="mb-4"><%= t(@contact_change.old_confirmation_required? ? 'contact_changes.both_emails' : 'contact_changes.check_email') %></p>
+      <%= button_to t('contact_changes.check_status'), contact_change_path(@contact_change), method: :get, class: 'btn btn-outline mb-4' %>
     <% end %>
     <% if @contact_change.ready? && !@contact_change.staff_assistance? %>
       <%= button_to t('contact_changes.complete'), complete_contact_change_path(@contact_change), class: 'btn btn-primary mb-4' %>
     <% end %>
-    <%= button_to t('contact_changes.resend'), resend_contact_change_path(@contact_change), class: 'btn btn-outline mb-4' %>
+    <% unless @contact_change.staff_assistance? %>
+      <%= button_to t('contact_changes.resend'), resend_contact_change_path(@contact_change), class: 'btn btn-outline mb-4' %>
+    <% end %>
     <%= button_to t('contact_changes.cancel'), contact_change_path(@contact_change), method: :delete, class: 'btn btn-outline' %>
   <% end %>
   <%= link_to t('contact_changes.back'), edit_profile_path, class: 'inline-block mt-6 underline' %>

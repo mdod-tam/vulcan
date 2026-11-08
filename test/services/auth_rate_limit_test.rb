@@ -59,7 +59,7 @@ class AuthRateLimitTest < ActiveSupport::TestCase
 
   test 'account and contact consumers have safe defaults without policy rows' do
     Policy.where(key: Policy::RATE_LIMIT_KEYS).delete_all
-    assert_equal({ max: 5, period: 1.hour }, AuthRateLimit.limit_config_for(:registration, :ip))
+    assert_equal({ max: 30, period: 1.hour }, AuthRateLimit.limit_config_for(:registration, :ip))
     assert_equal({ max: 3, period: 1.hour }, AuthRateLimit.limit_config_for(:registration, :contact))
     assert_equal({ max: 10, period: 1.hour }, AuthRateLimit.limit_config_for(:sms_verification, :contact))
     assert_equal({ max: 5, period: 1.hour }, AuthRateLimit.limit_config_for(:contact_change, :user_ip))

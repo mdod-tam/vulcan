@@ -44,8 +44,8 @@ es:
     pending: 'Contacto solicitado: %{value}'
     removal: Eliminar número de teléfono
     old_active: Su contacto actual seguirá activo hasta completar este cambio.
-    staff_help: Para un número que no pueda recibir mensajes de texto, comuníquese con %{email}
-      o %{phone}. El personal debe verificar su identidad y el nuevo número.
+    staff_help_html: Para un número que no pueda recibir mensajes de texto, el personal debe
+      verificar su identidad y el nuevo número. Comuníquese con %{email} o %{phone} para obtener ayuda.
     code: Código de verificación por mensaje de texto
     verify: Confirmar titularidad
     confirmed: Se confirmó la titularidad del contacto.
@@ -54,15 +54,17 @@ es:
     canceled: Se canceló el cambio de contacto.
     complete: Completar el cambio y cerrar sesión
     resend: Reenviar confirmaciones
+    check_status: Consultar estado de confirmación
     cancel: Cancelar este cambio
-    both_emails: Confirme el correo actual y el nuevo y luego vuelva a esta página. Si no tiene
-      acceso al anterior, comuníquese con el equipo MAT.
-    check_email: Confirme el correo enviado a su nueva dirección y luego vuelva a esta página.
+    both_emails: Confirme el correo actual y el nuevo y luego vuelva aquí y consulte el estado
+      de confirmación. Si no tiene acceso al anterior, comuníquese con el equipo MAT.
+    check_email: Confirme el correo enviado a su nueva dirección y luego vuelva aquí y consulte
+      el estado de confirmación.
     confirm_title: Confirme esta dirección de correo
     confirm_explanation: Confirme solo si solicitó este cambio de contacto. Esta confirmación
       no inicia sesión ni cambia el contacto por sí sola.
     return_to_browser: Vuelva al navegador con la sesión iniciada donde solicitó el cambio para
-      completarlo.
+      completarlo. Elija Consultar estado de confirmación para continuar.
     invalid_link: Esta confirmación no es válida, venció o ya no está vigente.
     use_verified_flow: Use el proceso de cambio verificado de correo o teléfono para actualizar
       los contactos de la cuenta.
@@ -74,6 +76,13 @@ es:
       anteriores. No se pudo poner en cola un aviso de seguridad. Inicie sesión con su información
       actualizada. Comuníquese con el equipo de MAT si necesita ayuda.
   registration_verification:
+    check_email_title: Revise su correo electrónico
+    requested_email: 'Dirección de correo: %{email}'
+    next_step: Abra el enlace de verificación en su correo para elegir una contraseña y terminar de crear su cuenta. Un enlace nuevo caduca %{minutes} minutos después de solicitarlo; termine el formulario antes de ese momento.
+    delivery_help: El correo puede tardar unos minutos. Revise la carpeta de correo no deseado antes de solicitar otro enlace. Las solicitudes repetidas tienen un límite.
+    resend: Enviar otro enlace de verificación
+    change_email: Corregir o cambiar la dirección de correo
+    support_html: '¿Todavía necesita ayuda? Comuníquese con el equipo MAT en %{email}.'
     introduction: Ingrese su correo para recibir un enlace y terminar de crear su cuenta.
     email_help: Elegirá su contraseña después de confirmar el correo. Este paso no inicia sesión.
     invalid_email: Ingrese una dirección de correo válida.

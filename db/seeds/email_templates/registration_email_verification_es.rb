@@ -11,10 +11,11 @@ EmailTemplate.create_or_find_by!(name: 'registration_email_verification', format
     Confirme su correo electrónico y continúe:
     %<verification_url>s
 
-    Este enlace caduca 20 minutos después de solicitarlo. Confirmar su correo electrónico no inicia sesión en una cuenta existente.
+    Termine de crear su cuenta antes de que caduque este enlace: %<expires_at>s.
+    Confirmar su correo electrónico no inicia sesión en una cuenta existente.
 
     Si no hizo esta solicitud, ignore este correo. Su cuenta no ha cambiado.
   TEXT
-  template.variables = { 'required' => %w[verification_url], 'optional' => [] }
+  template.variables = { 'required' => %w[verification_url expires_at], 'optional' => [] }
   template.version = 1
 end

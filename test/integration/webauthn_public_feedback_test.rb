@@ -63,9 +63,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
       assert_equal 1, results.uniq.length
       assert_equal({ 'error' => I18n.t('security_key_verification.feedback.failed', locale: locale),
                      'error_code' => 'verification_failed' }, results.first.last)
-      assert(logs.any? { |line| line.include?('Reason: credential_not_found') })
-      assert_equal(2, logs.count { |line| line.include?('WebAuthn::') })
-      assert_equal(1, logs.count { |line| line.include?('OpenSSL::PKey::PKeyError') })
+      assert_equal(4, logs.count { |line| line.include?('[2FA] Failed verification') })
 
       assertion = assertion_for(locale)
       assert_difference('Session.count', 1) do

@@ -83,6 +83,24 @@ class ContactChangesControllerTest < ActionDispatch::IntegrationTest
     assert TotpCredential.exists?(credential.id)
   end
 
+  test 'checking confirmation status reads email proofs without promoting the contact' do
+    change = request_email
+    get contact_change_path(change)
+    assert_select "form[action='#{contact_change_path(change)}'][method=get] button", text: I18n.t('contact_changes.check_status')
+    assert_select "form[action='#{complete_contact_change_path(change)}']", count: 0
+
+    confirm_email(change, 'old_email')
+    confirm_email(change, 'new_email')
+    ContactChangeDeliveryJob.expects(:perform_later).never
+    assert_no_difference ['Session.count', 'Event.count', 'ContactChangeRequest.count'] do
+      get contact_change_path(change)
+    end
+    assert_response :success
+    assert_select "form[action='#{complete_contact_change_path(change)}'] button", text: I18n.t('contact_changes.complete')
+    assert_equal @old_email, @user.reload.email
+    assert_nil change.reload.completed_at
+  end
+
   test 'a notice persistence failure after committed completion still signs out and reports the changed contact' do
     change = request_email
     confirm_email(change, 'old_email')
@@ -282,6 +300,12 @@ class ContactChangesControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'voice number requires staff assistance and cannot be promoted by self service' do
+    get new_contact_change_path
+    assert_response :success
+    assert_select '#contact_change_request_phone_type[aria-describedby=contact-staff-help]'
+    assert_select "#contact-staff-help a[href='mailto:#{ProgramContact.support_email}']"
+    assert_select "#contact-staff-help a[href='tel:#{ProgramContact.support_phone}']"
+
     TwilioVerifyService.expects(:send_verification).never
     post contact_changes_path, params: { contact_change_request: { kind: 'phone', proposed_value: '4105550192', phone_type: 'voice' } }
     change = current_change
@@ -289,7 +313,10 @@ class ContactChangesControllerTest < ActionDispatch::IntegrationTest
     get contact_change_path(change)
     assert_response :success
     assert_select 'input[name=code]', count: 0
-    assert_includes response.body, ProgramContact.support_email
+    assert_select "a[href='mailto:#{ProgramContact.support_email}']"
+    assert_select "a[href='tel:#{ProgramContact.support_phone}']"
+    assert_select "form[action='#{resend_contact_change_path(change)}']", count: 0
+    assert_select "form[action='#{contact_change_path(change)}'][method=get]", count: 0
     post complete_contact_change_path(change)
     assert_redirected_to contact_change_path(change)
     assert_equal @old_phone, @user.reload.phone
