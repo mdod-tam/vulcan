@@ -41,26 +41,6 @@ class RegistrationsMailerTest < ActiveSupport::TestCase
     assert_includes email.body.to_s, 'Welcome to the program'
   end
 
-  test 'registrations controller should send email' do
-    user = Users::Constituent.new(
-      first_name: 'New',
-      last_name: 'User',
-      email: 'test.reg.controller@example.com',
-      communication_preference: 'email'
-    )
-
-    # A Mocha expectation instead of enqueued-job assertions, which cannot serialize unsaved records.
-    mail_message = mock('MailMessage')
-    mail_message.expects(:deliver_later).returns(true)
-
-    ApplicationNotificationsMailer.expects(:registration_confirmation)
-                                  .with(user)
-                                  .returns(mail_message)
-
-    # Simulate the controller's send_registration_confirmation method
-    ApplicationNotificationsMailer.registration_confirmation(user).deliver_later
-  end
-
   private
 
   def create_email_templates

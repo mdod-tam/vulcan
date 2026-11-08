@@ -100,7 +100,7 @@ class ApplicationControllerSessionConcurrencyTest < ActiveSupport::TestCase
     duplicate = nil
     begin
       Current.paper_context = true
-      duplicate = create(:constituent, email: nil, phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+      duplicate = create(:constituent, email: "duplicate-#{SecureRandom.hex(4)}@example.com", phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
                                        communication_preference: :letter)
     ensure
       Current.reset
@@ -141,6 +141,7 @@ class ApplicationControllerSessionConcurrencyTest < ActiveSupport::TestCase
     # tests do render or redirect, and this one uses the same setters for consistency.
     controller.set_request!(ActionDispatch::TestRequest.create)
     controller.set_response!(ActionDispatch::TestResponse.new)
-    controller.send(:_create_and_set_session_cookie, User.find(user.id))
+    controller.send(:_create_and_set_session_cookie, User.find(user.id),
+                    submitted_login_identifier: user.email, submitted_password: 'password1234')
   end
 end

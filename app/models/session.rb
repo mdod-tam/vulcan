@@ -3,8 +3,11 @@
 require 'active_support/core_ext/securerandom'
 
 class Session < ApplicationRecord
+  class AuthenticationRequired < StandardError; end
+
   IDLE_TIMEOUT = 30.minutes
   ACTIVITY_WRITE_INTERVAL = 1.minute
+  REAUTHENTICATION_WINDOW = 5.minutes
 
   belongs_to :user
 
@@ -36,6 +39,41 @@ class Session < ApplicationRecord
 
   def expired?(at: Time.current)
     expires_at.nil? || expires_at <= at || last_active_at <= at - IDLE_TIMEOUT
+  end
+
+  # Call while holding the user's canonical lock, before any protected write. The
+  # original bearer matters: a request loaded before rotation must not inherit it.
+  def require_live!(token:, user:)
+    raise AuthenticationRequired unless persisted? && token.present?
+
+    reload(lock: true)
+    valid_token = ActiveSupport::SecurityUtils.secure_compare(session_token_digest, self.class.digest_token(token))
+    raise AuthenticationRequired unless user_id == user.id && valid_token && !expired? && user.public_login_active?
+
+    self
+  rescue ActiveRecord::RecordNotFound
+    raise AuthenticationRequired
+  end
+
+  def require_recent_authentication!(token:, user:)
+    require_live!(token: token, user: user)
+    raise AuthenticationRequired unless freshly_authenticated?(user: user)
+
+    self
+  end
+
+  # This predicate describes the loaded snapshot; protected writes also need the
+  # live bearer check above under the user lock.
+  def freshly_authenticated?(user:)
+    reauthenticated_at.present? && reauthenticated_at > REAUTHENTICATION_WINDOW.ago &&
+      reauthenticated_at <= Time.current && reauthenticated_security_version == user.security_version
+  end
+
+  def rotate_after_authentication!(user:)
+    self.session_token = self.class.generate_unique_secure_token(length: 44)
+    update!(reauthenticated_at: Time.current, reauthenticated_security_version: user.security_version,
+            last_active_at: Time.current)
+    self
   end
 
   def activity_deadlines

@@ -91,28 +91,12 @@ module TwoFactorVerification
   def verification_failed = verification_refused(t('security_key_verification.feedback.failed'), :verification_failed)
 
   def verify_webauthn_challenge(params, user)
-    webauthn_credential = WebAuthn::Credential.from_get(params)
-    stored_credential = user.webauthn_credentials.find_by(external_id: webauthn_credential.id)
+    stored_credential = user.verify_webauthn(params, challenge: retrieve_challenge[:challenge])
     unless stored_credential
-      log_verification_failure(user.id, :webauthn, reason: :credential_not_found)
+      log_verification_failure(user.id, :webauthn, reason: :verification_refused)
       return verification_failed
     end
 
-    perform_webauthn_verification(webauthn_credential, stored_credential, user)
-  rescue WebAuthn::Error, OpenSSL::PKey::PKeyError => e
-    log_verification_failure(user.id, :webauthn, credential_id: stored_credential&.id, error_class: e.class.name)
-    verification_failed
-  end
-
-  def perform_webauthn_verification(webauthn_credential, stored_credential, user)
-    challenge = retrieve_challenge[:challenge]
-    webauthn_credential.verify(
-      challenge,
-      public_key: stored_credential.public_key,
-      sign_count: stored_credential.sign_count
-    )
-
-    stored_credential.update!(sign_count: webauthn_credential.sign_count)
     log_verification_success(user.id, :webauthn, credential_id: stored_credential.id)
     verification_passed
   end

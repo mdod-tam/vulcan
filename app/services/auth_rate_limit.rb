@@ -2,6 +2,7 @@
 
 class AuthRateLimit
   class ExceededError < StandardError; end
+  class UnavailableError < ExceededError; end
 
   DEFAULT_PERIOD_HOURS = 1
   MAX_POLICY_VALUE = 100
@@ -11,13 +12,19 @@ class AuthRateLimit
   ALLOWED_SCOPES_FOR = {
     sign_in_attempt: %i[ip].freeze,
     account_access: %i[ip contact_ip user_ip].freeze,
-    account_recovery: %i[contact_ip user_ip ip].freeze
+    account_recovery: %i[contact_ip user_ip ip].freeze,
+    registration: %i[ip contact].freeze,
+    contact_change: %i[ip contact user_ip].freeze,
+    sms_verification: %i[contact].freeze
   }.freeze
 
   DEFAULT_MAX_FOR = {
     sign_in_attempt: { ip: 20 },
     account_access: { ip: 5, contact_ip: 5, user_ip: 5 },
-    account_recovery: { contact_ip: 5, ip: 5, user_ip: 3 }
+    account_recovery: { contact_ip: 5, ip: 5, user_ip: 3 },
+    registration: { ip: 5, contact: 3 },
+    contact_change: { ip: 10, contact: 3, user_ip: 5 },
+    sms_verification: { contact: 10 }
   }.freeze
 
   def self.check!(action:, scope:, request: nil, submitted_contact: nil, user_id: nil)
@@ -29,6 +36,8 @@ class AuthRateLimit
     )
 
     new(action: action, scope: scope, identifier: identifier).check!
+  rescue ActiveRecord::ActiveRecordError
+    raise UnavailableError, 'Authentication budget could not be reserved'
   end
 
   def self.limit_config_for(action, scope)
@@ -106,6 +115,10 @@ class AuthRateLimit
       raise ArgumentError, 'request is required for ip scope' if request.blank?
 
       request_ip_digest(request)
+    when :contact
+      raise ArgumentError, 'submitted_contact is required for contact scope' if submitted_contact.blank?
+
+      contact_digest(submitted_contact)
     when :contact_ip
       raise ArgumentError, 'request is required for contact_ip scope' if request.blank?
       raise ArgumentError, 'submitted_contact is required for contact_ip scope' if submitted_contact.nil?
@@ -141,6 +154,8 @@ class AuthRateLimit
     raise ArgumentError, "Unknown auth rate limit action/scope: #{@action}/#{@scope}" unless @limit
 
     count = increment_count
+    raise UnavailableError, 'Authentication budget could not be reserved' unless count.is_a?(Integer) && count.positive?
+
     return if count <= @limit[:max]
 
     raise ExceededError,
@@ -148,7 +163,7 @@ class AuthRateLimit
   end
 
   def current_usage_count
-    Rails.cache.read(cache_key).to_i
+    AuthRateLimitCounter.usage(counter_key)
   end
 
   private
@@ -159,11 +174,13 @@ class AuthRateLimit
     raise ArgumentError, 'identifier must be a 64-character hex digest derived by AuthRateLimit'
   end
 
-  def cache_key
+  def counter_key
     "auth_rate_limit:#{@action}:#{@scope}:#{@identifier}"
   end
 
   def increment_count
-    Rails.cache.increment(cache_key, 1, expires_in: @limit[:period]).to_i
+    AuthRateLimitCounter.reserve!(key: counter_key, period: @limit[:period])
+  rescue ActiveRecord::ActiveRecordError
+    raise UnavailableError, 'Authentication budget could not be reserved'
   end
 end

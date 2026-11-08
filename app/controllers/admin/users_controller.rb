@@ -84,6 +84,8 @@ module Admin
 
     def edit
       @user = User.find(params[:id])
+      @contact_verification = {}
+      @pending_contact_change = ContactChangeRequest.unresolved.where(user_id: @user.id).order(created_at: :desc).take
     end
 
     def create
@@ -132,6 +134,9 @@ module Admin
     # If this edit locks first, merge waits for the updated contact values.
     def update
       @user = User.find(params[:id])
+      @contact_verification = contact_verification_params.to_h
+      contact_changes = []
+      changed_contact = false
 
       ActiveRecord::Base.transaction do
         locked_users = User.lock_for_merge_integrity!(@user, current_user)
@@ -149,7 +154,15 @@ module Admin
         end
 
         @user = locked_user
-        if @user.update(admin_user_params)
+        attributes = admin_user_params.to_h.stringify_keys
+        changed_contact = Users::ContactChange.primary_attributes_changed?(@user, attributes)
+        if changed_contact
+          contact_changes = Users::ContactChange.new(user: @user, actor: locked_actor, session: current_session,
+                                                     token: presented_session_token)
+                                                .staff_update!(attributes, verification: contact_verification_params)
+          @user.reload
+        end
+        if changed_contact || @user.update(admin_user_params)
           AuditEventService.log(
             action: 'user_updated',
             actor: locked_actor,
@@ -159,12 +172,27 @@ module Admin
               admin_name: locked_actor.full_name
             }
           )
-          redirect_to admin_user_path(@user), notice: t('.user_update_pass')
         else
           render :edit, status: :unprocessable_content
           raise ActiveRecord::Rollback
         end
       end
+      return if performed?
+
+      redirect_after_user_update(contact_changes, changed_contact: changed_contact)
+    rescue Session::AuthenticationRequired
+      redirect_to new_reauthentication_path(return_to: edit_admin_user_path(@user)),
+                  alert: 'Confirm your identity before changing account contact information.', status: :see_other
+    rescue ContactChangeRequest::Refused
+      @user.reload
+      @user.assign_attributes(admin_user_params)
+      @user.errors.add(:base, 'Contact changes require another administrator, verified identity and new-contact association, and a verification method/reference.')
+      render :edit, status: :unprocessable_content
+    rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
+      @user.reload
+      @user.assign_attributes(admin_user_params)
+      @user.errors.add(:base, 'The contact change could not be saved. Check the contact and verification details. No changes were saved.')
+      render :edit, status: :unprocessable_content
     end
 
     def destroy_mfa_tokens
@@ -185,14 +213,24 @@ module Admin
         return
       end
 
-      credential_counts = mfa_credential_counts(@user)
-      sessions_count = @user.sessions.count
+      credential_counts = nil
+      sessions_count = nil
 
       User.transaction do
-        @user.webauthn_credentials.destroy_all
-        @user.totp_credentials.destroy_all
-        @user.sms_credentials.destroy_all
-        @user.sessions.destroy_all
+        users = User.lock_for_merge_integrity!(@user, current_user)
+        @user = users.fetch(@user.id)
+        actor = users.fetch(current_user.id)
+        current_session.require_recent_authentication!(token: presented_session_token, user: actor)
+        raise Session::AuthenticationRequired unless actor.admin?
+
+        credential_counts = mfa_credential_counts(@user)
+        sessions_count = @user.sessions.count
+        @user.advance_security_version!
+        ContactChangeRequest.unresolved.where(user_id: @user.id).find_each { |change| change.update!(canceled_at: Time.current) }
+        @user.webauthn_credentials.find_each(&:destroy!)
+        @user.totp_credentials.find_each(&:destroy!)
+        @user.sms_credentials.find_each(&:destroy!)
+        @user.sessions.find_each(&:destroy!)
 
         AuditEventService.log(
           action: 'admin_user_mfa_tokens_deleted',
@@ -212,6 +250,9 @@ module Admin
       else
         redirect_to admin_user_path(@user), notice: "No MFA tokens were found for #{@user.full_name}."
       end
+    rescue Session::AuthenticationRequired
+      redirect_to new_reauthentication_path(return_to: admin_user_path(@user)),
+                  alert: 'Confirm your identity before deleting MFA tokens.'
     end
 
     def deactivate
@@ -311,6 +352,26 @@ module Admin
     end
 
     private
+
+    def redirect_after_user_update(changes, changed_contact:)
+      if enqueue_contact_change_notices(changes)
+        redirect_to admin_user_path(@user), notice: t('.user_update_pass'), status: changed_contact ? :see_other : :found
+      else
+        redirect_to admin_user_path(@user),
+                    alert: 'User was saved, but contact security notices could not be confirmed as queued. Review delivery status before retrying.',
+                    status: :see_other
+      end
+    end
+
+    def enqueue_contact_change_notices(changes)
+      changes.map do |change|
+        change.enqueue_deliveries!
+        change.reload.completion_notices_queued?
+      rescue StandardError => e
+        Rails.logger.warn("Saved staff contact notice enqueue could not be confirmed: #{e.class.name}")
+        false
+      end.all?
+    end
 
     def load_user_metrics
       @user_counts_by_role = User.group(:type).count
@@ -533,6 +594,10 @@ module Admin
                  physical_address_1 physical_address_2 city state zip_code
                  communication_preference newsletter_signup date_of_birth]
       )
+    end
+
+    def contact_verification_params
+      params.fetch(:contact_verification, ActionController::Parameters.new).permit(:identity_verified, :association_verified, :method, :reference)
     end
 
     def user_create_params

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_050401) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -171,6 +171,46 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
     t.check_constraint "id_proof_status = ANY (ARRAY[0, 1, 2])", name: "id_proof_status_check"
     t.check_constraint "income_proof_status = ANY (ARRAY[0, 1, 2])", name: "income_proof_status_check"
     t.check_constraint "residency_proof_status = ANY (ARRAY[0, 1, 2])", name: "residency_proof_status_check"
+  end
+
+  create_table "auth_rate_limit_counters", force: :cascade do |t|
+    t.string "key", null: false
+    t.integer "attempts", default: 0, null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_auth_rate_limit_counters_on_expires_at"
+    t.index ["key"], name: "index_auth_rate_limit_counters_on_key", unique: true
+    t.check_constraint "attempts >= 0", name: "auth_rate_limit_counters_attempts_nonnegative"
+  end
+
+  create_table "contact_change_requests", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "session_id"
+    t.string "kind", null: false
+    t.text "old_value"
+    t.text "proposed_value"
+    t.text "notification_email"
+    t.string "phone_type"
+    t.string "locale", default: "en", null: false
+    t.bigint "security_version", null: false
+    t.boolean "old_confirmation_required", default: false, null: false
+    t.datetime "expires_at", null: false
+    t.datetime "old_confirmed_at"
+    t.datetime "new_confirmed_at"
+    t.string "sms_verification_sid"
+    t.datetime "sms_expires_at"
+    t.datetime "completed_at"
+    t.datetime "canceled_at"
+    t.jsonb "delivery_states", default: {}, null: false
+    t.jsonb "delivery_contexts", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_contact_change_requests_on_expires_at"
+    t.index ["session_id"], name: "index_contact_change_requests_on_session_id"
+    t.index ["user_id"], name: "index_contact_change_requests_on_user_id"
+    t.index ["user_id"], name: "index_contact_changes_on_current_user", unique: true, where: "((completed_at IS NULL) AND (canceled_at IS NULL))"
+    t.check_constraint "kind::text = ANY (ARRAY['email'::character varying::text, 'phone'::character varying::text])", name: "contact_change_kind"
   end
 
   create_table "document_scan_provider_budgets", force: :cascade do |t|
@@ -437,8 +477,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
     t.string "user_agent"
     t.bigint "user_id", null: false
     t.text "change_values"
-    t.index "action, ((metadata ->> 'operation_id'::text))", name: "index_events_on_legacy_mail_removal_operation", unique: true, where: "(((action)::text = ANY ((ARRAY['email_delivery_legacy_job_removal_requested'::character varying, 'email_delivery_legacy_job_removed'::character varying])::text[])) AND (NULLIF(btrim((metadata ->> 'operation_id'::text)), ''::text) IS NOT NULL))"
-    t.index "action, ((metadata ->> 'request_id'::text))", name: "index_events_on_delivery_outcome_request", unique: true, where: "(((action)::text = ANY ((ARRAY['email_delivery_suppressed'::character varying, 'email_delivery_configuration_error'::character varying, 'email_delivery_enqueue_failed'::character varying, 'essential_communication_submitted'::character varying])::text[])) AND (NULLIF(btrim((metadata ->> 'request_id'::text)), ''::text) IS NOT NULL))"
+    t.index "action, ((metadata ->> 'operation_id'::text))", name: "index_events_on_legacy_mail_removal_operation", unique: true, where: "(((action)::text = ANY (ARRAY[('email_delivery_legacy_job_removal_requested'::character varying)::text, ('email_delivery_legacy_job_removed'::character varying)::text])) AND (NULLIF(btrim((metadata ->> 'operation_id'::text)), ''::text) IS NOT NULL))"
+    t.index "action, ((metadata ->> 'request_id'::text))", name: "index_events_on_delivery_outcome_request", unique: true, where: "(((action)::text = ANY (ARRAY[('email_delivery_suppressed'::character varying)::text, ('email_delivery_configuration_error'::character varying)::text, ('email_delivery_enqueue_failed'::character varying)::text, ('essential_communication_submitted'::character varying)::text])) AND (NULLIF(btrim((metadata ->> 'request_id'::text)), ''::text) IS NOT NULL))"
     t.index ["action", "auditable_type", "auditable_id"], name: "index_events_on_action_and_auditable"
     t.index ["auditable_type", "auditable_id"], name: "index_events_on_auditable"
     t.index ["metadata"], name: "index_events_on_metadata", using: :gin
@@ -663,8 +703,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
     t.datetime "updated_at", null: false
     t.text "user_agent"
     t.bigint "user_id", null: false
+    t.string "verification_method"
+    t.string "verification_result"
+    t.string "verification_reference", limit: 200
     t.index ["user_id"], name: "index_recovery_requests_on_user_id"
     t.index ["user_id"], name: "index_recovery_requests_one_pending_per_user", unique: true, where: "((status)::text = 'pending'::text)"
+  end
+
+  create_table "registration_verifications", force: :cascade do |t|
+    t.text "email", null: false
+    t.string "locale", default: "en", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "consumed_at"
+    t.bigint "created_user_id"
+    t.string "delivery_status", default: "pending", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_user_id"], name: "index_registration_verifications_on_created_user_id"
+    t.index ["expires_at"], name: "index_registration_verifications_on_expires_at"
   end
 
   create_table "rejection_reasons", force: :cascade do |t|
@@ -745,6 +801,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
     t.bigint "user_id", null: false
     t.datetime "last_active_at", null: false
     t.string "session_token_digest", null: false
+    t.datetime "reauthenticated_at"
+    t.bigint "reauthenticated_security_version"
     t.index ["expires_at"], name: "index_sessions_on_expires_at"
     t.index ["session_token_digest"], name: "index_sessions_on_session_token_digest", unique: true
     t.index ["user_id"], name: "index_sessions_on_user_id"
@@ -760,6 +818,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
     t.index ["user_id", "phone_number"], name: "index_sms_credentials_on_user_id_and_phone_number", unique: true
     t.index ["user_id"], name: "index_sms_credentials_on_user_id"
     t.index ["verified_at"], name: "index_sms_credentials_on_verified_at"
+  end
+
+  create_table "sms_verification_attempts", force: :cascade do |t|
+    t.string "service_sid", null: false
+    t.string "destination_digest", null: false
+    t.text "phone_number", null: false
+    t.string "purpose", null: false
+    t.string "owner_digest", null: false
+    t.string "verification_sid"
+    t.datetime "issued_at", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "ownership_expires_at", null: false
+    t.datetime "last_sent_at"
+    t.string "send_version"
+    t.datetime "sending_until"
+    t.string "check_version"
+    t.datetime "checking_until"
+    t.integer "checks_count", default: 0, null: false
+    t.datetime "approved_at"
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ownership_expires_at"], name: "index_sms_verification_attempts_on_ownership_expires_at"
+    t.index ["service_sid", "destination_digest"], name: "index_sms_verification_on_active_destination", unique: true, where: "(finished_at IS NULL)"
   end
 
   create_table "solid_cache_entries", force: :cascade do |t|
@@ -886,6 +968,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
     t.string "zip_code", limit: 300
     t.integer "totp_failed_attempts", default: 0, null: false
     t.datetime "totp_attempt_window_started_at"
+    t.bigint "security_version", default: 0, null: false
     t.index ["business_name"], name: "index_users_on_business_name"
     t.index ["certifying_professional_id"], name: "index_users_on_certifying_professional_id"
     t.index ["dependent_email"], name: "index_users_on_dependent_email"
@@ -905,6 +988,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
     t.index ["w9_rejections_count"], name: "index_users_on_w9_rejections_count", where: "((type)::text = 'Users::Vendor'::text)"
     t.index ["w9_status"], name: "index_users_on_w9_status", where: "((type)::text = 'Users::Vendor'::text)"
     t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
+    t.check_constraint "security_version >= 0", name: "users_security_version_nonnegative"
     t.check_constraint "totp_failed_attempts >= 0", name: "users_totp_failed_attempts_nonnegative"
   end
 
@@ -1065,6 +1149,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
   add_foreign_key "applications", "users", column: "disability_certification_verified_by_id"
   add_foreign_key "applications", "users", column: "income_verified_by_id"
   add_foreign_key "applications", "users", column: "managing_guardian_id"
+  add_foreign_key "contact_change_requests", "sessions", on_delete: :nullify
+  add_foreign_key "contact_change_requests", "users"
   add_foreign_key "document_scans", "active_storage_blobs", column: "blob_id", on_delete: :cascade
   add_foreign_key "document_scans", "users", on_delete: :nullify
   add_foreign_key "duplicate_review_case_candidates", "duplicate_review_cases"
@@ -1107,6 +1193,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
   add_foreign_key "proof_reviews", "users", column: "admin_id"
   add_foreign_key "purchase_orders", "users", column: "vendor_id"
   add_foreign_key "recovery_requests", "users"
+  add_foreign_key "registration_verifications", "users", column: "created_user_id"
   add_foreign_key "role_capabilities", "users"
   add_foreign_key "secure_request_forms", "applications"
   add_foreign_key "secure_request_forms", "users", column: "delivery_owner_id"

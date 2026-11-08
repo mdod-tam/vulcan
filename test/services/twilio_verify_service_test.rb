@@ -4,253 +4,253 @@ require 'test_helper'
 
 class TwilioVerifyServiceTest < ActiveSupport::TestCase
   TwilioErrorResponse = Struct.new(:status_code, :body)
-  TwilioVerificationResponse = Data.define(:sid, :status, :to, :channel)
-  TwilioVerificationCheckResponse = Data.define(:status, :to)
+  PHONE = '555-123-4567'
+  DESTINATION = '+15551234567'
+  SID = 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
-  test 'SMS setup configuration errors use SMS guidance in the current locale' do
+  setup do
+    @owner = SecureRandom.hex(24)
+    @verifications = mock('verifications')
+    @checks = mock('verification_checks')
+    provider = mock('verify_service')
+    provider.stubs(:verifications).returns(@verifications)
+    provider.stubs(:verification_checks).returns(@checks)
+    TwilioVerifyService.stubs(:provider_service).returns(provider)
+    TwilioVerifyService.stubs(:test_mode?).returns(false)
+    TwilioVerifyService.stubs(:verify_configured?).returns(true)
+    TwilioVerifyService.stubs(:verify_service_sid).returns('VA_TEST')
+  end
+
+  test 'SMS configuration errors use SMS guidance in each supported locale' do
     FeatureFlag.find_by!(name: EmailDelivery::CHANNEL_CONTROLS.fetch('sms')).destroy!
-    TwilioVerifyService.expects(:client).never
+    @verifications.expects(:create).never
 
     %i[en es].each do |locale|
       I18n.with_locale(locale) do
-        result = TwilioVerifyService.send_verification('+15551234567', purpose: :setup)
-
+        result = send_code
         assert_not result[:success]
         assert result[:configuration_error]
         assert_not result[:delivery_suppressed]
         assert_equal I18n.t('outbound_delivery.sms_configuration_error'), result[:error]
-        assert_not_equal I18n.t('email_delivery.configuration_error'), result[:error]
       end
     end
   end
 
-  test 'verification check params use verification sid when provided' do
-    assert_equal(
-      { verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', code: '123456' },
-      TwilioVerifyService.send(
-        :verification_check_params,
-        '123456',
-        verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-      )
-    )
+  test 'a send preserves normalized provider destination and passes supported locale without logging contacts' do
+    @verifications.expects(:create).with(channel: 'sms', to: DESTINATION, locale: 'es').returns(provider_send)
+    logs = capture_rails_logs do
+      result = send_code(locale: 'es')
+      assert result[:success]
+      assert_equal DESTINATION, result[:to]
+      assert_equal SID, result[:verification_sid]
+      assert_operator result[:code_expires_at], :<=, 10.minutes.from_now.to_i
+    end
+    assert_private_logs(logs)
   end
 
-  test 'verification check params require verification sid' do
-    assert_raises(ArgumentError) do
-      TwilioVerifyService.send(:verification_check_params, '123456')
+  test 'a resend retains the original provider validity window and owner' do
+    freeze_time do
+      original = Time.current
+      @verifications.expects(:create).with(channel: 'sms', to: DESTINATION, locale: 'en')
+                    .twice.returns(provider_send(date_created: original))
+      first = send_code
+      travel 31.seconds
+      resent = send_code
+      assert first[:success]
+      assert resent[:success]
+      assert_equal first[:verification_sid], resent[:verification_sid]
+      assert_equal first[:code_expires_at], resent[:code_expires_at]
     end
   end
 
-  test 'login and setup sends redact phone logs while preserving the provider destination' do
-    phone_number = '555-123-4567'
-    destination = '+15551234567'
-    credential = create(:constituent).sms_credentials.create!(phone_number: phone_number, verified_at: Time.current)
-    verification = TwilioVerificationResponse.new(sid: 'VE_TEST', status: 'pending', to: destination, channel: 'sms')
-    verifications = mock('verifications')
-    verifications.expects(:create).with(channel: 'sms', to: destination).twice.returns(verification)
-    stub_verify_service.stubs(:verifications).returns(verifications)
-
-    logs = capture_rails_logs do
-      %i[login setup].each do |purpose|
-        result = TwilioVerifyService.send_verification(phone_number, purpose: purpose, sms_credential_id: credential.id)
-        assert result[:success]
-        assert_equal destination, result[:to]
-        assert_equal 'VE_TEST', result[:verification_sid]
-      end
+  test 'a configured longer provider lifetime keeps another context out after local entry expires' do
+    original_config = Rails.application.config.twilio
+    Rails.application.config.twilio = original_config.merge(verify_token_lifetime_seconds: '1200')
+    freeze_time do
+      start_provider_challenge
+      attempt = SmsVerificationAttempt.sole
+      assert_operator attempt.ownership_expires_at, :>=, 20.minutes.from_now
+      travel 10.minutes + 1.second
+      @verifications.expects(:create).never
+      @checks.expects(:create).never
+      assert_not send_code(purpose: :contact_change, owner: 'other-context')[:success]
+      assert_not check_code[:valid]
+      assert_nil attempt.reload.finished_at
     end
-
-    assert_includes logs, 'Sending verification to [REDACTED_PHONE]'
-    assert_private_phone_logs(logs, phone_number, destination)
+  ensure
+    Rails.application.config.twilio = original_config
   end
 
-  test 'verification check redacts phone logs while preserving the sid and code sent to the provider' do
-    destination = '+15551234567'
-    verification_checks = mock('verification_checks')
-    verification_checks.expects(:create)
-                       .with(verification_sid: 'VE_CHECK_TEST', code: '654321')
-                       .returns(TwilioVerificationCheckResponse.new(status: 'approved', to: destination))
-    stub_verify_service.stubs(:verification_checks).returns(verification_checks)
+  test 'invalid provider lifetime prevents reservation and transport' do
+    original_config = Rails.application.config.twilio
+    Rails.application.config.twilio = original_config.merge(verify_token_lifetime_seconds: 'invalid')
+    @verifications.expects(:create).never
+    assert_no_difference 'SmsVerificationAttempt.count' do
+      assert_not send_code[:success]
+    end
+  ensure
+    Rails.application.config.twilio = original_config
+  end
+
+  test 'the real SDK client uses the bounded HTTP adapter for a public send' do
+    original_client = TwilioVerifyService.instance_variable_get(:@client)
+    TwilioVerifyService.instance_variable_set(:@client, nil)
+    TwilioVerifyService.unstub(:provider_service)
+    transport = Twilio::HTTP::Client.new(timeout: 15)
+    default_transport = Twilio::HTTP::Client.new
+    Twilio::HTTP::Client.expects(:new).with { |*arguments| arguments.empty? }.returns(default_transport)
+    Twilio::HTTP::Client.expects(:new).with(timeout: 15).returns(transport)
+    payload = provider_send.merge(date_created: Time.current.iso8601)
+    transport.expects(:request).returns(Twilio::Response.new(201, payload.to_json))
+    assert send_code[:success]
+    assert_operator transport.timeout * 2, :<, SmsVerificationAttempt::CALL_TIMEOUT
+  ensure
+    TwilioVerifyService.instance_variable_set(:@client, original_client)
+  end
+
+  test 'another browser or purpose cannot adopt an in-flight provider verification' do
+    start_provider_challenge
+    @verifications.expects(:create).never
+    @checks.expects(:create).never
+
+    assert_not send_code(owner: 'another-browser')[:success]
+    assert_not send_code(purpose: :contact_change)[:success]
+    assert_not check_code(owner: 'another-browser')[:valid]
+    assert_not check_code(purpose: :contact_change)[:valid]
+    assert_equal 0, SmsVerificationAttempt.sole.checks_count
+  end
+
+  test 'checking by the stored SID validates the provider binding and persists approval' do
+    start_provider_challenge
+    @checks.expects(:create).with(verification_sid: SID, code: '654321').returns(provider_check(status: 'approved'))
 
     logs = capture_rails_logs do
-      result = TwilioVerifyService.check_verification('555-123-4567', '654321', verification_sid: 'VE_CHECK_TEST')
+      result = check_code(code: '654321')
       assert result[:success]
       assert result[:valid]
-      assert_equal destination, result[:to]
+      assert_equal 'approved', result[:status]
+      assert SmsVerificationAttempt.find(result[:receipt_id]).approved_at
     end
-
-    assert_includes logs, 'phone [REDACTED_PHONE]'
-    assert_private_phone_logs(logs, '555-123-4567', destination)
+    assert_private_logs(logs)
     assert_not_includes logs, '654321'
   end
 
-  test 'test mode keeps phone numbers and verification codes out of logs' do
-    TwilioVerifyService.expects(:client).never
+  test 'a successful HTTP check with pending status is not ownership proof' do
+    start_provider_challenge
+    @checks.expects(:create).with(verification_sid: SID, code: '123456').returns(provider_check(status: 'pending'))
+    result = check_code
+    assert result[:success]
+    assert_not result[:valid]
+    assert_equal 'pending', result[:status]
+    assert_nil SmsVerificationAttempt.sole.approved_at
+  end
 
-    logs = capture_rails_logs do
-      send_result = TwilioVerifyService.send_verification('555-123-4567', purpose: :setup)
-      check_result = TwilioVerifyService.check_verification('555-123-4567', '123456', verification_sid: send_result[:verification_sid])
-      assert send_result[:success]
-      assert_equal '555-123-4567', send_result[:to]
-      assert check_result[:valid]
+  %i[to service_sid channel sid].each do |attribute|
+    test "a provider check with a mismatched #{attribute} cannot approve" do
+      start_provider_challenge
+      @checks.expects(:create).returns(provider_check(status: 'approved').merge(attribute => 'wrong'))
+      result = check_code
+      assert_not result[:success]
+      assert_not result[:valid]
+      assert_nil SmsVerificationAttempt.sole.approved_at
     end
+  end
 
-    assert_includes logs, 'Simulating verification send to [REDACTED_PHONE]'
-    assert_private_phone_logs(logs, '555-123-4567', '+15551234567')
+  test 'unknown SID and malformed code are refused before provider I/O' do
+    start_provider_challenge
+    @checks.expects(:create).never
+    assert_not check_code(verification_sid: 'another-sid')[:valid]
+    assert_not check_code(code: 'invalid')[:valid]
+    assert_raises(ArgumentError) do
+      TwilioVerifyService.check_verification(PHONE, '123456', purpose: :setup, owner: @owner)
+    end
+  end
+
+  test 'a later 404 never substitutes for a durable approved receipt' do
+    start_provider_challenge
+    @checks.expects(:create).raises(twilio_error(code: 20_404, status_code: 404))
+    result = check_code
+    assert_not result[:success]
+    assert_not result[:valid]
+    assert_nil SmsVerificationAttempt.sole.approved_at
+  end
+
+  test 'test mode also requires owned live state and keeps phone numbers and codes out of logs' do
+    TwilioVerifyService.stubs(:test_mode?).returns(true)
+    TwilioVerifyService.expects(:client).never
+    logs = capture_rails_logs do
+      sent = send_code
+      assert sent[:success]
+      assert check_code(verification_sid: sent[:verification_sid])[:valid]
+      assert_not check_code(verification_sid: sent[:verification_sid])[:valid]
+    end
+    assert_private_logs(logs)
     assert_not_includes logs, '123456'
   end
 
-  test 'provider send errors redact echoed phone numbers and secure URLs from logs' do
-    error = twilio_error(code: 20_400, status_code: 400, message: private_error_message)
-    verifications = mock('verifications')
-    verifications.expects(:create).with(channel: 'sms', to: '+15551234567').raises(error)
-    stub_verify_service.stubs(:verifications).returns(verifications)
-
-    logs = capture_rails_logs do
-      result = TwilioVerifyService.send_verification('555-123-4567', purpose: :setup)
-      assert_not result[:success]
-      assert_equal 20_400, result[:error_code]
-      assert_private_error_result(result[:error])
-    end
-
-    assert_private_error_logs(logs)
-    assert_includes logs, 'Twilio::REST::RestError'
-  end
-
-  test 'provider check errors redact echoed phone numbers and secure URLs from logs' do
-    error = twilio_error(code: 60_200, status_code: 400, message: private_error_message)
-    stub_verification_check(error)
-
-    logs = capture_rails_logs do
-      result = TwilioVerifyService.check_verification('555-123-4567', '123456', verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-      assert result[:success]
-      assert_not result[:valid]
-      assert_equal 'invalid_input', result[:status]
-      assert_private_error_result(result[:error])
-      TwoFactorAuth.log_verification_failure(42, :sms, error_class: error.class.name)
-    end
-
-    assert_private_error_logs(logs)
-    assert_includes logs, 'Twilio::REST::RestError'
-  end
-
-  test 'unexpected send errors omit exception text and backtrace from logs' do
+  test 'send errors expose only generic guidance and retain the uncertain reservation' do
     error = StandardError.new(private_error_message)
     error.set_backtrace([private_error_message])
-    verifications = mock('verifications')
-    verifications.expects(:create).with(channel: 'sms', to: '+15551234567').raises(error)
-    stub_verify_service.stubs(:verifications).returns(verifications)
-
+    @verifications.expects(:create).raises(error)
     logs = capture_rails_logs do
-      result = TwilioVerifyService.send_verification('555-123-4567', purpose: :setup)
+      result = send_code
       assert_not result[:success]
-      assert_private_error_result(result[:error])
+      assert_private_logs(result[:error])
     end
-
-    assert_not_includes logs, '[TwilioVerify] Backtrace:'
+    assert_private_logs(logs)
     assert_includes logs, 'StandardError'
-    assert_private_error_logs(logs)
+    assert SmsVerificationAttempt.sole.sending_until
+    assert_nil SmsVerificationAttempt.sole.finished_at
   end
 
-  test 'unexpected check errors sanitize the message' do
-    error = StandardError.new(private_error_message)
-    stub_verification_check(error)
-
+  test 'provider check errors never log echoed contacts or tokens and never approve' do
+    start_provider_challenge
+    @checks.expects(:create).raises(twilio_error(code: 60_200, status_code: 400, message: private_error_message))
     logs = capture_rails_logs do
-      result = TwilioVerifyService.check_verification('555-123-4567', '123456', verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
-      assert_not result[:success]
-      assert_private_error_result(result[:error])
-      TwoFactorAuth.log_verification_failure(42, :sms, error_class: error.class.name)
+      result = check_code
+      assert_not result[:valid]
+      assert_private_logs(result[:error])
     end
-
-    assert_private_error_logs(logs)
-    assert_includes logs, 'StandardError'
-  end
-
-  test 'maps Twilio 60200 to invalid input without terminal failure' do
-    error = twilio_error(code: 60_200, status_code: 400)
-    stub_verification_check(error)
-
-    result = TwilioVerifyService.check_verification(
-      '555-123-4567',
-      '123456',
-      verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    )
-
-    assert result[:success]
-    assert_equal 'invalid_input', result[:status]
-    assert_not result[:valid]
-  end
-
-  test 'maps Twilio 404 to not found for sid checks' do
-    error = twilio_error(code: 20_404, status_code: 404)
-    stub_verification_check(error)
-
-    result = TwilioVerifyService.check_verification(
-      '555-123-4567',
-      '123456',
-      verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    )
-
-    assert result[:success]
-    assert_equal 'not_found', result[:status]
-    assert_not result[:valid]
+    assert_private_logs(logs)
+    assert_equal 1, SmsVerificationAttempt.sole.checks_count
+    assert_nil SmsVerificationAttempt.sole.approved_at
   end
 
   private
 
-  def twilio_error(code:, status_code:, message: 'Verify check failed')
-    Twilio::REST::RestError.new(
-      'Verify check failed',
-      TwilioErrorResponse.new(status_code, { 'code' => code, 'message' => message })
-    )
+  def send_code(purpose: :setup, owner: @owner, locale: 'en')
+    TwilioVerifyService.send_verification(PHONE, purpose: purpose, owner: owner, locale: locale)
   end
 
-  def stub_verification_check(error)
-    verification_checks = mock('verification_checks')
-    verification_checks.expects(:create)
-                       .with(verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', code: '123456')
-                       .raises(error)
-
-    stub_verify_service.stubs(:verification_checks).returns(verification_checks)
+  def check_code(code: '123456', verification_sid: SID, purpose: :setup, owner: @owner)
+    TwilioVerifyService.check_verification(PHONE, code, verification_sid: verification_sid, purpose: purpose, owner: owner)
   end
 
-  def stub_verify_service
-    verify_service = mock('verify_service')
-
-    verify_v2 = mock('verify_v2')
-    verify_v2.stubs(:services).with('VA_TEST').returns(verify_service)
-
-    verify_api = mock('verify_api')
-    verify_api.stubs(:v2).returns(verify_v2)
-
-    client = mock('twilio_client')
-    client.stubs(:verify).returns(verify_api)
-
-    TwilioVerifyService.stubs(:test_mode?).returns(false)
-    TwilioVerifyService.stubs(:verify_configured?).returns(true)
-    TwilioVerifyService.stubs(:verify_service_sid).returns('VA_TEST')
-    TwilioVerifyService.stubs(:client).returns(client)
-    verify_service
+  def start_provider_challenge
+    @verifications.expects(:create).with(channel: 'sms', to: DESTINATION, locale: 'en').returns(provider_send)
+    result = send_code
+    assert result[:success], result.inspect
   end
 
-  def assert_private_phone_logs(logs, *phone_numbers)
-    phone_numbers.each { |phone_number| assert_not_includes logs, phone_number }
-    assert_not_includes logs, '5551234567'
+  def provider_send(date_created: Time.current)
+    { sid: SID, status: 'pending', to: DESTINATION, channel: 'sms', service_sid: 'VA_TEST', date_created: date_created }
+  end
+
+  def provider_check(status:)
+    { sid: SID, status: status, to: DESTINATION, channel: 'sms', service_sid: 'VA_TEST' }
+  end
+
+  def twilio_error(code:, status_code:, message: 'Verify request failed')
+    Twilio::REST::RestError.new('Verify request failed', TwilioErrorResponse.new(status_code, { 'code' => code, 'message' => message }))
   end
 
   def private_error_message
     'provider echoed 555-123-4567 / +15551234567 / https://example.test/verify?token=private-token'
   end
 
-  def assert_private_error_logs(logs)
-    assert_private_phone_logs(logs, '555-123-4567', '+15551234567')
-    assert_not_includes logs, 'https://example.test/verify'
-    assert_not_includes logs, 'private-token'
-  end
-
-  def assert_private_error_result(message)
-    assert_private_error_logs(message)
-    assert_includes message, '[REDACTED_PHONE]'
-    assert_includes message, '[REDACTED_URL]'
+  def assert_private_logs(text)
+    [PHONE, DESTINATION, '5551234567', 'https://example.test/verify', 'private-token'].each do |secret|
+      assert_not_includes text.to_s, secret
+    end
   end
 end

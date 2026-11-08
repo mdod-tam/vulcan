@@ -16,12 +16,12 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'should update profile successfully' do
+    @original_email = @user.email
     assert_difference('Event.count', 1) do
       patch profile_path, params: {
         user: {
           first_name: 'Updated First',
-          last_name: 'Updated Last',
-          email: 'updated@example.com'
+          last_name: 'Updated Last'
         }
       }
     end
@@ -32,7 +32,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     @user.reload
     assert_equal 'Updated First', @user.first_name
     assert_equal 'Updated Last', @user.last_name
-    assert_equal 'updated@example.com', @user.email
+    assert_equal @original_email, @user.email
 
     event = Event.last
     assert_equal 'profile_updated', event.action
@@ -43,7 +43,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     changes = event.field_changes
     assert_equal 'U*** F***', changes['first_name']['new']
     assert_equal 'U*** L***', changes['last_name']['new']
-    assert_equal 'u***@e***.com', changes['email']['new']
+    assert_nil changes['email']
   end
 
   %i[inactive suspended].each do |status|
@@ -105,7 +105,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select '#error_explanation', /Email can't be blank/
+    assert_select '#error_explanation', /verified email or phone change process/
     @user.reload
     assert_equal original_email, @user.email
     assert_equal @user, User.find_by_login_identifier(original_email)

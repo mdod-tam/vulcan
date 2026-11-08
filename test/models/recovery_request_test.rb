@@ -52,42 +52,22 @@ class RecoveryRequestTest < ActiveSupport::TestCase
     assert request.save
   end
 
-  test 'should approve request and clear user credentials' do
-    create_webauthn_credential_for(@user)
+  test 'approval requires an explicit successful verification and nonsecret reference' do
+    request = FactoryBot.build(:recovery_request, user: @user)
+    assert_not request.valid?(:approval)
+    assert request.errors.added?(:identity_check_completed, :accepted)
 
-    request = FactoryBot.create(:recovery_request, user: @user)
+    request.assign_attributes(verification_method: 'staff_assisted_non_sms', verification_result: 'verified',
+                              verification_reference: 'CASE-123', identity_check_completed: '1')
+    assert request.valid?(:approval)
 
-    request.update!(
-      status: 'approved',
-      resolved_at: Time.current,
-      resolved_by_id: @admin.id
-    )
-
-    # Delete credentials as part of approval (simulating what controller would do)
-    @user.webauthn_credentials.destroy_all
-
-    assert_equal 'approved', request.status
-    assert_not_nil request.resolved_at
-    assert_equal @admin.id, request.resolved_by_id
-    assert_equal 0, @user.webauthn_credentials.count
-  end
-
-  private
-
-  def create_webauthn_credential_for(user)
-    WebAuthn.configure do |config|
-      config.allowed_origins = ['https://example.com']
-    end
-    fake_client = WebAuthn::FakeClient.new('https://example.com')
-
-    credential_options = WebAuthn::Credential.options_for_create(user: { id: user.id, name: user.email })
-    credential_hash = fake_client.create(challenge: credential_options.challenge)
-
-    user.webauthn_credentials.create!(
-      external_id: credential_hash['id'],
-      public_key: 'dummy_public_key_for_testing',
-      nickname: 'Test Key',
-      sign_count: 0
-    )
+    request.identity_check_completed = '0'
+    assert_not request.valid?(:approval)
+    request.identity_check_completed = '1'
+    request.verification_result = 'failed'
+    assert_not request.valid?(:approval)
+    request.verification_result = 'verified'
+    request.verification_reference = 'x' * 201
+    assert_not request.valid?(:approval)
   end
 end

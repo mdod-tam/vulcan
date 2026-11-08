@@ -142,6 +142,7 @@ module Admin
     end
 
     test 'admin can delete all mfa tokens for a user' do
+      sign_in_with_fresh_staff_authentication
       user = create(:constituent)
       create(:webauthn_credential, user: user)
       TotpCredential.create!(user: user, nickname: 'Authenticator app', secret: 'secret')
@@ -175,6 +176,7 @@ module Admin
     end
 
     test 'admin can delete mfa tokens when none exist' do
+      sign_in_with_fresh_staff_authentication
       user = create(:constituent)
 
       assert_no_difference -> { WebauthnCredential.count + TotpCredential.count + SmsCredential.count } do
@@ -691,12 +693,110 @@ module Admin
         assert_equal 'Updated', user.reload.first_name
         assert_predicate user, :"#{status}?"
       end
+
+      test "verified staff can correct an unmerged #{status} contact without reactivating the user" do
+        sign_in_with_fresh_staff_authentication
+        user = create(:constituent)
+        Session.create!(user: user, ip_address: '127.0.0.1', user_agent: 'Existing target session')
+        user.update!(status: status)
+        original_email = user.email
+        original_version = user.security_version
+        staff_session_ids = @admin.sessions.pluck(:id)
+
+        assert_difference 'ContactChangeRequest.count', 1 do
+          patch admin_user_path(user), params: {
+            user: { phone: '410-555-0183', phone_type: 'voice' },
+            contact_verification: {
+              identity_verified: '1', association_verified: '1', method: 'Approved non-SMS check', reference: 'CASE-STATUS-123'
+            }
+          }
+        end
+
+        assert_redirected_to admin_user_path(user)
+        assert_equal '410-555-0183', user.reload.phone
+        assert_equal 'voice', user.phone_type
+        assert_equal original_email, user.email
+        assert_predicate user, :"#{status}?"
+        assert_not user.public_login_active?
+        assert_equal original_version + 1, user.security_version
+        assert_empty user.sessions
+        assert_equal staff_session_ids, @admin.sessions.pluck(:id)
+        change = ContactChangeRequest.where(user_id: user.id).sole
+        assert change.completed_at
+        event = Event.find_by!(action: 'account_contact_change_completed', auditable: user)
+        assert_equal 'CASE-STATUS-123', event.metadata.dig('verification', 'reference')
+      end
+    end
+
+    %i[exception pending].each do |notice_failure|
+      test "a saved staff contact change remains committed when its notice followup has #{notice_failure}" do
+        sign_in_with_fresh_staff_authentication
+        user = create(:constituent)
+        previous_version = user.security_version
+        target_session = Session.create!(user: user, ip_address: '127.0.0.1', user_agent: 'Existing target session')
+        staff_sessions = @admin.sessions.pluck(:id)
+        if notice_failure == :exception
+          ContactChangeRequest.any_instance.expects(:enqueue_deliveries!).raises(ActiveRecord::RecordInvalid)
+        else
+          ContactChangeRequest.any_instance.expects(:enqueue_deliveries!).returns(false)
+        end
+
+        patch admin_user_path(user), params: {
+          user: { first_name: 'Committed staff edit', phone: '410-555-0185', phone_type: 'voice' },
+          contact_verification: {
+            identity_verified: '1', association_verified: '1', method: 'Approved non-SMS check', reference: 'CASE-NOTICE-123'
+          }
+        }
+
+        assert_response :see_other
+        assert_redirected_to admin_user_path(user)
+        assert_match(/User was saved/, flash[:alert])
+        assert_match(/notices could not be confirmed as queued/, flash[:alert])
+        assert_no_match(/No changes were saved/, response.body)
+        assert_nil flash[:notice]
+        assert_equal 'Committed staff edit', user.reload.first_name
+        assert_equal '410-555-0185', user.phone
+        assert_equal previous_version + 1, user.security_version
+        assert_not Session.exists?(target_session.id)
+        assert_empty user.sessions
+        assert_equal staff_sessions, @admin.sessions.pluck(:id)
+        change = ContactChangeRequest.where(user_id: user.id).sole
+        assert change.completed_at
+        assert_equal 'pending', change.delivery_states['old_completed']
+        assert Event.exists?(action: 'account_contact_change_completed', auditable: user)
+      end
+    end
+
+    test 'recorded staff proof cannot change merged or system audit contacts' do
+      sign_in_with_fresh_staff_authentication
+      retired = create(:constituent, status: :inactive, merged_into_user: create(:constituent), merged_by: @admin, merged_at: Time.current)
+      system_actor = ensure_system_audit_actor!
+
+      [retired, system_actor].each do |user|
+        original_contacts = user.attributes.slice('email', 'phone', 'phone_type', 'security_version', 'status')
+        assert_no_difference ['ContactChangeRequest.count', 'Event.count'] do
+          patch admin_user_path(user), params: {
+            user: { phone: '410-555-0184', phone_type: 'voice' },
+            contact_verification: {
+              identity_verified: '1', association_verified: '1', method: 'Approved non-SMS check', reference: 'CASE-REFUSAL-123'
+            }
+          }
+        end
+        if user == retired
+          assert_redirected_to admin_user_path(user)
+        else
+          assert_response :unprocessable_content
+        end
+        assert_equal original_contacts, user.reload.attributes.slice(*original_contacts.keys)
+      end
     end
 
     test 'admin cannot clear all contact information outside paper intake' do
+      sign_in_with_fresh_staff_authentication
       user = create(:constituent, email: generate(:email), phone: '410-555-0100')
 
       patch admin_user_path(user), params: {
+        contact_verification: { identity_verified: '1', association_verified: '1', method: 'Approved check', reference: 'CASE-123' },
         user: {
           first_name: user.first_name,
           last_name: user.last_name,
@@ -717,9 +817,11 @@ module Admin
     end
 
     test 'admin cannot set email delivery without email on file' do
+      sign_in_with_fresh_staff_authentication
       user = create(:constituent, email: generate(:email), phone: '410-555-0100')
 
       patch admin_user_path(user), params: {
+        contact_verification: { identity_verified: '1', association_verified: '1', method: 'Approved check', reference: 'CASE-123' },
         user: {
           first_name: user.first_name,
           last_name: user.last_name,
@@ -739,9 +841,11 @@ module Admin
     end
 
     test 'staff users cannot be made address-only through admin edit' do
+      sign_in_with_fresh_staff_authentication
       staff = create(:admin, email: generate(:email), phone: '410-555-0199')
 
       patch admin_user_path(staff), params: {
+        contact_verification: { identity_verified: '1', association_verified: '1', method: 'Approved check', reference: 'CASE-123' },
         user: {
           first_name: staff.first_name,
           last_name: staff.last_name,
@@ -762,6 +866,7 @@ module Admin
     end
 
     test 'admin update rejects malformed email for address-only user' do
+      sign_in_with_fresh_staff_authentication
       user = nil
       internal_password = SecureRandom.hex(32)
       Current.paper_context = true
@@ -779,6 +884,7 @@ module Admin
       end
 
       patch admin_user_path(user), params: {
+        contact_verification: { identity_verified: '1', association_verified: '1', method: 'Approved check', reference: 'CASE-123' },
         user: {
           first_name: 'Letter',
           last_name: 'Only',
@@ -856,6 +962,19 @@ module Admin
       assert_response :success
       assert_match ConstituentCommunicationLabelsHelper::NO_EMAIL_ON_FILE, response.body
       assert_match ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE, response.body
+    end
+
+    private
+
+    def sign_in_with_fresh_staff_authentication
+      sign_out
+      @admin.update!(password: 'FreshStaffPassword123!', password_confirmation: 'FreshStaffPassword123!')
+      credential = @admin.totp_credentials.create!(secret: ROTP::Base32.random, nickname: 'Staff app', last_used_at: 1.minute.ago)
+      post sign_in_path, params: { contact: @admin.email, password: 'FreshStaffPassword123!' }
+      assert_response :redirect
+      post process_verification_two_factor_authentication_path(type: 'totp'),
+           params: { code: ROTP::TOTP.new(credential.secret).now }, as: :json
+      assert_response :success
     end
   end
 end

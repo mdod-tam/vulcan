@@ -33,50 +33,21 @@
             'aria-describedby': (@user.errors[:last_name].any? ? 'error_explanation' : nil) %>
     </div>
 
-    <div>
-      <%= f.label :email, class: "form-label" %>
-      <p class="text-sm text-gray-600 mb-1"><%= t("portal_self_service.profile.on_file") %> <%= display_contact_email(@user) %></p>
-      <%= f.email_field :email,
-            class: "form-input mt-1",
-            'aria-invalid': @user.errors[:email].any?,
-            'aria-describedby': (@user.errors[:email].any? ? 'error_explanation' : nil) %>
-    </div>
-
-    <div>
-      <%= f.label :phone, class: "form-label" %>
-      <p class="text-sm text-gray-600 mb-1"><%= t("portal_self_service.profile.on_file") %> <%= display_contact_phone(@user) %></p>
-      <%= f.telephone_field :phone,
-            class: "form-input mt-1",
-            placeholder: "555-555-5555",
-            'aria-invalid': @user.errors[:phone].any?,
-            'aria-describedby': (@user.errors[:phone].any? ? 'error_explanation' : nil) %>
-    </div>
-
-    <fieldset>
-      <legend class="form-label mb-2">Phone Type</legend>
-      <div role="radiogroup" class="space-y-2">
-        <div class="flex items-center">
-          <%= f.radio_button :phone_type, "voice", id: "phone_type_voice",
-                 class: "h-4 w-4 text-primary-600 border-gray-300" %>
-          <%= f.label :phone_type_voice, "Voice", for: "phone_type_voice", class: "ml-3 text-sm text-gray-700" %>
-        </div>
-        <div class="flex items-center">
-          <%= f.radio_button :phone_type, "videophone", id: "phone_type_videophone",
-                 class: "h-4 w-4 text-primary-600 border-gray-300" %>
-          <%= f.label :phone_type_videophone, "Videophone", for: "phone_type_videophone", class: "ml-3 text-sm text-gray-700" %>
-        </div>
-        <div class="flex items-center">
-          <%= f.radio_button :phone_type, "text", id: "phone_type_text",
-                 class: "h-4 w-4 text-primary-600 border-gray-300" %>
-          <%= f.label :phone_type_text, "Text/SMS", for: "phone_type_text", class: "ml-3 text-sm text-gray-700" %>
-        </div>
-      </div>
-    </fieldset>
-
     <div class="flex justify-end">
       <%= f.submit "Update Profile", class: "btn btn-primary" %>
     </div>
   <% end %>
+
+  <section aria-labelledby="contact-heading" class="mt-8 pt-6 border-t border-gray-200">
+    <h2 id="contact-heading" class="text-lg font-medium"><%= t('contact_changes.title') %></h2>
+    <p class="mt-2"><%= t('contact_changes.email') %>: <%= display_contact_email(@user) %></p>
+    <p class="mt-2"><%= t('contact_changes.phone') %>: <%= display_contact_phone(@user) %></p>
+    <p class="mt-2"><%= t('contact_changes.explanation') %></p>
+    <%= link_to t('contact_changes.title'), new_contact_change_path, class: 'btn btn-primary mt-4' %>
+    <% if @pending_contact_change %>
+      <%= link_to t('contact_changes.view_pending'), contact_change_path(@pending_contact_change), class: 'block mt-3 underline' %>
+    <% end %>
+  </section>
 
   <section aria-labelledby="password-heading" class="mt-8 pt-6 border-t border-gray-200">
     <h2 id="password-heading" class="text-lg font-medium text-gray-900">Password Settings</h2>

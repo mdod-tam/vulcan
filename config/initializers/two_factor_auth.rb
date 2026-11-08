@@ -15,12 +15,14 @@ module TwoFactorAuth
     # Sign-in flow state
     temp_user_id: :two_factor_user_id,
     sign_in_token: :two_factor_sign_in_token,
+    sms_owner: :two_factor_sms_owner,
     available_methods: :two_factor_available_methods,
     return_path: :two_factor_return_path
   }.freeze
 
   def self.start_authentication(session, user)
     session[SESSION_KEYS[:temp_user_id]] = user.id
+    session[SESSION_KEYS[:sms_owner]] = SecureRandom.hex(24)
     session[SESSION_KEYS[:sign_in_token]] = user.generate_token_for(:two_factor_sign_in)
     Rails.logger.info("[2FA] Stored temporary user ID for 2FA: #{user.id}")
   end
@@ -87,6 +89,7 @@ module TwoFactorAuth
   def self.complete_authentication(session)
     session.delete(SESSION_KEYS[:temp_user_id])
     session.delete(SESSION_KEYS[:sign_in_token])
+    session.delete(SESSION_KEYS[:sms_owner])
     session.delete(SESSION_KEYS[:available_methods])
     session.delete(SESSION_KEYS[:return_path])
     # The challenge stays in the session until sign-in succeeds; complete_authentication_with_challenge_clear removes it.
@@ -103,6 +106,7 @@ module TwoFactorAuth
   def self.abort_authentication(session)
     session.delete(SESSION_KEYS[:temp_user_id])
     session.delete(SESSION_KEYS[:sign_in_token])
+    session.delete(SESSION_KEYS[:sms_owner])
     session.delete(SESSION_KEYS[:available_methods])
     session.delete(SESSION_KEYS[:return_path])
     session.delete(SESSION_KEYS[:verified_at])

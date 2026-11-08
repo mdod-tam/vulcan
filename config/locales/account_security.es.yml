@@ -1,0 +1,93 @@
+es:
+  reauthentication:
+    title: Confirme su identidad
+    explanation: Ingrese su contraseña actual y, si usa la autenticación de dos factores, un
+      método de verificación registrado. Esta confirmación dura cinco minutos.
+    password: Contraseña actual
+    factor: Método de verificación
+    totp: Aplicación de autenticación
+    webauthn: Llave de seguridad o clave de acceso
+    sms: Mensaje de texto
+    sms_number: Número de teléfono registrado
+    send_sms: Enviar código de verificación
+    code: Código de verificación
+    submit: Confirmar y continuar
+    cancel: Cancelar
+    completed: Identidad confirmada. Puede continuar.
+    invalid: No pudimos confirmar su identidad. Revise su contraseña y método de verificación
+      o solicite un código nuevo.
+    required: Confirme su identidad antes de cambiar la seguridad de la cuenta.
+    sms_sent: Se envió un código de verificación a su teléfono registrado.
+  contact_changes:
+    title: Cambiar correo o teléfono de la cuenta
+    explanation: Confirme su identidad y la titularidad antes de cambiar un contacto de acceso
+      o recuperación. Puede editar los otros datos del perfil por separado.
+    kind: Contacto que desea cambiar
+    email: Correo electrónico
+    phone: Teléfono
+    proposed_value: Nuevo correo o número de teléfono
+    value_help: Para cambiar el correo, ingrese la nueva dirección. Para cambiar el teléfono,
+      ingrese el nuevo número o deje el campo en blanco para eliminar el actual.
+    phone_type: Tipo de nuevo teléfono (solo para cambios de teléfono)
+    text: Texto/SMS
+    voice: Voz
+    videophone: Videoteléfono
+    request: Solicitar cambio verificado
+    back: Volver al perfil
+    requested: Su solicitud está pendiente. Complete las confirmaciones requeridas; su contacto
+      actual sigue activo.
+    invalid: Revise el contacto y el tipo de teléfono. No se cambió ningún contacto.
+    unavailable: No se pudo completar este cambio. Revise su estado o comuníquese con el equipo
+      MAT.
+    verification_unavailable: No pudimos enviar o confirmar el código. Espere e intente de nuevo
+      o comuníquese con el equipo MAT.
+    pending: 'Contacto solicitado: %{value}'
+    removal: Eliminar número de teléfono
+    old_active: Su contacto actual seguirá activo hasta completar este cambio.
+    staff_help: Para un número que no pueda recibir mensajes de texto, comuníquese con %{email}
+      o %{phone}. El personal debe verificar su identidad y el nuevo número.
+    code: Código de verificación por mensaje de texto
+    verify: Confirmar titularidad
+    confirmed: Se confirmó la titularidad del contacto.
+    completed: Se cambió su contacto y se cerraron las sesiones anteriores. Inicie sesión con
+      sus credenciales actuales.
+    canceled: Se canceló el cambio de contacto.
+    complete: Completar el cambio y cerrar sesión
+    resend: Reenviar confirmaciones
+    cancel: Cancelar este cambio
+    both_emails: Confirme el correo actual y el nuevo y luego vuelva a esta página. Si no tiene
+      acceso al anterior, comuníquese con el equipo MAT.
+    check_email: Confirme el correo enviado a su nueva dirección y luego vuelva a esta página.
+    confirm_title: Confirme esta dirección de correo
+    confirm_explanation: Confirme solo si solicitó este cambio de contacto. Esta confirmación
+      no inicia sesión ni cambia el contacto por sí sola.
+    return_to_browser: Vuelva al navegador con la sesión iniciada donde solicitó el cambio para
+      completarlo.
+    invalid_link: Esta confirmación no es válida, venció o ya no está vigente.
+    use_verified_flow: Use el proceso de cambio verificado de correo o teléfono para actualizar
+      los contactos de la cuenta.
+    view_pending: Ver cambio de contacto pendiente
+    mail_requested: Se solicitó un cambio del contacto de su cuenta. Su contacto actual sigue
+      activo hasta completar las confirmaciones requeridas.
+    mail_completed: Se cambió el contacto de su cuenta. Se cerraron las sesiones existentes.
+    completed_notice_failed: Se cambió su información de contacto y se cerraron las sesiones
+      anteriores. No se pudo poner en cola un aviso de seguridad. Inicie sesión con su información
+      actualizada. Comuníquese con el equipo de MAT si necesita ayuda.
+  registration_verification:
+    introduction: Ingrese su correo para recibir un enlace y terminar de crear su cuenta.
+    email_help: Elegirá su contraseña después de confirmar el correo. Este paso no inicia sesión.
+    invalid_email: Ingrese una dirección de correo válida.
+    send_link: Enviar enlace de verificación
+    sending: Enviando…
+    check_email: Si esta dirección puede recibir correo, llegará un enlace de verificación en
+      breve. Puede solicitar otro aquí. Esto no inicia sesión.
+    complete_title: Termine de crear su cuenta
+    verified_email: 'Correo verificado: %{email}'
+    phone_later: Después del registro puede agregar un teléfono verificándolo en su perfil.
+    invalid_link: Este enlace no es válido, venció o ya se usó. Solicite uno nuevo.
+    existing_account: Correo confirmado. Inicie sesión o use las instrucciones de acceso a la
+      cuenta. Comuníquese con el equipo MAT si necesita ayuda.
+    completion_failed: No pudimos confirmar que el registro finalizó. Intente iniciar sesión
+      antes de comenzar de nuevo.
+    completed_sign_in: Se creó su cuenta. Inicie sesión para continuar.
+    completed_notice_failed: Se creó su cuenta. No se pudo poner en cola el correo de bienvenida.

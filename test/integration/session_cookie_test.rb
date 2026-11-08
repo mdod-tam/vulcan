@@ -34,16 +34,16 @@ class SessionCookieTest < ActionDispatch::IntegrationTest
   test 'registration sets the same browser-session cookie and 24-hour server deadline' do
     freeze_time do
       assert_difference(['User.count', 'Session.count']) do
-        post sign_up_path, params: { user: {
-          email: 'cookie-registration@example.com',
-          password: 'password1234',
-          password_confirmation: 'password1234',
-          first_name: 'Cookie',
-          last_name: 'Registration',
-          date_of_birth: '1990-01-01',
-          timezone: 'Eastern Time (US & Canada)',
-          locale: 'en'
-        } }
+        submit_verified_registration({
+                                       email: 'cookie-registration@example.com',
+                                       password: 'password1234',
+                                       password_confirmation: 'password1234',
+                                       first_name: 'Cookie',
+                                       last_name: 'Registration',
+                                       date_of_birth: '1990-01-01',
+                                       timezone: 'Eastern Time (US & Canada)',
+                                       locale: 'en'
+                                     })
       end
 
       assert_redirected_to welcome_path

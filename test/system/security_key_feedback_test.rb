@@ -218,7 +218,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
     capture('mfa-totp-invalid-narrow')
     page.current_window.resize_to(1200, 900)
 
-    TwilioVerifyService.stubs(:send_verification).returns(success: true, verification_sid: 'TEST_LOCALE_SMS', status: 'pending')
+    TwilioVerifyService.stubs(:send_verification).returns(success: true, verification_sid: 'TEST_LOCALE_SMS', status: 'pending', code_expires_at: 10.minutes.from_now.to_i)
     click_button code_copy('common.use_sms')
     assert_current_path verify_method_two_factor_authentication_path(type: 'sms', locale: @locale)
     assert_text code_copy('sms.sent')

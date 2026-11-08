@@ -15,7 +15,9 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     # The factory omits the WebAuthn handle required by creation options.
     @user.update_column(:webauthn_id, WebAuthn.generate_user_id)
 
-    sign_in_for_integration_test(@user)
+    Current.reset
+    post sign_in_path, params: { contact: @user.email, password: 'password1234' }
+    assert_redirected_to constituent_portal_dashboard_path
   end
 
   teardown do
@@ -32,7 +34,7 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert_includes response.body, I18n.t('outbound_delivery.sms_suppressed')
     assert_select 'input[name="phone_number"][value="555-123-4567"]'
-    assert_nil Rails.cache.read(TwoFactor::PendingSmsSetupChallenge.cache_key(@user.id, '555-123-4567'))
+    assert_empty SmsVerificationAttempt.where(purpose: 'setup')
   end
 
   test 'setup remains in the default language outside public verification locale scope' do
@@ -269,7 +271,9 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
   end
 
   test 'should require authentication' do
-    sign_out
+    delete sign_out_path
+    assert_redirected_to sign_in_path
+    assert_empty @user.sessions
 
     get new_credential_two_factor_authentication_path(type: 'webauthn')
     assert_redirected_to sign_in_path,

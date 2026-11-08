@@ -8,6 +8,8 @@ class RecurringConfigTest < ActiveSupport::TestCase
     poll_email_delivery
     proof_review_reminders
     cleanup_expired_sessions
+    prune_registration_verifications
+    prune_contact_verifications
     cleanup_unattached_uploads
     recover_document_scans
     generate_vendor_invoices

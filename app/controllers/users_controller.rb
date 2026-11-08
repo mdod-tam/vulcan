@@ -9,6 +9,7 @@ class UsersController < ApplicationController
 
   def edit
     @user = current_user
+    @pending_contact_change = ContactChangeRequest.unresolved.where(user_id: @user.id).order(created_at: :desc).take
   end
 
   # Locks the current user before requalifying and updating primary contact fields, so a
@@ -24,9 +25,16 @@ class UsersController < ApplicationController
       raise IneligibleProfileEditError if locked_user.merged?
 
       @user = locked_user
-      update_succeeded = @user.update(user_params)
+      if Users::ContactChange.primary_attributes_changed?(@user, user_params)
+        @user.errors.add(:base, t('contact_changes.use_verified_flow'))
+        render :edit, status: :unprocessable_content
+        raise ActiveRecord::Rollback
+      end
+      update_succeeded = @user.update(user_params.except(:email, :phone, :phone_type))
       raise ActiveRecord::Rollback unless update_succeeded
     end
+
+    return if performed?
 
     if update_succeeded
       flash[:notice] = 'Profile successfully updated'

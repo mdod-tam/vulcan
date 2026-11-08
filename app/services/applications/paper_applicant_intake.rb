@@ -317,6 +317,7 @@ module Applications
       return true if updates.empty?
 
       if dependent.update(updates)
+        invalidate_changed_contact_authority!(dependent)
         Rails.logger.info "Updated contact info for dependent #{dependent.id}: #{updates.keys.join(', ')}"
         true
       else
@@ -412,6 +413,7 @@ module Applications
       return true if changed_fields.empty?
 
       if user.update(updates)
+        invalidate_changed_contact_authority!(user)
         log_constituent_contact_updated!(user, changed_fields)
         true
       else
@@ -425,6 +427,15 @@ module Applications
         old_val = user.read_attribute(key)
         changes[key] = { from: old_val, to: new_val } if old_val.to_s != new_val.to_s
       end
+    end
+
+    def invalidate_changed_contact_authority!(user)
+      return unless user.saved_changes.keys.intersect?(%w[email phone phone_type])
+
+      # Existing-applicant selection holds ordered User locks. Keep paper session
+      # disposition while expiring proof and freshness issued for the previous contact.
+      user.advance_security_version!
+      ContactChangeRequest.unresolved.where(user_id: user.id).find_each { |change| change.update!(canceled_at: Time.current) }
     end
 
     def log_constituent_contact_updated!(user, changed_fields)

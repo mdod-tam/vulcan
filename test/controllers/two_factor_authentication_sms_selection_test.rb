@@ -34,7 +34,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     post select_sms_verification_two_factor_authentication_path
     assert_redirected_to verify_two_factor_authentication_path
     assert_equal I18n.t('outbound_delivery.sms_suppressed'), flash[:alert]
-    assert_nil Rails.cache.read(TwoFactor::SmsLoginChallenge.cache_key(@user.sms_credentials.first.id))
+    assert_empty SmsVerificationAttempt.where(purpose: 'login')
     get verify_method_two_factor_authentication_path(type: 'totp')
     assert_response :success
   end
@@ -71,16 +71,16 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
       post sign_in_path, params: { email: @user.email, password: 'password1234' }
     end
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
-    assert Rails.cache.read(TwoFactor::SmsLoginChallenge.cache_key(@user.sms_credentials.first.id))
+    assert SmsVerificationAttempt.exists?(purpose: 'login')
   end
 
   test 'choosing SMS verification sends one SMS code' do
     start_password_step
 
-    TwilioVerifyService.expects(:send_verification).once.with('555-123-4567', purpose: :login, sms_credential_id: kind_of(Integer)).returns(
+    TwilioVerifyService.expects(:send_verification).once.with('555-123-4567', purpose: :login, owner: kind_of(String), locale: kind_of(Symbol), sms_credential_id: kind_of(Integer)).returns(
       success: true,
       verification_sid: 'TEST_SMS_SELECTION',
-      status: 'pending'
+      status: 'pending', code_expires_at: 10.minutes.from_now.to_i
     )
 
     post select_sms_verification_two_factor_authentication_path
@@ -96,10 +96,10 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
   test 'choosing SMS verification again reuses active challenge without sending another code' do
     start_password_step
 
-    TwilioVerifyService.expects(:send_verification).once.with('555-123-4567', purpose: :login, sms_credential_id: kind_of(Integer)).returns(
+    TwilioVerifyService.expects(:send_verification).once.with('555-123-4567', purpose: :login, owner: kind_of(String), locale: kind_of(Symbol), sms_credential_id: kind_of(Integer)).returns(
       success: true,
       verification_sid: 'TEST_SMS_SELECTION_IDEMPOTENT',
-      status: 'pending'
+      status: 'pending', code_expires_at: 10.minutes.from_now.to_i
     )
 
     post select_sms_verification_two_factor_authentication_path
@@ -113,10 +113,10 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
   test 'terminal SMS Turbo failure redirects back to send-first state' do
     start_password_step
 
-    TwilioVerifyService.expects(:send_verification).once.with('555-123-4567', purpose: :login, sms_credential_id: kind_of(Integer)).returns(
+    TwilioVerifyService.expects(:send_verification).once.with('555-123-4567', purpose: :login, owner: kind_of(String), locale: kind_of(Symbol), sms_credential_id: kind_of(Integer)).returns(
       success: true,
       verification_sid: 'TEST_SMS_TERMINAL_FAILURE',
-      status: 'pending'
+      status: 'pending', code_expires_at: 10.minutes.from_now.to_i
     )
     TwilioVerifyService.expects(:check_verification).once.returns(
       success: true,
@@ -148,10 +148,10 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
       verified_at: Time.current
     )
 
-    TwilioVerifyService.expects(:send_verification).once.with('555-987-6543', purpose: :login, sms_credential_id: kind_of(Integer)).returns(
+    TwilioVerifyService.expects(:send_verification).once.with('555-987-6543', purpose: :login, owner: kind_of(String), locale: kind_of(Symbol), sms_credential_id: kind_of(Integer)).returns(
       success: true,
       verification_sid: 'TEST_SMS_ONLY_SELECTION',
-      status: 'pending'
+      status: 'pending', code_expires_at: 10.minutes.from_now.to_i
     )
 
     post sign_in_path, params: {
@@ -191,7 +191,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
       assert_response :unprocessable_content
       assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code', locale: locale)
 
-      TwilioVerifyService.expects(:send_verification).once.returns(success: true, verification_sid: 'TEST_LOCALE', status: 'pending')
+      TwilioVerifyService.expects(:send_verification).once.returns(success: true, verification_sid: 'TEST_LOCALE', status: 'pending', code_expires_at: 10.minutes.from_now.to_i)
       post select_sms_verification_two_factor_authentication_path(locale: locale)
       assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms', locale: locale)
       follow_redirect!

@@ -59,12 +59,11 @@ class WebauthnRegistrationTest < ApplicationSystemTestCase
   private
 
   def sign_up_and_open_enrollment
-    visit sign_up_path
-    page.execute_script 'window.registrationPageMarker = true;'
     email = "credential-#{SecureRandom.hex(6)}@example.com"
+    visit registration_completion_path(email: email)
+    page.execute_script 'window.registrationPageMarker = true;'
     fill_in 'First Name', with: 'Credential'
     fill_in 'Last Name', with: 'Tester'
-    fill_in 'Email Address', with: email
     fill_in 'Password', with: 'Password123!', exact: true
     fill_in 'Confirm Password', with: 'Password123!'
     fill_in 'Date of Birth', with: '01/02/1990'

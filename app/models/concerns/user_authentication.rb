@@ -30,10 +30,11 @@ module UserAuthentication
 
     # Match Rails' password-reset salt binding without storing the password digest in the browser.
     generates_token_for :two_factor_sign_in, expires_in: TWO_FACTOR_SIGN_IN_EXPIRY do
-      password_salt&.last(10)
+      [password_salt&.last(10), security_version]
     end
 
     has_many :sessions, dependent: :destroy
+    before_update :advance_password_security_version, if: :will_save_change_to_password_digest?
     after_update :revoke_sessions_after_password_change, if: :saved_change_to_password_digest?
 
     has_many :webauthn_credentials, dependent: :destroy
@@ -105,6 +106,30 @@ module UserAuthentication
       sms_credentials.verified.exists?
   end
 
+  # Authority writers call this under the canonical user lock in their transaction.
+  # Factor usage counters and ordinary profile changes do not change authority.
+  def advance_security_version!
+    update!(security_version: security_version + 1)
+  end
+
+  def verify_webauthn(assertion, challenge:)
+    return if challenge.blank? || !valid_webauthn_assertion?(assertion)
+
+    with_lock do
+      next unless public_login_active?
+
+      response = WebAuthn::Credential.from_get(assertion)
+      credential = webauthn_credentials.find_by(external_id: response.id)
+      next unless credential
+
+      response.verify(challenge, public_key: credential.public_key, sign_count: credential.sign_count)
+      credential.update!(sign_count: response.sign_count)
+      credential
+    end
+  rescue WebAuthn::Error, OpenSSL::PKey::PKeyError, ArgumentError, JSON::ParserError, CBOR::UnpackError
+    nil
+  end
+
   # The account row serializes guesses across browsers, IP addresses, and application workers.
   # Restarting the password step does not clear this failure window.
   def verify_totp(code)
@@ -120,6 +145,17 @@ module UserAuthentication
   end
 
   private
+
+  def valid_webauthn_assertion?(assertion)
+    return false unless assertion.is_a?(Hash) && assertion['response'].is_a?(Hash)
+
+    required = assertion.values_at('id', 'rawId', 'type') +
+               assertion['response'].values_at('clientDataJSON', 'authenticatorData', 'signature')
+    return false unless required.all? { |value| value.is_a?(String) && value.present? }
+
+    client_data = JSON.parse(WebAuthn.configuration.relying_party.encoder.decode(assertion['response']['clientDataJSON']))
+    client_data.is_a?(Hash) && client_data.values_at('type', 'challenge', 'origin').all?(String)
+  end
 
   def login_lock_expired?
     locked_at.present? && !account_locked?
@@ -179,6 +215,13 @@ module UserAuthentication
   def revoke_sessions_after_password_change
     # Reload so a previously loaded association cannot leave a newer session active.
     sessions.reload.destroy_all
+    ContactChangeRequest.unresolved.where(user_id: id).find_each { |change| change.update!(canceled_at: Time.current) }
+  end
+
+  # Password changes already own session revocation here. Advance pending-proof
+  # authority in that same password write, without a recursive User save.
+  def advance_password_security_version
+    self.security_version += 1
   end
 
   # Payload for the :password_reset token above. The password digest is the HMAC key

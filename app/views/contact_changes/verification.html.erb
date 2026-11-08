@@ -1,0 +1,5 @@
+<section class="max-w-2xl mx-auto p-6">
+  <h1 class="text-2xl font-bold mb-4"><%= t('contact_changes.confirm_title') %></h1>
+  <p class="mb-6"><%= t('contact_changes.confirm_explanation') %></p>
+  <%= button_to t('contact_changes.verify'), contact_verification_path(purpose: params[:purpose], token: params[:token], locale: I18n.locale), class: 'btn btn-primary' %>
+</section>

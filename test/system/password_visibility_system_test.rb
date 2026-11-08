@@ -4,7 +4,7 @@ require 'application_system_test_case'
 
 class PasswordVisibilitySystemTest < ApplicationSystemTestCase
   test 'password fields on registration form have visibility toggle' do
-    visit sign_up_path
+    visit registration_completion_path
 
     ensure_stimulus_loaded
 
@@ -40,7 +40,7 @@ class PasswordVisibilitySystemTest < ApplicationSystemTestCase
   end
 
   test 'password visibility automatically hides after timeout' do
-    visit sign_up_path
+    visit registration_completion_path
 
     ensure_stimulus_loaded
 
@@ -63,7 +63,7 @@ class PasswordVisibilitySystemTest < ApplicationSystemTestCase
   end
 
   test 'password fields have correct accessibility attributes' do
-    visit sign_up_path
+    visit registration_completion_path
     ensure_stimulus_loaded
 
     %w[user_password user_password_confirmation].each do |field_id|

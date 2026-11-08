@@ -5,6 +5,10 @@ require 'application_system_test_case'
 class WebauthnSignInTest < ApplicationSystemTestCase
   include SystemTestAuthentication
 
+  setup do
+    ensure_system_audit_actor!
+  end
+
   # Teardown can raise NoMethodError during browser cleanup; the error is logged instead of failing the test.
   def teardown
     super
@@ -15,16 +19,13 @@ class WebauthnSignInTest < ApplicationSystemTestCase
   test 'registration redirects to welcome page with 2FA setup option' do
     reset_session!
 
-    visit sign_up_path
-    assert_text 'Create Account'
+    visit registration_completion_path(email: 'new_2fa_user@example.com')
+    assert_text I18n.t('registration_verification.complete_title')
 
     fill_in 'First Name', with: '2FA'
     fill_in 'Last Name', with: 'Tester'
-    fill_in 'Email Address', with: 'new_2fa_user@example.com'
     fill_in 'Password', with: 'password1234'
     fill_in 'Confirm Password', with: 'password1234'
-    fill_in 'Phone Number', with: '555-555-5555'
-    choose 'Text/SMS' # Registration requires a phone type when a phone is present.
 
     # The native date field uses YYYY-MM-DD.
     fill_in 'Date of Birth', with: '1990-01-01'

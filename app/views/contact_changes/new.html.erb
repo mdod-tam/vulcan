@@ -1,0 +1,25 @@
+<section class="max-w-2xl mx-auto p-6" aria-labelledby="contact-change-title">
+  <h1 id="contact-change-title" class="text-2xl font-bold mb-4"><%= t('contact_changes.title') %></h1>
+  <p class="mb-6"><%= t('contact_changes.explanation') %></p>
+  <% if @contact_change.errors.any? %>
+    <div role="alert" class="mb-4"><%= t('contact_changes.invalid') %></div>
+  <% end %>
+  <%= form_with model: @contact_change, url: contact_changes_path, class: 'space-y-5' do |form| %>
+    <div>
+      <%= form.label :kind, t('contact_changes.kind'), class: 'form-label' %>
+      <%= form.select :kind, [[t('contact_changes.email'), 'email'], [t('contact_changes.phone'), 'phone']], {}, class: 'form-input' %>
+    </div>
+    <div>
+      <%= form.label :proposed_value, t('contact_changes.proposed_value'), class: 'form-label' %>
+      <%= form.text_field :proposed_value, class: 'form-input', autocomplete: 'off', aria: { describedby: 'contact-value-help' } %>
+      <p id="contact-value-help" class="text-sm mt-2"><%= t('contact_changes.value_help') %></p>
+    </div>
+    <div>
+      <%= form.label :phone_type, t('contact_changes.phone_type'), class: 'form-label' %>
+      <%= form.select :phone_type, [[t('contact_changes.text'), 'text'], [t('contact_changes.voice'), 'voice'],
+                                    [t('contact_changes.videophone'), 'videophone']], {}, class: 'form-input' %>
+    </div>
+    <%= form.submit t('contact_changes.request'), class: 'btn btn-primary' %>
+  <% end %>
+  <%= link_to t('contact_changes.back'), edit_profile_path, class: 'inline-block mt-6 underline' %>
+</section>

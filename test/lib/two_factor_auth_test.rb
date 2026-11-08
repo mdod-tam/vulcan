@@ -118,6 +118,7 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
 
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:sms_owner]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:available_methods]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:return_path]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:verified_at]]

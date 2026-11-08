@@ -256,6 +256,71 @@ module Applications
       assert_nil event.change_values
     end
 
+    %i[self dependent].each do |scenario|
+      test "paper #{scenario} contact edit invalidates pending authority while retaining the ordinary session" do
+        subject, service_params = existing_contact_edit_params(scenario)
+        record, change, pending_mfa = pending_contact_authority(subject)
+        version = subject.security_version
+        original_email = subject.email
+        service_params[:constituent] = { phone: unique_paper_phone, phone_type: 'voice' }
+        service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+
+        assert service.create, service.errors.inspect
+
+        assert_equal version + 1, subject.reload.security_version
+        assert_equal original_email, subject.email, 'A phone edit must invalidate the pending operation for the other contact kind'
+        assert change.reload.canceled_at
+        assert_nil User.find_by_token_for(:two_factor_sign_in, pending_mfa)
+        assert_equal subject.id, record.reload.user_id
+        assert_not record.freshly_authenticated?(user: subject)
+        User.transaction do
+          locked_user = User.lock_for_merge_integrity!(subject).fetch(subject.id)
+          assert record.require_live!(token: record.session_token, user: locked_user)
+          assert_raises(Session::AuthenticationRequired) { record.require_recent_authentication!(token: record.session_token, user: locked_user) }
+          record.rotate_after_authentication!(user: locked_user)
+        end
+        assert_raises(ContactChangeRequest::Refused) do
+          Users::ContactChange.new(user: subject, actor: subject, session: record, token: record.session_token).complete!(change)
+        end
+        assert_equal original_email, subject.reload.email
+      end
+
+      test "paper #{scenario} equivalent contacts and ordinary data changes preserve pending authority" do
+        subject, service_params = existing_contact_edit_params(scenario)
+        record, change, pending_mfa = pending_contact_authority(subject)
+        version = subject.security_version
+        service_params[:constituent] = { email: subject.email.upcase, phone: PhoneNumber.national_digits(subject.phone),
+                                         phone_type: subject.phone_type, locale: 'es' }
+        service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+
+        assert service.create, service.errors.inspect
+
+        assert_equal version, subject.reload.security_version
+        assert_nil change.reload.canceled_at
+        assert_equal subject, User.find_by_token_for(:two_factor_sign_in, pending_mfa)
+        assert record.reload.freshly_authenticated?(user: subject)
+      end
+
+      test "paper #{scenario} later validation failure rolls back contact authority invalidation" do
+        subject, service_params = existing_contact_edit_params(scenario)
+        record, change, pending_mfa = pending_contact_authority(subject)
+        original_phone = subject.phone
+        version = subject.security_version
+        service_params[:constituent] = { phone: unique_paper_phone, phone_type: 'voice' }
+        service_params[:application] = @application_params.merge(maryland_resident: false)
+        service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
+
+        assert_not service.create
+        assert service.errors.any? { |error| error.include?('You must be a Maryland resident to apply') }, service.errors.inspect
+
+        assert_equal original_phone, subject.reload.phone
+        assert_equal version, subject.security_version
+        assert_nil change.reload.canceled_at
+        assert_equal subject, User.find_by_token_for(:two_factor_sign_in, pending_mfa)
+        assert record.reload.freshly_authenticated?(user: subject)
+      end
+    end
+
     test 'existing self applicant disability flags are saved before application validation' do
       applicant = create(
         :constituent,
@@ -1817,6 +1882,35 @@ module Applications
     end
 
     private
+
+    def existing_contact_edit_params(scenario)
+      subject = create(:constituent)
+      params = { constituent: {}, application: @application_params }
+      if scenario == :dependent
+        guardian = create(:constituent)
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: subject, relationship_type: 'Parent')
+        params.merge!(applicant_type: 'dependent', guardian_id: guardian.id, dependent_id: subject.id, relationship_type: 'Parent')
+      else
+        params.merge!(applicant_type: 'self', existing_constituent_id: subject.id,
+                      contact_info_mode: 'update', contact_info_verified: true)
+      end
+      [subject, params]
+    end
+
+    def pending_contact_authority(subject)
+      subject.totp_credentials.create!(secret: ROTP::Base32.random, nickname: 'Existing applicant app', last_used_at: 1.minute.ago)
+      record = subject.sessions.create!(
+        ip_address: '127.0.0.1', user_agent: 'Existing paper applicant session',
+        reauthenticated_at: Time.current, reauthenticated_security_version: subject.security_version
+      )
+      change = Users::ContactChange.new(user: subject, actor: subject, session: record, token: record.session_token)
+                                   .request!(kind: 'email', proposed_value: "paper-pending-#{SecureRandom.hex(5)}@example.test")
+      change.update!(new_confirmed_at: Time.current, old_confirmed_at: Time.current)
+      pending_mfa = subject.generate_token_for(:two_factor_sign_in)
+      assert_equal subject, User.find_by_token_for(:two_factor_sign_in, pending_mfa)
+      assert record.freshly_authenticated?(user: subject)
+      [record, change, pending_mfa]
+    end
 
     # Records Current.paper_context as each private step begins.
     def record_paper_context(service, *steps)

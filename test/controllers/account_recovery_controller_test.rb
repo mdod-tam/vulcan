@@ -162,8 +162,8 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_equal @system_audit_actor, event.user
     assert_equal @user, event.auditable
     assert_equal 'public_unauthenticated', event.metadata['public_audit_actor']
-    assert_cache_prefix_present('auth_rate_limit:account_recovery:user_ip:')
-    assert_cache_prefix_absent('security_key_recovery:')
+    assert_budget_prefix_present('auth_rate_limit:account_recovery:user_ip:')
+    assert_budget_prefix_absent('security_key_recovery:')
   ensure
     Rails.cache = old_cache
   end
@@ -202,8 +202,8 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert event.metadata['request_ip_digest'].present?
     assert event.metadata['submitted_contact_digest'].present?
     assert_not_includes event.metadata.values.join(' '), contact
-    assert_cache_prefix_present('auth_rate_limit:account_recovery:contact_ip:')
-    assert_cache_prefix_absent('security_key_recovery')
+    assert_budget_prefix_present('auth_rate_limit:account_recovery:contact_ip:')
+    assert_budget_prefix_absent('security_key_recovery')
   ensure
     Rails.cache = old_cache
   end
@@ -425,15 +425,15 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  def assert_cache_prefix_present(prefix)
-    assert cache_keys.any? { |key| key.start_with?(prefix) }, "Expected cache prefix #{prefix.inspect}"
+  def assert_budget_prefix_present(prefix)
+    assert budget_keys.any? { |key| key.start_with?(prefix) }, "Expected budget prefix #{prefix.inspect}"
   end
 
-  def assert_cache_prefix_absent(prefix)
-    assert cache_keys.none? { |key| key.start_with?(prefix) }, "Expected no cache prefix #{prefix.inspect}"
+  def assert_budget_prefix_absent(prefix)
+    assert budget_keys.none? { |key| key.start_with?(prefix) }, "Expected no budget prefix #{prefix.inspect}"
   end
 
-  def cache_keys
-    Rails.cache.instance_variable_get(:@data).keys.map(&:to_s)
+  def budget_keys
+    AuthRateLimitCounter.pluck(:key)
   end
 end

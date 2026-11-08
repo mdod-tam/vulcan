@@ -71,6 +71,9 @@ module EmailDelivery
       'TrainingSessionNotificationsMailer#training_rescheduled' => [:training, :preference, 'training_session_notifications_training_rescheduled'],
       'TrainingSessionNotificationsMailer#training_scheduled' => [:training, :preference, 'training_session_notifications_training_scheduled'],
       'UserMailer#password_reset' => [:account_security, :email_only, 'user_mailer_password_reset'],
+      'RegistrationMailer#email_verification' => [:account_security, :email_only, 'registration_email_verification', 'RegistrationVerification'],
+      'ContactChangeMailer#verification' => [:account_security, :email_only, 'contact_change_verification', 'Users::ContactChange'],
+      'ContactChangeMailer#security_notice' => [:account_security, :email_only, 'contact_change_notice', 'Users::ContactChange'],
       'VendorNotificationsMailer#invoice_generated' => [:vendor, :email_only, 'vendor_notifications_invoice_generated'],
       'VendorNotificationsMailer#payment_issued' => [:vendor, :email_only, 'vendor_notifications_payment_issued'],
       'VendorNotificationsMailer#w9_approved' => [:vendor, :email_only, 'vendor_notifications_w9_approved'],
@@ -95,6 +98,8 @@ module EmailDelivery
       'SmsService#provider_info' => [:certification, :sms, nil, 'Applications::RequestProviderInfo'],
       'TwoFactor#sms_login' => [:account_security, :sms, nil, 'TwoFactor::SmsLoginChallenge'],
       'TwoFactor#sms_setup' => [:account_security, :sms, nil, 'TwoFactor::PendingSmsSetupChallenge'],
+      'TwoFactor#sms_reauthentication' => [:account_security, :sms, nil, 'Users::Reauthentication'],
+      'ContactChange#sms_verification' => [:account_security, :sms, nil, 'Users::ContactChange'],
       'FaxService#certification_rejected' => [:certification, :fax, nil, 'CertifyingProfessionalNotifier'],
       'Letters#disability_certification_form' => [:certification, :letter, nil, 'Applications::DisabilityCertificationPdfService']
     }.to_h do |key, (category, routing, template, owner)|

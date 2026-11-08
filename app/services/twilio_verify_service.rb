@@ -1,195 +1,154 @@
 # frozen_string_literal: true
 
-# Twilio Verify adapter for SMS 2FA.
-# Twilio Verify documentation: https://www.twilio.com/docs/verify/quickstarts/ruby-rails
+# Provider I/O stays outside the durable reservation's transaction. Each SID
+# belongs to one local purpose and browser owner until it completes or expires.
 class TwilioVerifyService
-  extend SecureErrorSanitizer
+  ACTIONS = { login: 'TwoFactor#sms_login', setup: 'TwoFactor#sms_setup',
+              reauthentication: 'TwoFactor#sms_reauthentication', contact_change: 'ContactChange#sms_verification' }.freeze
+  TERMINAL_STATUSES = %w[expired canceled max_attempts_reached deleted failed].freeze
 
   class << self
-    # Sends a verification code through the SMS delivery policy.
-    # @param phone_number [String] Phone number. Unprefixed ten-digit US numbers receive +1 (e.g., +12025551234)
-    # @return [Hash] :success plus :verification_sid/:status on success or :error on failure
-    def send_verification(phone_number, purpose:, sms_credential_id: nil)
-      action = { login: 'TwoFactor#sms_login', setup: 'TwoFactor#sms_setup' }.fetch(purpose)
-      context = EmailDelivery::Policy.capture(mail_action: action, params: { sms_credential_id: sms_credential_id, phone_number: phone_number })
+    def send_verification(phone_number, purpose:, owner:, locale: 'en', sms_credential_id: nil)
+      action = ACTIONS.fetch(purpose.to_sym)
+      context = EmailDelivery::Policy.capture(mail_action: action,
+                                              params: { sms_credential_id: sms_credential_id, phone_number: phone_number })
       EmailDelivery.verify!(action, context: context, channel: 'sms')
-      if test_mode?
-        EmailDelivery::Outcome.record_essential_handoff(context: context, channel: :sms)
-        return test_mode_success(phone_number)
-      end
+      return refused unless test_mode? || verify_configured?
 
-      unless verify_configured?
-        Rails.logger.warn('[TwilioVerify] Verify not configured, skipping verification send')
-        return { success: false, error: 'Twilio Verify not configured' }
-      end
-
-      phone_e164 = format_phone_to_e164(phone_number)
-      Rails.logger.info("[TwilioVerify] Sending verification to #{sanitize_secure_error_message(phone_e164)}")
+      provider_lifetime = configured_provider_lifetime
+      attempt, version = SmsVerificationAttempt.reserve_send!(
+        service_sid: reservation_service_sid, phone: phone_number, purpose: purpose, owner: owner, provider_lifetime: provider_lifetime
+      )
+      return attempt.provider_result unless version
 
       EmailDelivery.verify!(action, context: context, channel: 'sms')
-      verification = client
-                     .verify
-                     .v2
-                     .services(verify_service_sid)
-                     .verifications
-                     .create(
-                       channel: 'sms',
-                       to: phone_e164
-                     )
+      verification = if test_mode?
+                       { sid: "TEST_#{SecureRandom.hex(8)}", to: format_phone_to_e164(phone_number), channel: 'sms',
+                         service_sid: reservation_service_sid, date_created: Time.current }
+                     else
+                       provider_service.verifications.create(channel: 'sms', to: format_phone_to_e164(phone_number),
+                                                             locale: supported_locale(locale))
+                     end
+      sid = read_twilio_attribute(verification, :sid)
+      created_at = read_twilio_attribute(verification, :date_created)
+      return refused unless sid.present? && created_at.respond_to?(:acts_like_time?) && created_at.acts_like_time? &&
+                            provider_identity_matches?(verification, sid: sid, phone: phone_number)
 
+      attempt.finish_send!(version: version, sid: sid, provider_created_at: created_at, provider_lifetime: provider_lifetime)
       EmailDelivery::Outcome.record_essential_handoff(context: context, channel: :sms)
-      Rails.logger.info("[TwilioVerify] Verification sent successfully, SID: #{verification.sid}, Status: #{verification.status}")
-
-      {
-        success: true,
-        verification_sid: verification.sid,
-        status: verification.status,
-        to: verification.to,
-        channel: verification.channel
-      }
+      attempt.provider_result
     rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
       { success: false, delivery_suppressed: e.is_a?(ApplicationMailer::DeliverySkipped),
         configuration_error: e.is_a?(EmailDelivery::ConfigurationError), reason: e.reason,
         error: I18n.t(e.is_a?(ApplicationMailer::DeliverySkipped) ? 'outbound_delivery.sms_suppressed' : 'outbound_delivery.sms_configuration_error') }
-    rescue Twilio::REST::RestError => e
-      error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Twilio API error: #{e.class.name}")
-      Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
-      { success: false, error: error_message, error_code: e.code }
+    rescue SmsVerificationAttempt::Refused, AuthRateLimit::ExceededError
+      refused
     rescue StandardError => e
-      error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Unexpected error: #{e.class.name}")
-      { success: false, error: error_message }
+      Rails.logger.warn("SMS verification send failed: #{e.class.name}")
+      refused
     end
 
-    # Verifies a code against the supplied verification SID.
-    # @param phone_number [String] Phone number that received the code
-    # @param code [String] The verification code to check
-    # @return [Hash] :success, with :status/:valid for handled checks. :error can accompany :success true or false.
-    def check_verification(phone_number, code, verification_sid:)
-      return test_mode_check(code) if test_mode?
+    def check_verification(phone_number, code, verification_sid:, purpose:, owner:)
+      return refused unless code.is_a?(String) && code.match?(/\A[0-9]{6}\z/)
+      return refused unless test_mode? || verify_configured?
 
-      unless verify_configured?
-        Rails.logger.warn('[TwilioVerify] Verify not configured, skipping verification check')
-        return { success: false, error: 'Twilio Verify not configured' }
-      end
-      if verification_sid.blank?
-        Rails.logger.warn('[TwilioVerify] Verification SID is required for verification checks')
-        return { success: true, status: 'invalid_input', valid: false, error: 'Verification SID is required' }
-      end
-
-      phone_e164 = format_phone_to_e164(phone_number)
-      Rails.logger.info("[TwilioVerify] Checking verification for SID #{verification_sid} and phone #{sanitize_secure_error_message(phone_e164)}")
-
-      verification_check = client
-                           .verify
-                           .v2
-                           .services(verify_service_sid)
-                           .verification_checks
-                           .create(**verification_check_params(code, verification_sid: verification_sid))
-
-      is_valid = verification_check.status == 'approved'
-      Rails.logger.info("[TwilioVerify] Verification check result: #{verification_check.status}, Valid: #{is_valid}")
-
-      {
-        success: true,
-        status: verification_check.status,
-        valid: is_valid,
-        to: verification_check.to
-      }
+      attempt, version = SmsVerificationAttempt.reserve_check!(
+        service_sid: reservation_service_sid, phone: phone_number, purpose: purpose, owner: owner, verification_sid: verification_sid
+      )
+      checked = provider_check(phone_number, code, verification_sid)
+      matches = provider_identity_matches?(checked, sid: verification_sid, phone: phone_number)
+      status = read_twilio_attribute(checked, :status).to_s
+      approved = matches && status == 'approved'
+      attempt.finish_check!(version: version, approved: approved, terminal: !matches || TERMINAL_STATUSES.include?(status))
+      { success: matches, status: matches ? status : 'failed', valid: approved,
+        receipt_id: (attempt.id if approved), to: format_phone_to_e164(phone_number) }
+    rescue SmsVerificationAttempt::Refused, ActiveRecord::RecordNotFound, AuthRateLimit::ExceededError
+      refused
     rescue Twilio::REST::RestError => e
-      error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Verification check error: #{e.class.name}")
-      Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
-
-      # Twilio uses 60200 for invalid parameters and 60202 for exhausted code-check attempts.
-      return { success: true, status: 'invalid_input', valid: false, error: error_message } if e.code == 60_200
-      return { success: true, status: 'max_attempts_reached', valid: false, error: error_message } if e.code == 60_202
-      return { success: true, status: 'not_found', valid: false, error: error_message } if read_twilio_attribute(e, :status_code) == 404
-
-      { success: false, error: error_message, error_code: e.code }
+      attempt&.finish_check!(version: version, approved: false, terminal: terminal_provider_error?(e)) if version
+      refused
     rescue StandardError => e
-      error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Unexpected error: #{e.class.name}")
-      { success: false, error: error_message }
+      Rails.logger.warn("SMS verification check failed: #{e.class.name}")
+      refused
     end
 
     private
 
+    def configured_provider_lifetime
+      seconds = Integer(Rails.application.config.twilio.fetch(:verify_token_lifetime_seconds, 600))
+      raise ArgumentError, 'Unsupported Verify token lifetime' unless seconds.between?(120, 86_400)
+
+      seconds.seconds
+    end
+
+    def provider_check(phone, code, sid)
+      return provider_service.verification_checks.create(verification_sid: sid, code: code) unless test_mode?
+
+      { sid: sid, service_sid: reservation_service_sid, to: format_phone_to_e164(phone),
+        channel: 'sms', status: code == '123456' ? 'approved' : 'pending' }
+    end
+
+    def terminal_provider_error?(error)
+      error.code.in?([60_202, 60_203]) || read_twilio_attribute(error, :status_code) == 404
+    end
+
+    def provider_identity_matches?(result, sid:, phone:)
+      read_twilio_attribute(result, :sid) == sid &&
+        read_twilio_attribute(result, :service_sid) == reservation_service_sid &&
+        PhoneNumber.normalize(read_twilio_attribute(result, :to)) == PhoneNumber.normalize(phone) &&
+        read_twilio_attribute(result, :channel) == 'sms'
+    end
+
+    def refused
+      { success: false, status: 'unavailable', valid: false, error: I18n.t('contact_changes.verification_unavailable') }
+    end
+
     def client
       @client ||= Twilio::REST::Client.new(
-        Rails.application.config.twilio[:account_sid],
-        Rails.application.config.twilio[:auth_token]
-      )
+        Rails.application.config.twilio[:account_sid], Rails.application.config.twilio[:auth_token]
+      ).tap { |instance| instance.http_client = Twilio::HTTP::Client.new(timeout: 15) }
+    end
+
+    def provider_service
+      client.verify.v2.services(verify_service_sid)
     end
 
     def verify_service_sid
       Rails.application.config.twilio[:verify_service_sid]
     end
 
+    def reservation_service_sid
+      verify_service_sid.presence || 'TEST_VERIFY_SERVICE'
+    end
+
     def verify_configured?
       config = Rails.application.config.twilio
-      config[:account_sid].present? &&
-        config[:auth_token].present? &&
-        config[:verify_service_sid].present?
+      config[:account_sid].present? && config[:auth_token].present? && config[:verify_service_sid].present?
     end
 
     def test_mode?
-      return true if Rails.env.test?
-
-      Rails.env.development? && !verify_configured?
+      Rails.env.test? || (Rails.env.development? && !verify_configured?)
     end
 
-    # Adds +1 to a ten-digit US number. Leaves input with a leading + unchanged.
-    # @param phone [String] Phone number with separators, a country code, or a leading +
-    # @return [String] Number with a leading +, without format validation
+    def supported_locale(locale)
+      %w[en es].include?(locale.to_s) ? locale.to_s : 'en'
+    end
+
     def format_phone_to_e164(phone)
       return phone if phone.start_with?('+')
 
       digits = phone.gsub(/\D/, '')
-
       digits = "1#{digits}" if digits.length == 10
-
       "+#{digits}"
-    end
-
-    def verification_check_params(code, verification_sid:)
-      { verification_sid: verification_sid, code: code }
     end
 
     def read_twilio_attribute(object, *names)
       names.each do |name|
         return object.public_send(name) if object.respond_to?(name)
         return object[name] if object.respond_to?(:key?) && object.key?(name)
-
-        string_name = name.to_s
-        return object[string_name] if object.respond_to?(:key?) && object.key?(string_name)
+        return object[name.to_s] if object.respond_to?(:key?) && object.key?(name.to_s)
       end
-
       nil
-    end
-
-    # Test mode applies in tests and in development without Verify configuration.
-    def test_mode_success(phone_number)
-      Rails.logger.info("[TwilioVerify] TEST MODE: Simulating verification send to #{sanitize_secure_error_message(phone_number)}")
-      {
-        success: true,
-        verification_sid: "TEST_#{SecureRandom.hex(8)}",
-        status: 'pending',
-        to: phone_number,
-        channel: 'sms'
-      }
-    end
-
-    def test_mode_check(code)
-      is_valid = code == '123456'
-      Rails.logger.info("[TwilioVerify] TEST MODE: Verification check valid: #{is_valid}")
-      {
-        success: true,
-        status: is_valid ? 'approved' : 'failed',
-        valid: is_valid,
-        to: 'test-number'
-      }
     end
   end
 end

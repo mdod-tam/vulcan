@@ -1,5 +1,5 @@
 version: "3.0"
-last_updated: "2026-10-27"
+last_updated: "2026-11-08"
 application: "MAT Vulcan"
 
 # The security controls: what each one does and which files implement it.
@@ -23,9 +23,15 @@ controls:
       summary: >-
         Passwords are hashed with BCrypt (has_secure_password), with a default
         cost of 12 outside tests. Accounts lock after five failed attempts.
+        Email-first registration verifies the request destination before
+        password selection, account creation or login-session issuance.
       files:
         - app/models/concerns/user_authentication.rb
         - app/controllers/sessions_controller.rb
+        - app/controllers/registrations_controller.rb
+        - app/controllers/registration_verifications_controller.rb
+        - app/models/registration_verification.rb
+        - app/services/users/registration_completion.rb
 
     - id: "AUTH-002"
       name: "Multi-Factor Authentication"
@@ -35,10 +41,18 @@ controls:
       summary: >-
         WebAuthn security keys, TOTP authenticator codes, and SMS codes.
         Required for administrators, evaluators, trainers, and vendors, and
-        optional for constituents.
+        optional for constituents. Shared TOTP consumption rejects reuse
+        across sign-in, reauthentication and enrollment. SMS challenges have
+        durable purpose/context ownership and bounded send/check capacity.
+        Deployment requires six-digit Verify codes and a configured token
+        lifetime matching the provider; ownership covers that provider window
+        independently of the at-most-ten-minute local code-entry deadline.
       files:
         - app/controllers/application_controller.rb
         - app/controllers/two_factor_authentications_controller.rb
+        - app/models/concerns/user_authentication.rb
+        - app/models/sms_verification_attempt.rb
+        - app/services/twilio_verify_service.rb
 
     - id: "AUTH-003"
       name: "Password Policy"
@@ -60,15 +74,24 @@ controls:
         The login cookie is signed, HttpOnly, SameSite=Lax, and Secure in
         production. Sessions expire after 30 minutes idle or 24 hours in
         total, and activity is written at most once a minute. Changing a
-        password revokes the existing login sessions in one step, and a
-        signed-in user who changes theirs gets a fresh session. Shared session
-        creation resets browser state after commit.
+        password revokes the existing login sessions in one step; the signed-in
+        browser then attempts to establish fresh session authority. Shared session
+        creation resets browser state after commit. Recent authentication
+        lasts five minutes and is bound to account security state. Reauthentication
+        rotates the bearer; protected writes recheck the presented token under
+        lock. Contact promotion and staff-approved key recovery revoke all
+        target-user sessions and invalidate pending authority. Guardian/dependent
+        and supervised paper contact writers invalidate proof and freshness
+        generations while preserving ordinary login sessions.
       files:
         - app/models/session.rb
         - app/models/concerns/user_authentication.rb
         - app/controllers/concerns/authentication.rb
         - app/controllers/application_controller.rb
         - app/controllers/passwords_controller.rb
+        - app/services/users/reauthentication_service.rb
+        - app/services/users/contact_change.rb
+        - app/services/recovery_requests/approve.rb
 
   data_protection:
     - id: "DATA-001"
@@ -81,10 +104,15 @@ controls:
         Outside the test environment the app won't start without the
         encryption credentials, except while precompiling assets, which
         doesn't need them. See pii_encryption.md for the fields, audit
-        masking, lookup rules, and key constraints.
+        masking, lookup rules, and key constraints. Purpose-specific registration,
+        contact-change and SMS-verification rows encrypt destination values;
+        signed proof payloads contain request IDs rather than those values.
       files:
         - app/models/concerns/user_profile.rb
         - config/initializers/active_record_encryption.rb
+        - app/models/registration_verification.rb
+        - app/models/contact_change_request.rb
+        - app/models/sms_verification_attempt.rb
 
     - id: "DATA-002"
       name: "Input Validation & Filtering"
@@ -118,9 +146,17 @@ controls:
       owner: "@david"
       summary: >-
         Authentication helpers provide the role checks, and each portal
-        controller scopes which records its users can reach.
+        controller scopes which records its users can reach. Primary contact
+        replacement requires recent authentication and destination proof or
+        recorded staff-assisted verification. Lost-key approval requires a
+        different recently authenticated administrator and recorded identity
+        verification; the application does not certify the agency procedure.
       files:
         - app/controllers/concerns/authentication.rb
+        - app/controllers/contact_changes_controller.rb
+        - app/services/users/contact_change.rb
+        - app/controllers/admin/recovery_requests_controller.rb
+        - app/services/recovery_requests/approve.rb
 
     - id: "AUTHZ-003"
       name: "API Security"
@@ -128,12 +164,17 @@ controls:
       priority: high
       owner: "@david"
       summary: >-
-        Request throttles, backed by policy and kept in cache, cover proofs
-        and secure forms. Limits on public sign-in, password reset, and account
-        recovery are keyed by a digest of the identifier.
+        Cache-backed RateLimit covers proofs and secure forms. AuthRateLimit
+        uses durable atomic counters for failed sign-in, password/account
+        recovery, registration, contact changes and shared SMS sends. Keys
+        contain digests instead of raw identifiers. Missing policy rows use
+        bounded defaults; unavailable counter or policy reads fail closed.
+        Registration recipient caps span IPs.
       files:
         - app/services/rate_limit.rb
         - app/services/auth_rate_limit.rb
+        - app/models/auth_rate_limit_counter.rb
+        - app/models/policy.rb
 
   http_security:
     - id: "CONFIG-001"
@@ -173,12 +214,21 @@ controls:
         snapshots. Exact actor IDs, account associations, and role metadata
         are kept, and separate profile or contact changes stay visible even
         when their masks match. HTTP CSV exports record the actor, export
-        type, and row count, never the exported contents.
+        type, and row count, never the exported contents. Security-key approval
+        records verification, removed internal credential IDs/count and session
+        revocation counts. Required audit and notice intent persist with the
+        authority change; a post-commit transport failure does not undo it.
+        Contact notice states distinguish submitted provider acceptance from
+        unknown outcomes, which are not automatically resent. Unresolved
+        completion notices require an abandonment audit before retention purge.
       files:
         - app/services/audit_event_service.rb
         - app/services/audit_metadata_privacy.rb
         - app/models/event.rb
         - app/services/csv_export.rb
+        - app/services/users/contact_change.rb
+        - app/services/recovery_requests/approve.rb
+        - app/services/recovery_requests/dispatch_approval_notice.rb
 
   testing_and_vulnerability_management:
     - id: "TEST-001"

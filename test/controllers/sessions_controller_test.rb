@@ -31,6 +31,43 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'a[href=?]', sign_up_path(locale: 'es'), text: 'Registrarse'
   end
 
+  def test_turbo_stream_accept_on_sign_in_get_returns_a_complete_html_page
+    get sign_in_path(locale: 'es'), headers: { 'Accept' => "#{Mime[:turbo_stream]}, text/html, application/xhtml+xml" }
+
+    assert_response :success
+    assert_equal 'text/html', response.media_type
+    assert_match(/\A<!DOCTYPE html>/i, response.body.lstrip)
+    assert_select 'html[lang=es]'
+    assert_select 'head title'
+    assert_select 'h1#signin-heading', 'Iniciar sesión'
+    assert_select '#sign_in_form form[action=?]', sign_in_path(locale: 'es')
+    assert_select 'turbo-stream', count: 0
+  end
+
+  def test_turbo_stream_accept_on_sign_in_get_redirects_an_authenticated_user
+    user = create(:constituent)
+    post sign_in_path, params: { contact: user.email, password: 'password1234' }
+    assert_redirected_to constituent_portal_dashboard_path
+
+    get sign_in_path, headers: { 'Accept' => "#{Mime[:turbo_stream]}, text/html, application/xhtml+xml" }
+
+    assert_response :found
+    assert_redirected_to constituent_portal_dashboard_path
+    assert_select 'turbo-stream', count: 0
+  end
+
+  def test_invalid_sign_in_post_still_replaces_its_existing_form_with_a_turbo_stream
+    post sign_in_path, params: { contact: @admin.email, password: 'incorrect-password' },
+                       headers: { 'Accept' => Mime[:turbo_stream].to_s }
+
+    assert_response :success
+    assert_equal Mime[:turbo_stream].to_s, response.media_type
+    assert_select 'turbo-stream[action=replace][target=sign_in_form]' do
+      assert_select 'template #sign_in_form form'
+    end
+    assert_no_match(/<!DOCTYPE html>/i, response.body)
+  end
+
   def test_should_not_sign_in_with_wrong_credentials
     post sign_in_path, params: {
       email: @admin.email,

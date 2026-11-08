@@ -98,6 +98,20 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal 'create', filtered['action']
   end
 
+  test 'account authority form secrets and staff references are filtered at nested request boundaries' do
+    keys = %w[proposed_value verification_reference credential reauthentication_challenge factor_enrollment_authority]
+    values = keys.index_with { 'private-account-authority-sentinel' }
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      values.merge('contact_change_request' => values, 'purpose' => 'new_email')
+    )
+    keys.each do |key|
+      assert_equal '[FILTERED]', filtered[key]
+    end
+    assert_equal '[FILTERED]', filtered['contact_change_request']
+    assert_equal 'new_email', filtered['purpose']
+    assert_not_includes filtered.inspect, 'private-account-authority-sentinel'
+  end
+
   test 'evaluation free text is filtered in nested hashes and arrays without hiding ordinary fields' do
     filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
       'notes' => 'Private report context',

@@ -13,7 +13,7 @@ class PasswordVisibilityIntegrationTest < ActionDispatch::IntegrationTest
   end
 
   test 'password visibility toggle works on registration page' do
-    get sign_up_path
+    get registration_completion_path
     assert_response :success
 
     assert_select "input#user_password + button[aria-label='Show password']"
@@ -32,7 +32,7 @@ class PasswordVisibilityIntegrationTest < ActionDispatch::IntegrationTest
   end
 
   test 'password visibility toggle has correct accessibility attributes' do
-    get sign_up_path
+    get registration_completion_path
     assert_response :success
 
     assert_select "button[aria-label='Show password']" do |elements|
@@ -44,7 +44,7 @@ class PasswordVisibilityIntegrationTest < ActionDispatch::IntegrationTest
   end
 
   test 'password visibility toggle has data-controller attribute' do
-    get sign_up_path
+    get registration_completion_path
     assert_response :success
 
     assert_select "div[data-controller='visibility']"
@@ -52,7 +52,7 @@ class PasswordVisibilityIntegrationTest < ActionDispatch::IntegrationTest
   end
 
   test 'password visibility toggle has timeout value' do
-    get sign_up_path
+    get registration_completion_path
     assert_response :success
 
     assert_select 'div[data-visibility-timeout-value]'

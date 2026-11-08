@@ -8,7 +8,7 @@ class PasswordFieldsTest < ActionDispatch::IntegrationTest
   MIN = User::PASSWORD_MIN_LENGTH.to_s
 
   test 'sign-up states the model minimum on the new password only' do
-    get sign_up_path
+    get registration_completion_path
 
     assert_select "input#user_password[minlength='#{MIN}']"
     assert_select '#user_password-hint', text: "Use at least #{MIN} characters."
@@ -32,11 +32,11 @@ class PasswordFieldsTest < ActionDispatch::IntegrationTest
   end
 
   test 'a short sign-up password is refused with the error tied to its field' do
-    post sign_up_path, params: { user: { email: "short-#{SecureRandom.hex(3)}@example.com",
-                                         password: 'elevenchars', password_confirmation: 'elevenchars',
-                                         first_name: 'Short', last_name: 'Password', date_of_birth: '01/15/1990',
-                                         phone: "555555#{rand(1000..9999)}", phone_type: 'voice',
-                                         timezone: 'Eastern Time (US & Canada)', locale: 'en', hearing_disability: true } }
+    submit_verified_registration({ email: "short-#{SecureRandom.hex(3)}@example.com",
+                                   password: 'elevenchars', password_confirmation: 'elevenchars',
+                                   first_name: 'Short', last_name: 'Password', date_of_birth: '01/15/1990',
+                                   phone: "555555#{rand(1000..9999)}", phone_type: 'voice',
+                                   timezone: 'Eastern Time (US & Canada)', locale: 'en', hearing_disability: true })
 
     assert_response :unprocessable_content
     assert_select '#user_password-error', text: "is too short (minimum is #{MIN} characters)"

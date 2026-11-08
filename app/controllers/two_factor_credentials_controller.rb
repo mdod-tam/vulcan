@@ -6,7 +6,10 @@ class TwoFactorCredentialsController < ApplicationController
   include TurboStreamResponseHandling
 
   before_action :authenticate_user!
+  before_action :require_recent_credential_authentication, except: :credential_success
+  before_action :start_enrollment_authority, only: %i[new_credential webauthn_creation_options create_credential]
   skip_before_action :enforce_required_mfa_enrollment
+  rescue_from Session::AuthenticationRequired, with: :require_credential_reauthentication
 
   # POST /two_factor_authentication/credentials/webauthn/options
   def webauthn_creation_options
@@ -148,6 +151,54 @@ class TwoFactorCredentialsController < ApplicationController
 
   private
 
+  def require_recent_credential_authentication
+    ActiveRecord::Base.transaction do
+      user = User.lock_for_merge_integrity!(current_user).fetch(current_user.id)
+      raise Session::AuthenticationRequired unless current_session
+
+      current_session.require_recent_authentication!(token: presented_session_token, user: user)
+    end
+  end
+
+  def start_enrollment_authority
+    return if enrollment_authority_valid?(current_user)
+
+    TwoFactorAuth.clear_challenge(session)
+    session[:factor_enrollment_authority] = {
+      'user_id' => current_user.id, 'session_id' => current_session.id,
+      'token_digest' => Session.digest_token(presented_session_token),
+      'security_version' => current_user.security_version,
+      'nonce' => SecureRandom.hex(24), 'expires_at' => 10.minutes.from_now.to_i
+    }
+  end
+
+  def enrollment_authority_valid?(user)
+    authority = session[:factor_enrollment_authority]
+    authority.is_a?(Hash) && authority['user_id'] == user.id && authority['session_id'] == current_session&.id &&
+      authority['token_digest'] == Session.digest_token(presented_session_token) &&
+      authority['security_version'] == user.security_version && authority['expires_at'].to_i > Time.current.to_i
+  end
+
+  def with_credential_authority(enrollment: true)
+    ActiveRecord::Base.transaction do
+      user = User.lock_for_merge_integrity!(current_user).fetch(current_user.id)
+      current_session.require_recent_authentication!(token: presented_session_token, user: user)
+      raise Session::AuthenticationRequired if enrollment && !enrollment_authority_valid?(user)
+
+      @current_user = user
+      yield user
+    end
+  end
+
+  def require_credential_reauthentication
+    path = params[:type].present? ? new_credential_two_factor_authentication_path(type: params[:type]) : edit_profile_path
+    redirect_path = new_reauthentication_path(return_to: path)
+    respond_to do |format|
+      format.json { render json: { error: t('reauthentication.required'), redirect_url: redirect_path }, status: :forbidden }
+      format.any { redirect_to redirect_path, alert: t('reauthentication.required'), status: :see_other }
+    end
+  end
+
   def ensure_webauthn_id!
     return if current_user.webauthn_id.present?
 
@@ -182,7 +233,17 @@ class TwoFactorCredentialsController < ApplicationController
 
   # The response helpers limit the RuboCop ABC size.
   def destroy_and_log_credential(credential, credential_name)
-    if credential.destroy
+    removed = with_credential_authority(enrollment: false) do |user|
+      target = credential.class.find_by(id: credential.id, user_id: user.id)
+      next false unless target
+
+      target.destroy!
+      user.advance_security_version!
+      AuditEventService.log(action: 'mfa_credential_removed', actor: user, auditable: user,
+                            metadata: { credential_type: @type, credential_id: target.id })
+      true
+    end
+    if removed
       handle_credential_destruction_success(credential_name, credential)
     else
       handle_credential_destruction_failure(credential_name, credential.id)
@@ -231,12 +292,13 @@ class TwoFactorCredentialsController < ApplicationController
     nested_params = process_webauthn_params
     webauthn_credential = create_webauthn_from_params(nested_params)
 
-    verify_webauthn_challenge(webauthn_credential)
     credential = save_webauthn_credential(webauthn_credential)
 
     handle_webauthn_success(credential)
   rescue WebAuthn::Error => e
     handle_webauthn_error(e, 'verification')
+  rescue Session::AuthenticationRequired
+    raise
   rescue StandardError => e
     handle_webauthn_error(e, 'creation')
   end
@@ -395,14 +457,22 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def create_totp_credential_record
-    current_user.with_lock do
-      existing = current_user.totp_credentials.find { |credential| credential.secret == @secret }
+    with_credential_authority do |user|
+      raise Session::AuthenticationRequired unless TwoFactorAuth.pending_totp_secret(session, user_id: user.id) == @secret
+
+      existing = user.totp_credentials.find { |credential| credential.secret == @secret }
       existing&.update!(last_used_at: [existing.last_used_at, Time.at(@matched_totp_at).utc].max)
-      existing || current_user.totp_credentials.create!(
+      next existing if existing
+
+      credential = user.totp_credentials.create!(
         secret: @secret,
         nickname: params[:nickname].presence || 'Authenticator App',
         last_used_at: Time.at(@matched_totp_at).utc
       )
+      user.advance_security_version!
+      AuditEventService.log(action: 'mfa_credential_added', actor: user, auditable: user,
+                            metadata: { credential_type: 'totp', credential_id: credential.id })
+      credential
     end
   end
 
@@ -456,11 +526,17 @@ class TwoFactorCredentialsController < ApplicationController
 
   def create_confirmed_sms_credential
     phone_number = pending_sms_phone_number
-    credential = current_user.with_lock do
-      current_user.sms_credentials.find_or_initialize_by(phone_number: phone_number).tap do |sms_credential|
+    credential = with_credential_authority do |user|
+      user.sms_credentials.find_or_initialize_by(phone_number: phone_number).tap do |sms_credential|
+        new_authority = !sms_credential.verified?
         sms_credential.last_sent_at ||= Time.current
         sms_credential.verified_at ||= Time.current
         sms_credential.save! if sms_credential.new_record? || sms_credential.changed?
+        if new_authority
+          user.advance_security_version!
+          AuditEventService.log(action: 'mfa_credential_added', actor: user, auditable: user,
+                                metadata: { credential_type: 'sms', credential_id: sms_credential.id })
+        end
       end
     end
 
@@ -525,12 +601,19 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def save_webauthn_credential(webauthn_credential)
-    credential = current_user.webauthn_credentials.create!(
-      external_id: webauthn_credential.id,
-      nickname: params[:credential_nickname].presence || 'Security Key',
-      public_key: webauthn_credential.public_key,
-      sign_count: webauthn_credential.sign_count
-    )
+    credential = with_credential_authority do |user|
+      raise Session::AuthenticationRequired unless retrieve_challenge[:type].to_s == 'webauthn'
+
+      verify_webauthn_challenge(webauthn_credential)
+      saved = user.webauthn_credentials.create!(
+        external_id: webauthn_credential.id, nickname: params[:credential_nickname].presence || 'Security Key',
+        public_key: webauthn_credential.public_key, sign_count: webauthn_credential.sign_count
+      )
+      user.advance_security_version!
+      AuditEventService.log(action: 'mfa_credential_added', actor: user, auditable: user,
+                            metadata: { credential_type: 'webauthn', credential_id: saved.id })
+      saved
+    end
 
     TwoFactorAuth.clear_challenge(session)
     log_webauthn_credential_created(credential)
