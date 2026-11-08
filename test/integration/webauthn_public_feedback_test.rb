@@ -90,7 +90,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
         end
         post process_verification_two_factor_authentication_path(type: 'webauthn', locale: :es),
              params: { two_factor_authentication: assertion }, headers: { 'Accept' => format }
-        assert_response(format == 'text/html' ? :unprocessable_content : :success)
+        assert_response :unprocessable_content
         assert_includes response.body, I18n.t('security_key_verification.feedback.failed', locale: :es)
         assert_not_includes response.body, 'Credential not found'
         assert_not_includes response.body, 'WebAuthn::'
