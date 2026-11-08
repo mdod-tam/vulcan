@@ -85,7 +85,7 @@ module Trainers
                        else
                          trainer_recent_activity
                        end
-      preload_auditable_associations(@activity_logs)
+      Event.preload_auditable_associations(@activity_logs)
     end
 
     def admin_recent_activity
@@ -111,13 +111,6 @@ module Trainers
            .order(created_at: :desc)
            .limit(10)
            .to_a
-    end
-
-    def preload_auditable_associations(events)
-      by_type = events.filter_map(&:auditable).group_by(&:class)
-      ActiveRecord::Associations::Preloader.new(records: by_type[Application], associations: [:user]).call if by_type[Application]
-      ActiveRecord::Associations::Preloader.new(records: by_type[Evaluation], associations: [:constituent]).call if by_type[Evaluation]
-      ActiveRecord::Associations::Preloader.new(records: by_type[TrainingSession], associations: [:constituent]).call if by_type[TrainingSession]
     end
 
     def training_sessions

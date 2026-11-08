@@ -171,7 +171,7 @@ module ConstituentPortal
     def detect_portal_dependent_duplicates(attrs)
       result = DuplicateDetectionService.new(
         context: :portal_new_dependent,
-        attrs: duplicate_detection_attrs(attrs)
+        attrs: DuplicateDetectionService.identity_facts(attrs)
       ).call
       return result.data if result.success?
 
@@ -250,11 +250,11 @@ module ConstituentPortal
 
     # This portal guard compares constituents this guardian already manages.
     # A matching name and birthdate blocks a new request.
-    # Users::Constituent.find_duplicates owns the comparison after duplicate_detection_attrs casts the birthdate.
+    # Users::Constituent.find_duplicates owns the comparison after the shared identity projection casts the birthdate.
     # The query includes relationships from paper and admin intake.
     # This portal lock does not serialize concurrent writes by those entrypoints.
     def guardian_scoped_identity_match(locked_guardian, dependent_attrs)
-      attrs = duplicate_detection_attrs(dependent_attrs)
+      attrs = DuplicateDetectionService.identity_facts(dependent_attrs)
       first_name = attrs[:first_name].to_s.strip
       last_name = attrs[:last_name].to_s.strip
       date_of_birth = attrs[:date_of_birth]
@@ -415,23 +415,6 @@ module ConstituentPortal
       return unless PhoneNumber.synthetic?(dependent_attrs[:phone])
 
       dependent_attrs[:phone]
-    end
-
-    def duplicate_detection_attrs(attrs)
-      data = attrs.with_indifferent_access
-
-      {
-        email: data[:email],
-        phone: data[:phone],
-        first_name: data[:first_name],
-        last_name: data[:last_name],
-        date_of_birth: DateInputNormalizer.normalize(data[:date_of_birth]),
-        physical_address_1: data[:physical_address_1],
-        physical_address_2: data[:physical_address_2],
-        city: data[:city],
-        state: data[:state],
-        zip_code: data[:zip_code]
-      }
     end
 
     def dependent_contact_strategy_params(attrs, guardian)

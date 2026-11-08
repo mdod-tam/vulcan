@@ -73,17 +73,33 @@ module Applications
     end
 
     test 'the rejection-limit warning goes to its reviewer with truthful actor attribution' do
-      @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1)
+      ensure_system_audit_actor!
+      @application.user.update!(communication_preference: :email, locale: 'en')
+      @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1, income_proof_status: :rejected)
+      %w[email_header_text email_footer_text application_notifications_proof_rejected].each do |name|
+        EmailTemplate.where(name: name, format: :text).destroy_all
+        load Rails.root.join("db/seeds/email_templates/#{name}.rb")
+      end
+      ActionMailer::Base.deliveries.clear
       review = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
                           .record!(admin: @admin, rejection_reason: 'Unreadable')
 
-      follow_up(review)
+      assert_emails(1) { follow_up(review) }
 
       notification = Notification.find_by!(notifiable: @application, action: 'max_rejections_warning')
       assert_equal @admin.id, notification.recipient_id
       assert_equal @admin.id, notification.actor_id
       assert_nil notification.delivery_status
       assert_equal @admin.id, Event.find_by!(auditable: @application, action: 'max_rejections_warning').metadata['recipient_id']
+      assert_equal ProofReview::MAX_REJECTIONS, @application.reload.total_rejections
+      assert_not_predicate @application, :status_archived?
+      assert SecureRequestForm.income_proof.active.exists?(application: @application)
+      email = ActionMailer::Base.deliveries.sole
+      assert_equal [@application.user.email], email.to
+      body = email.body.decoded
+      assert_includes body, I18n.t('application_notifications.proof_rejected.remaining_attempts_message', count: 1, locale: :en)
+      assert_includes body, 'HOW TO SUBMIT A CORRECTED DOCUMENT:'
+      assert_not_includes body, I18n.t('application_notifications.proof_rejected.archived_message', locale: :en)
     end
 
     test 'distinct rejection-limit decisions retain their audit while repeated follow-up is deduplicated' do

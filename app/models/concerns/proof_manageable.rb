@@ -39,6 +39,13 @@ module ProofManageable
     !status_archived? && !status_approved?
   end
 
+  # Reaching the warning limit still permits one final corrected submission.
+  def proof_submission_attempts_remaining
+    return 0 if status_archived?
+
+    [ProofReview::MAX_REJECTIONS + 1 - total_rejections, 0].max
+  end
+
   # The attachment for a document type: income, residency, id, or disability_certification.
   def document_attachment_for(type)
     public_send(DocumentType.fetch(type).attachment_name)

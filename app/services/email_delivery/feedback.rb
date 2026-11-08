@@ -93,9 +93,10 @@ module EmailDelivery
       actor = PublicAuditActor.system_audit_actor_or_report('email_bounced')
       return unless actor
 
-      event = Event.create!(user: actor, action: 'email_bounced', auditable: attempt.origin || attempt.notification,
-                            metadata: { email_delivery_attempt_id: attempt.id, bounce_category: attempt.bounce_category,
-                                        bounced_at: attempt.bounced_at.iso8601 })
+      event = AuditEventService.log(actor: actor, action: 'email_bounced', auditable: attempt.origin || attempt.notification,
+                                    metadata: { email_delivery_attempt_id: attempt.id, bounce_category: attempt.bounce_category,
+                                                bounced_at: attempt.bounced_at.iso8601,
+                                                operation_id: "email-delivery-attempt-#{attempt.id}-bounce" })
       attempt.update!(bounce_event: event)
     end
     private_class_method :record_bounce

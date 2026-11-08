@@ -194,9 +194,95 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     event = Event.find_by!(action: EmailDelivery::LegacyMailJobs::AUDIT_ACTION)
     assert_equal 'UserMailer#password_reset', event.metadata['mail_action']
     assert_not event.metadata.key?('arguments')
+    intent = Event.find_by!(action: EmailDelivery::LegacyMailJobs::INTENT_ACTION)
+    assert_equal intent.id, event.metadata['removal_intent_event_id']
+    assert_equal intent.metadata['operation_id'], event.metadata['operation_id']
+    assert_equal 'deleted_now', event.metadata['removal_outcome']
+    assert_equal @admin, intent.user
+    assert intent.metadata['__service_generated']
+    assert event.metadata['__service_generated']
+    assert_equal 0, EmailDelivery::LegacyMailJobs.remove!(actor: @admin)
+    [intent, event].each do |record|
+      error = assert_raises(ActiveRecord::RecordNotUnique) do
+        Event.transaction(requires_new: true) do
+          AuditEventService.log(action: record.action, actor: @admin, metadata: record.metadata.slice('operation_id'))
+        end
+      end
+      assert_equal EmailDelivery::LegacyMailJobs::OPERATION_INDEX, error.cause.result.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+    end
   ensure
     SolidQueue::Job.where(class_name: 'ActionMailer::MailDeliveryJob').delete_all
     ActionMailer::MailDeliveryJob.queue_adapter = legacy_adapter
+  end
+
+  test 'legacy cleanup keeps the job when its durable intent cannot be recorded' do
+    job = create_legacy_mail_job
+    AuditEventService.expects(:log).with(action: EmailDelivery::LegacyMailJobs::INTENT_ACTION, actor: @admin,
+                                         metadata: has_entries(solid_queue_job_id: job.id)).raises(ActiveRecord::StatementInvalid, 'audit unavailable')
+
+    assert_raises(ActiveRecord::StatementInvalid) { EmailDelivery::LegacyMailJobs.remove!(actor: @admin) }
+
+    assert SolidQueue::Job.exists?(job.id)
+    assert_empty legacy_audits(job)
+  end
+
+  test 'a queue deletion failure retains its intent and can be retried' do
+    job = create_legacy_mail_job
+    SolidQueue::Job.any_instance.stubs(:destroy!).raises(ActiveRecord::RecordNotDestroyed, 'queue unavailable')
+
+    assert_raises(ActiveRecord::RecordNotDestroyed) { EmailDelivery::LegacyMailJobs.remove!(actor: @admin) }
+
+    assert SolidQueue::Job.exists?(job.id)
+    intent = legacy_audits(job).sole
+    assert_equal EmailDelivery::LegacyMailJobs::INTENT_ACTION, intent.action
+    SolidQueue::Job.any_instance.unstub(:destroy!)
+    assert_equal 1, EmailDelivery::LegacyMailJobs.remove!(actor: @admin)
+    assert_not SolidQueue::Job.exists?(job.id)
+    assert_equal 2, legacy_audits(job).count
+    assert_equal intent.id, legacy_audits(job).find_by!(action: EmailDelivery::LegacyMailJobs::AUDIT_ACTION).metadata['removal_intent_event_id']
+  end
+
+  test 'an interrupted confirmation survives deletion and resumes only after queue absence is verified' do
+    job = create_legacy_mail_job
+    original_log = AuditEventService.method(:log)
+    fail_confirmation = lambda do |**attributes|
+      raise ActiveRecord::StatementInvalid, 'audit unavailable' if attributes[:action] == EmailDelivery::LegacyMailJobs::AUDIT_ACTION
+
+      original_log.call(**attributes)
+    end
+    AuditEventService.stub(:log, fail_confirmation) do
+      assert_raises(ActiveRecord::StatementInvalid) { EmailDelivery::LegacyMailJobs.remove!(actor: @admin) }
+    end
+
+    assert_not SolidQueue::Job.exists?(job.id)
+    intent = legacy_audits(job).sole
+    assert_includes EmailDelivery::LegacyMailJobs.report, '1 legacy mail job removals await confirmation.'
+    SolidQueue::Job.stub(:transaction, ->(*) { raise ActiveRecord::ConnectionNotEstablished, 'queue unavailable' }) do
+      assert_raises(ActiveRecord::ConnectionNotEstablished) { EmailDelivery::LegacyMailJobs.remove!(actor: @admin) }
+    end
+    assert_equal [intent.id], legacy_audits(job).pluck(:id)
+
+    assert_equal 1, EmailDelivery::LegacyMailJobs.remove!(actor: @admin)
+    confirmation = legacy_audits(job).find_by!(action: EmailDelivery::LegacyMailJobs::AUDIT_ACTION)
+    assert_equal 'already_absent', confirmation.metadata['removal_outcome']
+    assert_equal intent.id, confirmation.metadata['removal_intent_event_id']
+    assert_equal 0, EmailDelivery::LegacyMailJobs.remove!(actor: @admin)
+    assert_equal 2, legacy_audits(job).count
+    assert_equal 'No legacy mail jobs are waiting.', EmailDelivery::LegacyMailJobs.report
+    assert_not_includes legacy_audits(job).pluck(:metadata).to_json, 'private-recipient@example.test'
+    assert_not_includes legacy_audits(job).pluck(:metadata).to_json, 'private-reset-token'
+  end
+
+  test 'legacy cleanup rejects a caller transaction before recording intent or removing a job' do
+    job = create_legacy_mail_job
+
+    Event.transaction do
+      error = assert_raises(ArgumentError) { EmailDelivery::LegacyMailJobs.remove!(actor: @admin) }
+      assert_match 'outside an application transaction', error.message
+    end
+
+    assert SolidQueue::Job.exists?(job.id)
+    assert_empty legacy_audits(job)
   end
 
   test 'certification wrapper rollback leaves no request state or queue job' do
@@ -230,6 +316,17 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   end
 
   private
+
+  def create_legacy_mail_job
+    SolidQueue::Job.create!(queue_name: 'mailers', class_name: 'ActionMailer::MailDeliveryJob', active_job_id: SecureRandom.uuid,
+                            arguments: { 'arguments' => ['UserMailer', 'password_reset', 'deliver_now',
+                                                         { 'recipient' => 'private-recipient@example.test', 'token' => 'private-reset-token' }] })
+  end
+
+  def legacy_audits(job)
+    Event.where(action: [EmailDelivery::LegacyMailJobs::INTENT_ACTION, EmailDelivery::LegacyMailJobs::AUDIT_ACTION])
+         .with_metadata(:solid_queue_job_id, job.id)
+  end
 
   # Exercise the adapter's real database-error wrapper, not a stubbed ActiveJob exception.
   def reject_mail_inserts!

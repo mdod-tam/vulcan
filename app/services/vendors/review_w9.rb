@@ -2,6 +2,9 @@
 
 module Vendors
   class ReviewW9 < BaseService
+    # W9 warnings alert staff; they do not close the vendor's resubmission flow.
+    REJECTION_WARNING_THRESHOLD = 8
+
     def initialize(vendor:, admin:, attributes:)
       super()
       @vendor = vendor
@@ -67,7 +70,7 @@ module Vendors
       else
         result.data[:delivery] = notification&.reload&.delivery_status || 'failed'
       end
-      notify_rejection_limit if review.status_rejected? && @vendor.w9_rejections_count >= 8
+      notify_rejection_limit if review.status_rejected? && @vendor.w9_rejections_count >= REJECTION_WARNING_THRESHOLD
     rescue StandardError => e
       result.data[:delivery] = 'failed'
       Rails.logger.error("W9 review #{review.id} follow-up failed (#{e.class})")

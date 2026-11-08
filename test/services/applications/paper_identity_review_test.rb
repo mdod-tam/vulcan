@@ -40,11 +40,23 @@ module Applications
     # Staff cannot override a hard block. The receipt supports only selection of a record.
     test 'an exact contact collision issues a receipt for selection only' do
       existing = create(:constituent, email: "collide-#{SecureRandom.hex(3)}@example.com")
+      attrs = @facts.merge(email: " #{existing.email.upcase} ", phone: '(555) 000-0123',
+                           date_of_birth: '04021990', newsletter_signup: true)
 
-      result = review(@facts.merge(email: existing.email))
+      result = review(attrs.stringify_keys)
+      portal_facts = DuplicateDetectionService.identity_facts(ActionController::Parameters.new(attrs))
+      portal_detection = DuplicateDetectionService.new(context: :portal_new_dependent, attrs: portal_facts).call
 
       assert result.blocked?
       assert result.token.present?
+      assert_equal existing.email, portal_facts[:email]
+      assert_equal '555-000-0123', portal_facts[:phone]
+      assert_equal Date.new(1990, 4, 2), portal_facts[:date_of_birth]
+      assert_not_includes portal_facts.keys, :newsletter_signup
+      assert_equal portal_facts, result.identity_facts
+      assert portal_detection.success?
+      assert_equal result.candidates.map(&:id), portal_detection.data.matched_users.map(&:id)
+      assert_equal result.reasons, portal_detection.data.reasons
       assert_not review_object(@facts.merge(email: existing.email), submitted_token: result.token, determination: 'keep_separate').call.permits_creation?
     end
 

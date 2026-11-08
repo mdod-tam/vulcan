@@ -63,15 +63,24 @@ module Invoices
       assert_nil @invoice.payment_reference
     end
 
-    test 'a payment notice that cannot be queued leaves the payment recorded' do
+    test 'generation and payment notice failures retain their actors and both operations without undoing payment' do
+      purchase = create(:voucher_transaction, vendor: @vendor, amount: 50, processed_at: 2.days.ago)
+      EmailDelivery::MailDeliveryJob.queue_adapter.stubs(:enqueue).raises(ActiveJob::EnqueueError, 'queue down')
+      generated = Invoices::GenerationService.new(vendor_ids: [@vendor.id]).call
+      assert generated.success?, generated.message
+      @invoice = generated.data[:invoices].sole
       approve_invoice!(@invoice, actor: @admin)
-      EmailDelivery.stubs(:deliver_later).raises(ActiveJob::EnqueueError)
 
       paid = workflow.record_payment!(expected_status: 'invoice_approved', payment_date: Date.current, payment_method: 'eft',
                                       payment_reference: 'EFT-9', gad_invoice_reference: 'GAD-9')
 
       assert paid.reload.status_invoice_paid?
-      assert Event.exists?(auditable: paid, action: 'invoice_notification_enqueue_failed')
+      assert_equal [purchase.id], paid.voucher_transaction_ids
+      failures = Event.where(auditable: paid, action: 'invoice_notification_enqueue_failed').order(:id).to_a
+      assert_equal(%w[invoice_generated payment_issued], failures.map { |event| event.metadata['notice_kind'] })
+      assert_equal [PublicAuditActor.system_audit_actor.id, @admin.id], failures.map(&:user_id)
+      assert_equal 2, failures.map { |event| event.metadata['operation_id'] }.uniq.size
+      assert(failures.all? { |event| event.metadata['__service_generated'] })
     end
 
     test 'payment queues exactly one vendor notice, after commit' do

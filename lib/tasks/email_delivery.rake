@@ -27,7 +27,7 @@ namespace :email_delivery do
   desc 'Remove mail jobs queued before the email controls existed (run with workers stopped)'
   task remove_legacy_mail_jobs: :environment do
     puts EmailDelivery::LegacyMailJobs.report
-    puts "#{EmailDelivery::LegacyMailJobs.remove!(actor: email_delivery_task_actor)} legacy mail jobs removed."
+    puts "#{EmailDelivery::LegacyMailJobs.remove!(actor: email_delivery_task_actor)} legacy mail job removals confirmed."
   end
 
   desc 'Show All, channel and category communication controls'

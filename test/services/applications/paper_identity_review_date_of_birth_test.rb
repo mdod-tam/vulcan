@@ -39,8 +39,8 @@ module Applications
     end
 
     test 'detection facts carry the parsed date' do
-      assert_equal Date.new(2026, 9, 9), PaperIdentityReview.detection_facts(date_of_birth: '09092026')[:date_of_birth]
-      assert_nil PaperIdentityReview.detection_facts(date_of_birth: '9/9/26')[:date_of_birth]
+      assert_equal Date.new(2026, 9, 9), DuplicateDetectionService.identity_facts(date_of_birth: '09092026')[:date_of_birth]
+      assert_nil DuplicateDetectionService.identity_facts(date_of_birth: '9/9/26')[:date_of_birth]
     end
 
     private

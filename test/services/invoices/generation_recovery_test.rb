@@ -3,7 +3,7 @@
 require 'test_helper'
 
 module Invoices
-  # Every completed purchase before the cutoff is invoiced exactly once, whatever runs were missed or failed.
+  # Missed periods remain eligible; a purchase is claimed by one committed invoice.
   class GenerationRecoveryTest < ActiveJob::TestCase
     setup do
       ensure_system_audit_actor!
@@ -71,17 +71,17 @@ module Invoices
       assert_empty InvoiceGenerationFailure.unresolved
     end
 
-    test 'a failed vendor is recorded without stopping the others, and a retry resolves it' do
+    test 'an audit failure rolls back the vendor claim without stopping others, and a retry resolves it' do
       other_vendor = create(:vendor, :approved)
-      purchase(processed_at: @now - 2.days)
+      failed_purchase = purchase(processed_at: @now - 2.days)
       purchase(processed_at: @now - 2.days, vendor: other_vendor)
       failing_vendor_id = @vendor.id
       service = Invoices::GenerationService.new(now: @now)
       service.singleton_class.prepend(Module.new do
-        define_method(:create_invoice) do |vendor_id|
-          raise ActiveRecord::StatementInvalid, 'simulated' if vendor_id == failing_vendor_id
+        define_method(:create_invoice_event) do |invoice, claimed|
+          raise ActiveRecord::StatementInvalid, 'simulated audit failure' if invoice.vendor_id == failing_vendor_id
 
-          super(vendor_id)
+          super(invoice, claimed)
         end
       end)
 
@@ -89,6 +89,8 @@ module Invoices
 
       assert_equal 1, result.data[:vendors_failed]
       assert Invoice.exists?(vendor: other_vendor)
+      assert_not Invoice.exists?(vendor: @vendor)
+      assert_nil failed_purchase.reload.invoice_id
       failure = InvoiceGenerationFailure.unresolved.find_by!(vendor_id: @vendor.id)
       assert_equal 'ActiveRecord::StatementInvalid', failure.error_category
 

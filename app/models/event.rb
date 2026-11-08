@@ -15,7 +15,7 @@ class Event < ApplicationRecord
     self.ip_address = Current.ip_address
   end
 
-  # Ensure metadata is always a hash
+  # Treat absent metadata as an empty object.
   def metadata
     super || {}
   end
@@ -39,6 +39,13 @@ class Event < ApplicationRecord
   scope :with_metadata, lambda { |key, value|
     where('metadata @> ?', { key => value }.to_json)
   }
+
+  def self.preload_auditable_associations(events)
+    by_type = events.filter_map(&:auditable).group_by(&:class)
+    ActiveRecord::Associations::Preloader.new(records: by_type[Application], associations: [:user]).call if by_type[Application]
+    ActiveRecord::Associations::Preloader.new(records: by_type[Evaluation], associations: [:constituent]).call if by_type[Evaluation]
+    ActiveRecord::Associations::Preloader.new(records: by_type[TrainingSession], associations: [:constituent]).call if by_type[TrainingSession]
+  end
 
   private
 

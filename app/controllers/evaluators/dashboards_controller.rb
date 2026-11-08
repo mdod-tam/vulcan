@@ -76,7 +76,7 @@ module Evaluators
                        else
                          evaluator_recent_activity
                        end
-      preload_auditable_associations(@activity_logs)
+      Event.preload_auditable_associations(@activity_logs)
     end
 
     def admin_recent_activity
@@ -136,13 +136,6 @@ module Evaluators
         .sort_by(&:created_at)
         .reverse
         .first(10)
-    end
-
-    def preload_auditable_associations(events)
-      by_type = events.filter_map(&:auditable).group_by(&:class)
-      ActiveRecord::Associations::Preloader.new(records: by_type[Application], associations: [:user]).call if by_type[Application]
-      ActiveRecord::Associations::Preloader.new(records: by_type[Evaluation], associations: [:constituent]).call if by_type[Evaluation]
-      ActiveRecord::Associations::Preloader.new(records: by_type[TrainingSession], associations: [:constituent]).call if by_type[TrainingSession]
     end
   end
 end

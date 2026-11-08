@@ -52,6 +52,8 @@ Automatic proof-rejection delivery does not select SMS. Staff can select it from
 
 Proof-rejection and maximum-rejection notices describe remaining attempts or the current application's closure without generating a reapplication date. Rejection or archival alone starts no waiting period; admission uses the approved-only rule owned by `Applications::AdmissionEligibility`. The maximum-rejection seed templates and preview data have no `reapply_date_formatted` variable.
 
+The application rejection limit sends a staff warning at eight rejections and archives on the ninth. An active application at eight retains one submission attempt and its correction instructions. Rejection mail selects closure text from the application's archived status and obtains its remaining-attempt count from the proof model rule. The vendor W9 warning has its own threshold and does not archive the vendor or stop W9 resubmission.
+
 [UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) refreshes pollable `EmailDeliveryAttempt` rows linked to a notification. The authenticated Postmark webhook records delivery, bounce and complaint feedback; open tracking is optional. Legacy message IDs can't identify the provider's message, and a queued, accepted or opened message isn't proof of delivery. See [Postmark delivery visibility](../infrastructure/postmark_delivery_visibility.md) for matching, polling limits and history semantics.
 
 In the notification list, recipients see basic delivery status on their own notifications. Diagnostic details—including suppression reasons, destination ownership, provider feedback and tracking history—and manual notification status refresh are admin-only. Both audiences use the shared delivery presenter so the status has the same meaning.

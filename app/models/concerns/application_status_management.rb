@@ -23,49 +23,6 @@ module ApplicationStatusManagement
     scope :draft, -> { where(status: :draft) }
     scope :submitted, -> { where.not(status: :draft) }
     scope :filter_by_status, ->(status) { where(status: status) if status.present? }
-    scope :filter_by_type, lambda { |filter_type|
-      case filter_type
-      when 'proofs_needing_review'
-        where(
-          'income_proof_status = ? OR residency_proof_status = ?',
-          income_proof_statuses[:not_reviewed],
-          residency_proof_statuses[:not_reviewed]
-        )
-      when 'proofs_rejected'
-        where(
-          income_proof_status: income_proof_statuses[:rejected],
-          residency_proof_status: residency_proof_statuses[:rejected]
-        )
-      when 'awaiting_disability_certification'
-        where(status: statuses[:awaiting_dcf])
-      when 'digitally_signed_needs_review'
-        where(
-          document_signing_status: document_signing_statuses[:signed]
-        ).where.not(
-          disability_certification_status: [
-            disability_certification_statuses[:approved],
-            disability_certification_statuses[:rejected]
-          ]
-        )
-      end
-    }
-    scope :sorted_by, lambda { |column, direction|
-      direction = direction&.downcase == 'desc' ? 'desc' : 'asc'
-
-      if column.present?
-        if column.start_with?('user.')
-          association = 'users'
-          column_name = column.split('.').last
-          joins(:user).order("#{association}.#{column_name} #{direction}")
-        elsif column_names.include?(column)
-          order("#{column} #{direction}")
-        else
-          order(application_date: :desc)
-        end
-      else
-        order(application_date: :desc)
-      end
-    }
   end
 
   def workflow_active?

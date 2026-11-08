@@ -2,7 +2,7 @@
 
 module EmailDelivery
   # Records an email that was not sent. Stored through audit events, which stay visible while
-  # email is off; one record per request, so reprocessing the same job does not add another.
+  # email is off. Stored events are unique per nonblank action/request pair; contextless observations remain separate.
   # These paths are reachable from public requests (a password reset while email is off), so the
   # actor is looked up only: a missing or non-admin system account is logged, never created or promoted.
   module Outcome
@@ -10,20 +10,20 @@ module EmailDelivery
 
     SUPPRESSED = 'email_delivery_suppressed'
     CONFIGURATION_ERROR = 'email_delivery_configuration_error'
+    REQUEST_ID_INDEX = 'index_events_on_delivery_outcome_request'
 
     def self.record_not_sent(decision, context:, mail_action:)
       Current.denial_decision = decision
       CertifyingProfessionalNotifier.record_fallback_outcome(context, status: decision.outcome, reason: decision.reason) if context&.dig('provider_notification_id')
       action = decision.configuration_error? ? CONFIGURATION_ERROR : SUPPRESSED
-      request_id = context&.dig('request_id')
+      request_id = context&.dig('request_id').presence
       ActiveSupport::Notifications.instrument("#{action}.email_delivery", reason: decision.reason, mail_action: mail_action)
       log(decision, action, mail_action, request_id)
       mark_originating_notification(context) { |notification| notification.mark_delivery_not_sent!(decision, channel: context&.dig('channel') || :email) }
-      return if request_id.present? && recorded?(action, request_id)
       return unless (actor = audit_actor(action, mail_action))
 
-      Event.create!(
-        user: actor,
+      record_event(
+        actor: actor,
         action: action,
         metadata: { mail_action: mail_action, reason: decision.reason, request_id: request_id }.compact
       )
@@ -36,31 +36,30 @@ module EmailDelivery
       return if controls.empty?
 
       action = 'essential_communication_submitted'
-      request_id = context.fetch('request_id')
-      return if recorded?(action, request_id)
+      request_id = context.fetch('request_id').presence
       return unless (actor = audit_actor(action, context['mail_action']))
 
-      Event.create!(user: actor, action: action,
-                    metadata: { request_id: request_id, mail_action: context['mail_action'], channel: channel.to_s,
-                                bypassed_controls: controls, outcome: 'submitted_under_control_exception',
-                                delivery_correlation_id: context['delivery_correlation_id'], sms_credential_id: context['sms_credential_id'] }.compact)
+      record_event(actor: actor, action: action,
+                   metadata: { request_id: request_id, mail_action: context['mail_action'], channel: channel.to_s,
+                               bypassed_controls: controls, outcome: 'submitted_under_control_exception',
+                               delivery_correlation_id: context['delivery_correlation_id'], sms_credential_id: context['sms_credential_id'] }.compact)
     rescue StandardError => e
       Rails.logger.error("Essential communication audit failed: #{e.class.name}")
     end
 
     ENQUEUE_FAILED = 'email_delivery_enqueue_failed'
 
-    # The email was requested but never reached the queue. Nothing was sent or claimed as queued.
+    # The queue adapter reported an enqueue failure; this event does not claim provider handoff.
     def self.record_enqueue_failure(error, context:, mail_action:)
       CertifyingProfessionalNotifier.record_fallback_outcome(context, status: :enqueue_failed, reason: error.class.name) if context&.dig('provider_notification_id')
-      request_id = context&.dig('request_id')
+      request_id = context&.dig('request_id').presence
       ActiveSupport::Notifications.instrument("#{ENQUEUE_FAILED}.email_delivery", mail_action: mail_action)
       Rails.logger.error("EmailDelivery: #{ENQUEUE_FAILED} #{mail_action} #{error.class} request=#{request_id}")
       mark_originating_notification(context) { |notification| notification.mark_delivery_enqueue_failed!(error) }
       return unless (actor = audit_actor(ENQUEUE_FAILED, mail_action))
 
-      Event.create!(
-        user: actor,
+      record_event(
+        actor: actor,
         action: ENQUEUE_FAILED,
         metadata: { mail_action: mail_action, error_class: error.class.name, request_id: request_id }.compact
       )
@@ -90,10 +89,17 @@ module EmailDelivery
     end
     private_class_method :audit_actor
 
-    def self.recorded?(action, request_id)
-      Event.where(action: action).with_metadata(:request_id, request_id).exists?
+    def self.record_event(action:, actor:, metadata:)
+      Event.transaction(requires_new: true) do
+        AuditEventService.log(action: action, actor: actor, metadata: metadata)
+      end
+    rescue ActiveRecord::RecordNotUnique => e
+      constraint = e.cause&.result&.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+      raise unless constraint == REQUEST_ID_INDEX
+
+      Event.where(action: action).with_metadata(:request_id, metadata.fetch(:request_id)).sole
     end
-    private_class_method :recorded?
+    private_class_method :record_event
 
     def self.log(decision, action, mail_action, request_id)
       level = decision.configuration_error? ? :error : :info

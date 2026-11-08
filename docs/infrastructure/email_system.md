@@ -64,7 +64,7 @@ Shared headers and footers (`email_header_text`, `email_footer_text`) are fragme
 
 The test-email page sanitizes HTML-format preview snippets, preserving safe formatting while removing scripts and event handlers. Voucher dates and generated message fragments use the recipient locale in both email and printed-letter rendering.
 
-Deduplication lookups for email request ids and control operation ids use `Event.with_metadata`, backed by the existing JSONB GIN index.
+Lookups for email request IDs and control operation IDs use `Event.with_metadata`, backed by the JSONB GIN index. Outcome audit events also have a unique action/request-ID index for their four action names when the original request ID is nonblank. Retries preserve that captured ID; contextless refusals remain separate observations.
 
 Only [`EmailDelivery::ControlWriter`](../../app/services/email_delivery/control_writer.rb) changes a control or a template pair. Turning one off bumps its generation in the same transaction and records `email_control_changed` or `email_template_pair_toggled` with the operation id; a retried operation id is applied once, and a form submitted against a setting someone else has since changed is refused. The generic feature-flag screen, `features:enable`/`features:disable`, and direct model updates cannot change a communication control or a template's `enabled` value.
 
@@ -75,10 +75,14 @@ Only [`EmailDelivery::ControlWriter`](../../app/services/email_delivery/control_
 | `bin/rails 'email_delivery:set_all[off]'` / `[on]` | Stop or permit ordinary requests across channels, preserving saved channel settings and required access exceptions. |
 | `bin/rails email_delivery:legacy_letter_report` | Inventory unreleased letters lacking version-2 authorization. |
 | `bin/rails email_delivery:reconcile_letters` | Cancel ineligible unreleased letters; revoke only their unreleased secure requests. Never reauthorize an old PDF. |
+| `bin/rails email_delivery:legacy_mail_job_report` | List mail jobs lacking the captured delivery context. |
+| `bin/rails email_delivery:remove_legacy_mail_jobs` | With workers stopped, request and confirm legacy job removals, including unfinished removals from an earlier invocation. |
 | `bin/rails email_delivery:template_pair_report` | Read-only list of template pairs whose English and Spanish settings disagree, and which locale would stop sending. |
 | `bin/rails email_delivery:reconcile_template_pairs` | Turn those pairs off (the approved conservative policy). Each change is audited and cancels that pair's pending email; a rerun changes nothing. |
 
 Until a mismatched pair is reconciled, the policy already treats it as off, because every locale row of the pair must be on.
+
+Legacy mail removal must run outside an application transaction. It commits a removal-request audit before deleting the job in the queue store and then records confirmation. If deletion or confirmation fails, rerun the task with workers still stopped: it reconciles unfinished requests as well as remaining jobs. A recovered job already absent is recorded as such; an unreachable queue is not treated as empty. Audit metadata retains job identity and mail action, excluding serialized arguments and recipient or token values.
 
 Queued mail runs through [`EmailDelivery::MailDeliveryJob`](../../app/jobs/email_delivery/mail_delivery_job.rb), which captures context before Rails defers enqueue callbacks until commit. The capture includes the originating notification id and the row id and generation of All, each supported channel, the category, and every locale row of its template when the message is requested. `ApplicationMailer`'s `before_deliver` check verifies that capture right before handoff; immediate deliveries capture and verify at that moment. Except for the required-access exemptions from All and Account security, mail captured before a control was turned off stays canceled after it is turned back on, a channel denied when requested stays denied (an independently eligible letter route may still run), and a recreated control row does not authorize it.
 

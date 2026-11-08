@@ -70,7 +70,10 @@ module Invoices
       assert invoice.status_invoice_pending?
       assert_in_delta 250.25, invoice.total_amount.to_f
       assert_equal @transactions.map(&:id).sort, invoice.voucher_transactions.pluck(:id).sort
-      assert invoice.events.exists?(action: 'generated')
+      generated = invoice.events.find_by!(action: 'generated')
+      assert_equal PublicAuditActor.system_audit_actor, generated.user
+      assert generated.metadata['__service_generated']
+      assert_equal "invoice-#{invoice.id}-generated", generated.metadata['operation_id']
 
       mail = ActionMailer::Base.deliveries.find { |delivery| delivery.to == [@vendor.email] }
       assert mail, 'vendor invoice notice was not delivered'
@@ -86,7 +89,10 @@ module Invoices
       assert result.success?
       invoice = Invoice.find_by!(vendor: @vendor)
       assert_equal 2, invoice.voucher_transactions.count
-      assert invoice.events.exists?(action: 'invoice_notification_enqueue_failed')
+      failure = invoice.events.find_by!(action: 'invoice_notification_enqueue_failed')
+      assert_equal PublicAuditActor.system_audit_actor, failure.user
+      assert failure.metadata['__service_generated']
+      assert_equal 'invoice_generated', failure.metadata['notice_kind']
       assert Event.exists?(action: EmailDelivery::Outcome::ENQUEUE_FAILED)
       assert_equal 0, ActionMailer::Base.deliveries.size
     end

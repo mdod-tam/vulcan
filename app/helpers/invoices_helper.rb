@@ -3,7 +3,7 @@
 # Labels for invoice status and payment, shared by the admin and vendor invoice screens and the CSV.
 module InvoicesHelper
   STATUS_LABELS = {
-    'invoice_draft' => 'Draft', 'invoice_pending' => 'Awaiting approval', 'invoice_approved' => 'Approved, awaiting payment',
+    'invoice_pending' => 'Awaiting approval', 'invoice_approved' => 'Approved, awaiting payment',
     'invoice_paid' => 'Paid', 'invoice_cancelled' => 'Withdrawn'
   }.freeze
   PAYMENT_METHOD_LABELS = { 'direct_deposit' => 'Direct deposit', 'eft' => 'EFT', 'check' => 'Check' }.freeze
