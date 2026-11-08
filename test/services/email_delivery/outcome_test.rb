@@ -4,7 +4,7 @@ require 'test_helper'
 require 'timeout'
 
 # Outcome identity needs committed, competing connections. Queue-boundary tests cover its callers.
-class EmailDeliveryOutcomeTest < ActiveSupport::TestCase
+class EmailDeliveryOutcomeServiceTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
   include ConcurrencyTestHelper
 
@@ -25,6 +25,7 @@ class EmailDeliveryOutcomeTest < ActiveSupport::TestCase
     @actor.events.where.not(id: @initial_event_ids).delete_all
     cleanup_duplicate_review_test_data!(@actor) unless @actor_existed
     EmailDelivery::Current.reset
+    ::Current.reset
   end
 
   test 'competing outcomes commit one event and return the same durable request identity' do
@@ -59,8 +60,10 @@ class EmailDeliveryOutcomeTest < ActiveSupport::TestCase
   test 'enqueue failure retries retain the original request beyond the ordinary audit window' do
     first = record_enqueue_failure
     travel 1.minute do
-      repeated = record_enqueue_failure
+      repeated = EmailDelivery::Outcome.record_enqueue_failure(IOError.new('different retry failure'), context: context,
+                                                                                                       mail_action: 'UserMailer#password_reset')
       assert_equal first.id, repeated.id
+      assert_equal 'ActiveJob::EnqueueError', repeated.metadata['error_class']
     end
     assert_equal 1, request_events.count
     assert_equal @request_id, request_events.sole.metadata['request_id']

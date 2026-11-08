@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class DropApplicationsProducts < ActiveRecord::Migration[8.0]
+class DropApplicationsProducts < ActiveRecord::Migration[8.1]
   def change
     drop_table :applications_products, id: false do |t|
       t.bigint :application_id, null: false
