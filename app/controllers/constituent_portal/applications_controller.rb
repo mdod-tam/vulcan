@@ -4,7 +4,7 @@ module ConstituentPortal
   class ApplicationsController < ApplicationController
     include ViewerLocale
 
-    around_action :with_viewer_locale, only: :request_training
+    around_action :with_viewer_locale
 
     include ApplicationFormHandling
     include FplClientData

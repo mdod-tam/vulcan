@@ -50,7 +50,76 @@ class ProofReviewConcurrencyTest < ActiveSupport::TestCase
     cleanup_duplicate_review_test_data!(admin, application&.user)
   end
 
+  test 'concurrent follow-ups of one archived decision create and queue one constituent notice' do
+    admin = create(:admin)
+    application = create(:application, :with_income_proof, total_rejections: ProofReview::MAX_REJECTIONS)
+    review = ProofReview.for_decision(application, proof_type: :income, status: :rejected)
+                        .record!(admin: admin, rejection_reason: 'Unreadable')
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_thread = on_own_connection do
+      Application.find(application.id).with_lock do
+        holder_ready << backend_pid
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_ready, thread: holder_thread)
+    contender_pids = Queue.new
+    contenders = []
+    blocked_pids = [holder_pid]
+    2.times do
+      thread = on_own_connection do
+        snapshot = ProofReview.find(review.id)
+        # Each live after-commit callback retains the total that this decision recorded.
+        snapshot.instance_variable_set(:@rejection_total, review.rejection_total)
+        contender_pids << backend_pid
+        Applications::ProofDecisionFollowUp.new(snapshot).call
+      end
+      contenders << thread
+      pid = wait_for_signal(contender_pids, thread: thread)
+      wait_until_blocked_by_queue(pid, blockers: blocked_pids, thread: thread)
+      blocked_pids << pid
+    end
+    assert_not Notification.exists?(action: 'max_rejections_reached', notifiable: application)
+    assert_empty(enqueued_jobs.select { |job| job[:args]&.first(2) == %w[ApplicationNotificationsMailer max_rejections_reached] })
+    release_holder << true
+    reap_thread(holder_thread, timeout: 10, suppress_errors: false)
+    contenders.each { |thread| reap_thread(thread, timeout: 10, suppress_errors: false) }
+
+    notice = Notification.where(action: 'max_rejections_reached', notifiable: application).sole
+    jobs = enqueued_jobs.select { |job| job.dig('email_delivery_context', 'notification_id') == notice.id }
+    assert_equal 1, jobs.size
+    assert_equal 'queued', notice.delivery_status
+    assert_predicate application.reload, :status_archived?
+  ensure
+    release_holder << true if defined?(release_holder)
+    threads = [holder_thread, *contenders].compact
+    threads.each { |thread| reap_thread(thread, timeout: 10, suppress_errors: true) }
+    raise 'Archive notice worker still holds a connection; refusing concurrent cleanup' if threads.any?(&:alive?)
+
+    cleanup_duplicate_review_test_data!(admin, application&.user)
+  end
+
   private
+
+  # PostgreSQL may queue the second row-lock waiter behind the first, rather than the original holder.
+  def wait_until_blocked_by_queue(pid, blockers:, thread:)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 10
+    loop do
+      observed = ActiveRecord::Base.uncached do
+        ActiveRecord::Base.connection.select_value("SELECT pg_blocking_pids(#{Integer(pid)})::text")
+      end
+      return if parse_pg_int_array(observed).intersect?(blockers)
+
+      unless thread.alive?
+        thread.join
+        raise "Archive notice worker #{pid} finished without blocking on #{blockers.inspect}"
+      end
+      raise "Archive notice worker #{pid} did not block on #{blockers.inspect}; blockers: #{observed}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+      poll_pace
+    end
+  end
 
   # A raw insert: it takes the foreign key's shared lock without running the model's callbacks.
   def insert_rejected_review(application, admin, proof_type)

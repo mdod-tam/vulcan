@@ -129,22 +129,26 @@ module Applications
 
     # After deduplication, preload notification actors and selected recipients.
     def load_notifications
-      Notification
-        .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata')
-        .where(notifiable_type: 'Application', notifiable_id: application.id)
-        .where(action: %w[
-                 disability_certification_requested
-                 disability_certification_received
-                 disability_certification_approved
-                 disability_certification_rejected
-                 provider_info_requested
-                 proof_resubmission_requested
-                 cert_upload_requested
-                 review_requested
-                 documents_requested
-               ])
-        .order(created_at: :desc)
-        .to_a
+      notifications = Notification
+                      .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata')
+                      .where(notifiable_type: 'Application', notifiable_id: application.id)
+                      .where(action: %w[
+                               disability_certification_requested
+                               disability_certification_received
+                               disability_certification_approved
+                               disability_certification_rejected
+                               provider_info_requested
+                               proof_resubmission_requested
+                               cert_upload_requested
+                               review_requested
+                               documents_requested
+                               max_rejections_reached
+                             ])
+                      .order(created_at: :desc)
+                      .to_a
+
+      EmailDelivery::Visibility.preload(notifications.select { |notification| notification.action == 'max_rejections_reached' })
+      notifications
     end
 
     def load_application_events
@@ -155,6 +159,8 @@ module Applications
           "action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ? OR (auditable_type = 'Application' AND auditable_id = ?))",
           %w[
             voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
+            initial_voucher_issuance_attention
+            document_signing_request_unconfirmed document_signing_follow_up_failed
             application_created application_post_creation_step_failed
             duplicate_review_case_resolved
             evaluator_assigned evaluator_reassigned trainer_assigned trainer_unassigned trainer_reassigned

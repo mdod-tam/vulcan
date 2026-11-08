@@ -75,4 +75,14 @@ class NotificationTest < ActiveSupport::TestCase
       assert_equal state, attempt.reload.state
     end
   end
+
+  test 'a late failure preserves a letter already admitted for printing' do
+    @notification.record_delivery_handoff!(channel: :letter, state: :queued)
+    expected = @notification.reload.attributes.slice('delivery_status', 'metadata')
+
+    @notification.mark_delivery_failed!(StandardError.new('late bookkeeping failure'), channel: :letter)
+    @notification.mark_delivery_enqueue_failed!(StandardError.new('late queue failure'))
+
+    assert_equal expected, @notification.reload.attributes.slice('delivery_status', 'metadata')
+  end
 end

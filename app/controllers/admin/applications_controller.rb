@@ -121,7 +121,8 @@ module Admin
         prepare_application_show if request.format.html?
         handle_error_response(
           error_message: result.message,
-          html_render_action: :show
+          html_render_action: :show,
+          turbo_error_target: params[:status] == 'rejected' ? 'proof-rejection-errors' : nil
         )
       end
     end
@@ -266,7 +267,8 @@ module Admin
       else
         handle_error_response(
           error_message: "Failed to reject certification: #{result.message}",
-          html_redirect_path: admin_application_path(@application)
+          html_redirect_path: admin_application_path(@application),
+          turbo_error_target: 'certification-rejection-errors'
         )
       end
     end

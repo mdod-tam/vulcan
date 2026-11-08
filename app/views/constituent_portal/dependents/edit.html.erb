@@ -5,13 +5,13 @@
         <div class="px-4 py-5 sm:px-6">
           <div class="flex items-center justify-between">
             <div>
-              <h1 class="text-2xl font-bold text-gray-900">Edit <%= @dependent_user.full_name %></h1>
-              <p class="mt-1 text-sm text-gray-600">Update dependent information</p>
+              <h1 class="text-2xl font-bold text-gray-900"><%= t('constituent_portal.dependents.pages.edit_title', name: @dependent_user.full_name) %></h1>
+              <p class="mt-1 text-sm text-gray-600"><%= t('constituent_portal.dependents.pages.edit_help') %></p>
             </div>
             <div class="flex space-x-3">
-              <%= link_to "View Details", constituent_portal_dependent_path(@dependent_user),
+              <%= link_to t('constituent_portal.dependents.pages.view_details'), constituent_portal_dependent_path(@dependent_user),
                   class: "btn btn-outline" %>
-              <%= link_to "Back to Dashboard", constituent_portal_dashboard_path,
+              <%= link_to t('constituent_portal.workflow.back'), constituent_portal_dashboard_path,
                   class: "btn btn-primary" %>
             </div>
           </div>
@@ -24,7 +24,8 @@
             <div class="px-4 py-5 sm:px-6">
               <% if @guardian_relationship %>
                 <div class="bg-info-50 border border-info-200 text-info-800 p-4 rounded mb-4">
-                  <span class="font-medium">Current Relationship:</span> <%= @guardian_relationship.relationship_type %>
+                  <span class="font-medium"><%= t('constituent_portal.dependents.pages.current_relationship') %></span>
+                  <%= t("constituent_portal.dependents.form.relationships.#{@guardian_relationship.relationship_type.parameterize(separator: '_')}") %>
                 </div>
               <% end %>
 
@@ -36,7 +37,7 @@
         <div class="space-y-6">
           <div class="card">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
-              <h2 class="text-lg font-medium text-gray-900">Recent Changes</h2>
+              <h2 class="text-lg font-medium text-gray-900"><%= t('constituent_portal.dependents.pages.recent_changes') %></h2>
             </div>
             <div class="px-4 py-5 sm:p-6">
               <% if @recent_changes.any? %>
@@ -58,17 +59,14 @@
                             </div>
                             <div class="min-w-0 flex-1 pt-1.5">
                               <p class="text-sm text-gray-500">
-                                Updated by 
-                                <span class="font-medium text-gray-900">
-                                  <%= change.user.full_name %>
-                                </span>
+                                <%= t('constituent_portal.dependents.pages.updated_by', name: change.user.full_name) %>
                               </p>
                               <% if change.field_changes.present? %>
                                 <div class="mt-1 text-xs text-gray-600">
                                   <% change.field_changes.each do |field, values| %>
                                     <div class="mb-1">
                                       <span class="inline-block bg-gray-100 rounded px-2 py-1 mr-1">
-                                        <%= field.humanize %>
+                                        <%= User.human_attribute_name(field) %>
                                       </span>
                                       <span class="text-danger-600"><%= values['old'] %></span>
                                       <span class="text-gray-500">→</span>
@@ -78,7 +76,7 @@
                                 </div>
                               <% end %>
                               <p class="mt-1 text-xs text-gray-500">
-                                <%= time_ago_in_words(change.created_at) %> ago
+                                <%= t('constituent_portal.dependents.pages.ago', time: time_ago_in_words(change.created_at)) %>
                               </p>
                             </div>
                           </div>
@@ -88,11 +86,11 @@
                   </ul>
                 </div>
                 <div class="mt-4">
-                  <%= link_to "View All Changes", constituent_portal_dependent_path(@dependent_user),
+                  <%= link_to t('constituent_portal.dependents.pages.all_changes'), constituent_portal_dependent_path(@dependent_user),
                       class: "text-sm text-primary-600 hover:text-primary-900" %>
                 </div>
               <% else %>
-                <p class="text-sm text-gray-500">No recent changes recorded</p>
+                <p class="text-sm text-gray-500"><%= t('constituent_portal.dependents.pages.no_changes') %></p>
               <% end %>
             </div>
           </div>

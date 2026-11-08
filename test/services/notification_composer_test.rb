@@ -21,6 +21,81 @@ class NotificationComposerTest < ActiveSupport::TestCase
     end
   end
 
+  test 'proof notification language follows the viewer while preserving its constituent destination' do
+    notification = build(
+      :notification, action: 'proof_rejected', notifiable: @application, actor: @admin,
+                     metadata: { proof_type: 'income', rejection_reason: 'Unreadable document' }
+    )
+    { 'en' => 'Income proof rejected for', 'es' => 'Comprobante de ingresos rechazado para' }.each do |locale, expected|
+      @constituent.update!(locale: locale)
+      message = I18n.with_locale(locale == 'en' ? :es : :en) { notification.message(@constituent) }
+
+      assert_includes message, expected
+      fragment = Nokogiri::HTML.fragment(message)
+      assert_equal 1, fragment.css('a').size
+      assert_equal "/constituent_portal/applications/#{@application.id}", fragment.at_css('a')['href']
+      assert_includes fragment.at_css('a').text, 'John Doe'
+    end
+  end
+
+  test 'explicit request locale overrides the viewer language through the notification model' do
+    @constituent.update!(locale: 'es')
+    notification = build(
+      :notification, action: 'proof_approved', notifiable: @application, actor: @admin,
+                     metadata: { proof_type: 'residency' }
+    )
+
+    message = notification.message(@constituent, locale: :en)
+
+    assert_includes message, 'Residency proof approved for'
+    assert_includes Nokogiri::HTML.fragment(message).at_css('a').text, "Application ##{@application.id}"
+    assert_not_includes message, 'Comprobante de residencia'
+  end
+
+  test 'notification language uses the viewer effective guardian locale rather than the stored locale' do
+    guardian = create(:constituent, locale: 'es')
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: @constituent)
+    @constituent.reload
+    assert_equal 'en', @constituent.locale
+    assert_equal :es, @constituent.effective_message_locale
+
+    message = I18n.with_locale(:en) do
+      NotificationComposer.generate('training_trainer_changed', nil, @admin, { trainer_name: 'Jane Trainer' }.stringify_keys,
+                                    viewer: @constituent)
+    end
+
+    assert_equal 'Su capacitación ahora está a cargo de Jane Trainer. Las citas programadas no han cambiado.', message
+  end
+
+  test 'translated proof notification escapes names and reasons while retaining the generated link' do
+    @constituent.first_name = '<script>alert(1)</script>'
+    @constituent.locale = 'es'
+    reason = '<img src=x onerror=alert(2)>'
+
+    message = NotificationComposer.generate('proof_rejected', @application, @admin,
+                                            { proof_type: 'id', rejection_reason: reason }, viewer: @constituent, locale: :es)
+    fragment = Nokogiri::HTML.fragment(message)
+
+    assert_predicate message, :html_safe?
+    assert_empty fragment.css('script, img')
+    assert_includes fragment.text, reason
+    assert_includes fragment.at_css('a').text, '<script>alert(1)</script>'
+    assert_equal "/constituent_portal/applications/#{@application.id}", fragment.at_css('a')['href']
+    assert_match(/\AVer Solicitud/, fragment.at_css('a')['aria-label'])
+  end
+
+  test 'stored training notification without an actor uses its preloaded trainer in the viewer language' do
+    trainer = create(:trainer, first_name: 'Jane', last_name: 'Trainer')
+    session = create(:training_session, :scheduled, application: @application, trainer: trainer)
+    session.trainer
+    @constituent.update!(locale: 'es')
+
+    message = NotificationComposer.generate('training_scheduled', session, nil, {}, viewer: @constituent)
+
+    assert_includes message, 'Jane Trainer programó la capacitación de John Doe'
+    assert_equal "/constituent_portal/applications/#{@application.id}", Nokogiri::HTML.fragment(message).at_css('a')['href']
+  end
+
   test 'generate message for proof_approved' do
     message = NotificationComposer.generate(
       'proof_approved',

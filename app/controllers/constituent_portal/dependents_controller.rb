@@ -2,6 +2,9 @@
 
 module ConstituentPortal
   class DependentsController < ApplicationController
+    include ViewerLocale
+
+    around_action :with_viewer_locale
     include UserServiceIntegration
 
     before_action :authenticate_user!
@@ -71,7 +74,7 @@ module ConstituentPortal
         locked_guardian = locked_users.fetch(current_user.id)
 
         unless dependent_edit_still_authorized?(locked_dependent, locked_guardian)
-          redirect_to constituent_portal_dashboard_path, alert: 'This dependent is no longer available to edit.'
+          redirect_to constituent_portal_dashboard_path, alert: t('constituent_portal.dependents.pages.unavailable')
           raise ActiveRecord::Rollback
         end
 
@@ -103,9 +106,9 @@ module ConstituentPortal
       relationship = @dependent.guardian_relationships_as_dependent.find_by(guardian_user: current_user)
 
       if relationship&.destroy
-        redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully removed.'
+        redirect_to constituent_portal_dashboard_path, notice: t('constituent_portal.dependents.pages.removed')
       else
-        redirect_to constituent_portal_dashboard_path, alert: 'Failed to remove dependent.'
+        redirect_to constituent_portal_dashboard_path, alert: t('constituent_portal.dependents.pages.remove_failed')
       end
     end
 
@@ -133,7 +136,7 @@ module ConstituentPortal
 
       return if @dependent
 
-      redirect_to constituent_portal_dashboard_path, alert: 'Dependent not found.'
+      redirect_to constituent_portal_dashboard_path, alert: t('constituent_portal.dependents.pages.not_found')
     end
 
     def dependent_user_params
@@ -348,7 +351,7 @@ module ConstituentPortal
           raise ActiveRecord::Rollback
         end
 
-        redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully created.'
+        redirect_to constituent_portal_dashboard_path, notice: t('constituent_portal.dependents.pages.created')
       end
 
       # Render after rollback because a rescued database error can leave PostgreSQL's transaction unusable.
@@ -510,7 +513,7 @@ module ConstituentPortal
       @guardian_relationship ||= GuardianRelationship.new(guardian_relationship_params)
       capture_guardian_contact_choices
 
-      flash.now[:alert] = "Failed to create dependent: #{error_messages.join(', ')}"
+      flash.now[:alert] = t('constituent_portal.dependents.pages.create_failed', errors: error_messages.join(', '))
       render :new, status: :unprocessable_content
     end
 
@@ -519,11 +522,11 @@ module ConstituentPortal
         app = Application.find_by(id: params[:application_id])
         if app
           return redirect_to constituent_portal_application_path(app),
-                             notice: 'Dependent was successfully updated.'
+                             notice: t('constituent_portal.dependents.pages.updated')
         end
       end
 
-      redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully updated.'
+      redirect_to constituent_portal_dashboard_path, notice: t('constituent_portal.dependents.pages.updated')
     end
 
     def setup_edit_template_variables

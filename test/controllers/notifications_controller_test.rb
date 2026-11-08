@@ -119,7 +119,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     get notifications_path
 
     assert_select "#notification_#{@notification.id} summary", count: 1
-    assert_select "form[action='#{check_email_status_notification_path(@notification)}']", count: 1
+    assert_select "form[action^='#{check_email_status_notification_path(@notification)}']", count: 1
     assert_enqueued_with(job: UpdateEmailStatusJob, args: [@notification.id]) do
       post check_email_status_notification_path(@notification)
     end
@@ -196,7 +196,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
   def assert_recipient_delivery_visibility
     assert_select "#notification_#{@notification.id} details", count: 0
-    assert_select "form[action='#{check_email_status_notification_path(@notification)}']", count: 0
+    assert_select "form[action^='#{check_email_status_notification_path(@notification)}']", count: 0
     assert_select "#notification_#{@notification.id}", text: /Contact owner:|Destination:|Last checked:|Open detected/, count: 0
   end
 end

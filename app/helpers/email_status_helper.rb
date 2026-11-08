@@ -27,8 +27,4 @@ module EmailStatusHelper
   end
 
   def format_email_status(notification) = delivery_visibility(notification)
-
-  def notification_viewer_locale
-    current_user.locale.presence || I18n.locale
-  end
 end

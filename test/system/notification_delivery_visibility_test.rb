@@ -45,6 +45,9 @@ class NotificationDeliveryVisibilityTest < ApplicationSystemTestCase
     visit notifications_path(scope: 'all')
 
     assert_recipient_statuses('Enviado — esperando confirmación', 'No enviado')
+    assert_selector 'h1', text: 'Notificaciones'
+    assert_text 'Comprobante de ingresos aprobado para'
+    assert_no_text 'Income proof approved for'
     assert_no_selector "#notification_#{@other_notification.id}"
     assert_no_selector '.translation_missing'
     capture_recipient_screen('delivery-recipient-statuses-mobile-es')
@@ -55,6 +58,7 @@ class NotificationDeliveryVisibilityTest < ApplicationSystemTestCase
     end
     assert_not_nil @notification.reload.read_at
     assert_recipient_statuses('Enviado — esperando confirmación', 'No enviado')
+    assert_text 'Comprobante de ingresos aprobado para'
     capture_recipient_screen('delivery-recipient-read-replacement-mobile-es')
   ensure
     page.current_window.resize_to(1200, 800)
@@ -90,8 +94,8 @@ class NotificationDeliveryVisibilityTest < ApplicationSystemTestCase
       assert_no_selector 'details', visible: :all
       assert_no_text(/Delivery controls|controles de entrega/)
     end
-    assert_no_selector "form[action='#{check_email_status_notification_path(@notification)}']", visible: :all
-    assert_no_selector "form[action='#{check_email_status_notification_path(@suppressed)}']", visible: :all
+    assert_no_selector "form[action^='#{check_email_status_notification_path(@notification)}']", visible: :all
+    assert_no_selector "form[action^='#{check_email_status_notification_path(@suppressed)}']", visible: :all
   end
 
   def capture_recipient_screen(label)

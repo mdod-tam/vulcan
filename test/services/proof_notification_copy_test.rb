@@ -16,4 +16,26 @@ class ProofNotificationCopyTest < ActiveSupport::TestCase
     assert_equal 'Residency proof approved', ProofNotificationCopy.approved_text('residency')
     assert_equal 'Income proof requested', ProofNotificationCopy.requested_text('income')
   end
+
+  test 'Spanish proof labels and statuses use the requested locale independently of the ambient locale' do
+    I18n.with_locale(:en) do
+      assert_equal 'Comprobante de identidad', ProofNotificationCopy.proof_label('ID_PROOF', locale: :es)
+      assert_equal 'Comprobante de ingresos', ProofNotificationCopy.proof_label('Income Proof', locale: :es)
+      assert_equal 'Comprobante', ProofNotificationCopy.proof_label(nil, locale: :es)
+      assert_equal 'Comprobante de residencia aprobado', ProofNotificationCopy.approved_text('residency', locale: :es)
+      assert_equal 'Comprobante de identidad adjuntado', ProofNotificationCopy.attached_text('id', locale: :es)
+      assert_equal 'Comprobante de ingresos no proporcionado', ProofNotificationCopy.not_provided_text('income', locale: :es)
+      assert_equal 'Comprobante de identidad solicitado', ProofNotificationCopy.requested_text('id', locale: :es)
+      assert_equal 'Comprobante de ingresos rechazado - Documento ilegible',
+                   ProofNotificationCopy.rejected_text('income', 'Documento ilegible', locale: :es)
+      assert_equal 'Comprobante de ingresos rechazado', ProofNotificationCopy.rejected_text('income', nil, locale: :es)
+    end
+  end
+
+  test 'proof copy follows the ambient locale when the caller supplies none' do
+    I18n.with_locale(:es) do
+      assert_equal 'Comprobante de residencia solicitado', ProofNotificationCopy.requested_text('residency')
+      assert_equal 'ID proof requested', ProofNotificationCopy.requested_text('id', locale: :en)
+    end
+  end
 end

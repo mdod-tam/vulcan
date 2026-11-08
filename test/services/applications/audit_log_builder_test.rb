@@ -301,6 +301,30 @@ module Applications
       end
     end
 
+    test 'includes closure delivery history and workflow attention events in application audit logs' do
+      archive_notice = create(
+        :notification,
+        recipient: @application.user, actor: @admin, notifiable: @application,
+        action: 'max_rejections_reached', delivery_status: :error,
+        metadata: { delivery_error: { message: 'The notice could not be queued.', error_class: 'RuntimeError' } }
+      )
+      events = %w[
+        initial_voucher_issuance_attention document_signing_request_unconfirmed document_signing_follow_up_failed
+      ].map do |action|
+        Event.create!(user: @admin, auditable: @application, action: action,
+                      metadata: { application_id: @application.id, operation_id: SecureRandom.uuid })
+      end
+
+      builder = AuditLogBuilder.new(@application)
+      logs = builder.build_deduplicated_audit_logs
+
+      events.each { |event| assert_includes logs, event }
+      loaded_notice = logs.find { |entry| entry.is_a?(Notification) && entry.id == archive_notice.id }
+      assert loaded_notice
+      assert_equal 'error', loaded_notice.delivery_status
+      assert_predicate loaded_notice.association(:email_delivery_attempts), :loaded?
+    end
+
     test 'includes secure request issuance notifications in audit logs' do
       provider_info_notification = create(
         :notification,

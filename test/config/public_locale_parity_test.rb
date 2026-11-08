@@ -10,6 +10,7 @@ class PublicLocaleParityTest < ActiveSupport::TestCase
     alerts.sign_in_required alerts.session_expired alerts.session_fail
     application_notifications.proof_approved application_notifications.registration_confirmation
     applications.alternate_contact_relationship_types applications.creation constituent_portal.activity controllers errors.messages layouts.secure_public
+    constituent_portal.dependents constituent_portal.proofs notifications.messages notifications.proof_copy notifications.index
     passwords password_visibility portal_self_service sessions terms_and_conditions
     secure_certification_form_resends secure_certification_forms secure_proof_form_resends secure_proof_forms
     secure_provider_info_form_resends secure_provider_info_forms secure_w9_form_resends secure_w9_forms

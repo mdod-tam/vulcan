@@ -146,6 +146,28 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_not_includes body, I18n.t('secure_proof_forms.proof_types.income', locale: :en)
   end
 
+  { 'en' => 'Previously Approved documentation remains approved',
+    'es' => 'Documentos recibidos - referencia Approved' }.each do |locale, subject|
+    test "#{locale} edited receipt subject agrees in preview email and printed letter" do
+      use_real_email_templates('application_notifications_proof_received')
+      template = EmailTemplate.find_by!(name: 'application_notifications_proof_received', format: :text, locale: locale)
+      template.update!(subject: subject)
+      @user.update!(locale: locale, communication_preference: :email)
+      sample_data = EmailTemplates::SampleData.for_template(template, locale: locale, subject: subject)
+      preview_subject, = template.render(**sample_data)
+
+      email = ApplicationNotificationsMailer.proof_received(@application, :income).deliver_now
+
+      assert_equal subject, preview_subject
+      assert_equal preview_subject, email.subject
+      @user.update!(communication_preference: :letter)
+      assert_difference 'PrintQueueItem.count', 1 do
+        assert_no_emails { ApplicationNotificationsMailer.proof_received(@application, :income).deliver_now }
+      end
+      assert_includes inflated_pdf_text(PrintQueueItem.order(:id).last.pdf_letter.download), subject
+    end
+  end
+
   test 'a Spanish registration email says there are no authorized vendors in Spanish' do
     use_real_email_templates('application_notifications_registration_confirmation')
     Users::Vendor.stubs(:active).returns(Users::Vendor.none)
@@ -985,8 +1007,19 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
   end
 
-  test 'max rejection rendering failure is logged safely without sending or raising' do
-    assert_handled_action_failure(:max_rejections_reached, @application)
+  test 'max rejection rendering failure reaches its delivery owner without leaking diagnostics' do
+    error = StandardError.new('private render https://example.test/request?token=secret-token')
+    EmailTemplate.stubs(:find_with_locale).raises(error)
+    messages = []
+
+    Rails.logger.stub(:error, ->(message) { messages << message }) do
+      assert_no_emails do
+        assert_raises(StandardError) { ApplicationNotificationsMailer.max_rejections_reached(@application).deliver_now }
+      end
+    end
+    assert_includes messages.join, 'StandardError'
+    assert_not_includes messages.join, 'private render'
+    assert_not_includes messages.join, 'secret-token'
   end
 
   test 'review reminder rendering failure is logged safely without sending or raising' do

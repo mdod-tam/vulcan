@@ -82,9 +82,6 @@ class ApplicationMailer < ActionMailer::Base
     variables = common_template_variables.merge(variables)
     rendered_subject, rendered_text_body = template.render(**variables)
 
-    subject_override = mail_options.delete(:subject_override)
-    rendered_subject = subject_override.call(rendered_subject) if subject_override.present?
-
     default_options = {
       to: recipient_email,
       subject: rendered_subject,

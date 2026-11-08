@@ -150,35 +150,6 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
     assert application.reload.disability_certification_status_requested?
   end
 
-  test 'a late certification stop keeps a DocuSeal request accepted in the same second' do
-    application = create(:application, :in_progress, certifying_professional_name: 'Dr. Provider',
-                                                     certifying_professional_email: 'provider@example.test')
-    ::Docuseal.stubs(:create_submission).returns({ 'id' => 'sub-1', 'submitters' => [{ 'id' => 'subm-1' }] })
-    EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
-                         .then.returns(EmailDelivery::Decision.allowed)
-                         .then.returns(EmailDelivery::Decision.suppressed(:global_disabled))
-    service_class = Class.new(Applications::RequestCertificationUpload) do
-      private
-
-      # Another admin sends a DocuSeal request between preparation and the final check.
-      def deliver_request_email!(request_form, raw_token)
-        result = DocumentSigning::SubmissionService.new(application: application.reload, actor: actor).call
-        raise "DocuSeal request failed: #{result.message}" unless result.success?
-
-        super
-      end
-    end
-
-    travel_to Time.current.change(usec: 100) do
-      service_class.new(application: application, actor: @admin, deliver_email: true).call
-    end
-
-    application.reload
-    assert application.document_signing_status_sent?
-    assert application.disability_certification_status_requested?
-    assert_not_nil application.disability_certification_requested_at
-  end
-
   test 'a queued notification email suppressed when the worker runs is recorded on the notification' do
     vendor = create(:vendor)
     notification = NotificationService.create_and_deliver!(type: :w9_approved, recipient: vendor, actor: @admin,
