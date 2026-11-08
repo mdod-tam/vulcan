@@ -159,24 +159,29 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   %w[en es].each do |locale|
-    test "#{locale} rejection notices retain attempts and closure without a rejection-based waiting date" do
+    test "#{locale} rejection notices retain the final correction attempt and follow the archived state" do
       use_real_email_templates('application_notifications_proof_rejected', 'application_notifications_max_rejections_reached')
       @user.update!(locale: locale)
       reapply_date = 3.years.from_now.to_date
       future_dates = [I18n.l(reapply_date, format: :long, locale: locale), reapply_date.strftime('%B %d, %Y')].uniq
 
-      [7, 6, 8].each do |rejections|
-        @application.update_column(:total_rejections, rejections)
-        mail = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review).deliver_now
+      secure_upload_url = 'https://example.test/corrected-document'
+      [[ProofReview::MAX_REJECTIONS - 1, 2], [ProofReview::MAX_REJECTIONS, 1], [ProofReview::MAX_REJECTIONS + 1, 0]].each do |rejections, attempts|
+        @application.update!(total_rejections: rejections)
+        @application.transition_status!(:archived, actor: @admin) if attempts.zero?
+        mail = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review, secure_upload_url: secure_upload_url).deliver_now
         body = mail.body.decoded
-        expected = if rejections == 8
-                     I18n.t('application_notifications.proof_rejected.archived_message', locale: locale)
-                   else
-                     I18n.t('application_notifications.proof_rejected.remaining_attempts_message', count: 8 - rejections, locale: locale)
-                   end
+        archived_message = I18n.t('application_notifications.proof_rejected.archived_message', locale: locale)
 
         assert_equal [@user.email], mail.to
-        assert_includes body, expected
+        if attempts.zero?
+          assert_includes body, archived_message
+          assert_not_includes body, secure_upload_url
+        else
+          assert_includes body, I18n.t('application_notifications.proof_rejected.remaining_attempts_message', count: attempts, locale: locale)
+          assert_includes body, secure_upload_url
+          assert_not_includes body, archived_message
+        end
         future_dates.each { |date| assert_not_includes body, date }
         assert_no_match(/%[<{]\w+[>}]s?/, body)
       end
@@ -621,7 +626,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal 'Rechazo en espanol', email.subject
     assert_includes email.body.to_s, I18n.t(
       'application_notifications.proof_rejected.remaining_attempts_message',
-      count: 6,
+      count: ProofReview::MAX_REJECTIONS - application.total_rejections + 1,
       locale: 'es'
     )
     assert_not_includes email.body.to_s, I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')

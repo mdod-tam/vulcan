@@ -67,7 +67,7 @@ module Applications
     end
 
     def identity_facts
-      @identity_facts ||= self.class.detection_facts(applicant_data)
+      @identity_facts ||= DuplicateDetectionService.identity_facts(applicant_data)
     end
 
     def presented_candidates(candidates, selectable_candidates: selectable(candidates))
@@ -77,26 +77,6 @@ module Applications
           city: candidate.city, state: candidate.state, zip_code: candidate.zip_code,
           selectable: selectable_ids.include?(candidate.id) }
       end
-    end
-
-    def self.detection_facts(attrs)
-      data = if attrs.respond_to?(:to_unsafe_h)
-               attrs.to_unsafe_h.with_indifferent_access
-             else
-               attrs.to_h.with_indifferent_access
-             end
-      {
-        email: User.normalize_email(data[:email]),
-        phone: PhoneNumber.normalize(data[:phone]),
-        first_name: data[:first_name],
-        last_name: data[:last_name],
-        date_of_birth: DateInputNormalizer.normalize(data[:date_of_birth]),
-        physical_address_1: data[:physical_address_1],
-        physical_address_2: data[:physical_address_2],
-        city: data[:city],
-        state: data[:state],
-        zip_code: data[:zip_code]
-      }
     end
 
     private

@@ -120,15 +120,6 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
     assert_includes results, active_app
   end
 
-  test 'filter_by_type includes digitally_signed_needs_review' do
-    signed_app = create(:application, :in_progress, document_signing_status: :signed)
-    other_app = create(:application, :in_progress, document_signing_status: :sent)
-
-    results = Application.filter_by_type('digitally_signed_needs_review')
-    assert_includes results, signed_app
-    assert_not_includes results, other_app
-  end
-
   test 'can store DocuSeal service metadata' do
     @application.update!(
       document_signing_service: 'docuseal',

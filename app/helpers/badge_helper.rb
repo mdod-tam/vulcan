@@ -10,7 +10,7 @@
 # carries the state alone: every badge states it in words.
 #
 # Families beyond the application workflow:
-#   invoice              draft and withdrawn are both neutral: neither is waiting on anyone
+#   invoice              withdrawn is neutral because no payment is waiting
 #   voucher              redeemed (fully used) is info; expired is danger; cancelled is neutral because it is closed
 #   voucher_transaction  cancelled is neutral, so it differs from pending (warning) and failed (danger)
 #   delivery             in-flight states (queued, accepted, released, submitted, DocuSeal) are info; delayed is
@@ -38,7 +38,7 @@ module BadgeHelper
     },
     document_signing: { not_sent: :neutral, sent: :warning, opened: :info, signed: :success, declined: :danger },
     invoice: {
-      invoice_draft: :neutral, invoice_pending: :warning, invoice_approved: :info, invoice_paid: :success,
+      invoice_pending: :warning, invoice_approved: :info, invoice_paid: :success,
       invoice_cancelled: :neutral
     },
     voucher: { active: :success, redeemed: :info, expired: :danger, cancelled: :neutral },

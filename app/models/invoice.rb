@@ -16,7 +16,6 @@ class Invoice < ApplicationRecord
   before_validation :calculate_total_amount, on: :create
 
   enum :status, {
-    invoice_draft: 0,        # Initial state when invoice is created
     invoice_pending: 1,      # Ready for review and processing
     invoice_approved: 2,     # Approved for payment
     invoice_paid: 3,         # Payment has been processed
@@ -27,7 +26,6 @@ class Invoice < ApplicationRecord
 
   # Invoices::Workflow is the writer for these transitions; the model refuses any other.
   ALLOWED_TRANSITIONS = {
-    'invoice_draft' => %w[invoice_pending invoice_cancelled],
     'invoice_pending' => %w[invoice_approved invoice_cancelled],
     'invoice_approved' => %w[invoice_paid invoice_cancelled],
     'invoice_paid' => [],
@@ -128,10 +126,8 @@ class Invoice < ApplicationRecord
     end
   end
 
-  # Issued invoices are financial records; only a draft may be deleted.
+  # Invoices are financial records; withdrawing one retains its history.
   def keep_issued_invoices
-    return if status_invoice_draft?
-
     errors.add(:base, 'An issued invoice cannot be deleted')
     throw :abort
   end

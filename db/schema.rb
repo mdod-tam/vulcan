@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_01_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_08_011000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -171,13 +171,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_170000) do
     t.check_constraint "id_proof_status = ANY (ARRAY[0, 1, 2])", name: "id_proof_status_check"
     t.check_constraint "income_proof_status = ANY (ARRAY[0, 1, 2])", name: "income_proof_status_check"
     t.check_constraint "residency_proof_status = ANY (ARRAY[0, 1, 2])", name: "residency_proof_status_check"
-  end
-
-  create_table "applications_products", id: false, force: :cascade do |t|
-    t.bigint "application_id", null: false
-    t.bigint "product_id", null: false
-    t.index ["application_id", "product_id"], name: "index_applications_products_on_application_id_and_product_id"
-    t.index ["product_id", "application_id"], name: "index_applications_products_on_product_id_and_application_id"
   end
 
   create_table "document_scan_provider_budgets", force: :cascade do |t|
@@ -444,6 +437,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_170000) do
     t.string "user_agent"
     t.bigint "user_id", null: false
     t.text "change_values"
+    t.index "action, ((metadata ->> 'operation_id'::text))", name: "index_events_on_legacy_mail_removal_operation", unique: true, where: "(((action)::text = ANY ((ARRAY['email_delivery_legacy_job_removal_requested'::character varying, 'email_delivery_legacy_job_removed'::character varying])::text[])) AND (NULLIF(btrim((metadata ->> 'operation_id'::text)), ''::text) IS NOT NULL))"
+    t.index "action, ((metadata ->> 'request_id'::text))", name: "index_events_on_delivery_outcome_request", unique: true, where: "(((action)::text = ANY ((ARRAY['email_delivery_suppressed'::character varying, 'email_delivery_configuration_error'::character varying, 'email_delivery_enqueue_failed'::character varying, 'essential_communication_submitted'::character varying])::text[])) AND (NULLIF(btrim((metadata ->> 'request_id'::text)), ''::text) IS NOT NULL))"
     t.index ["action", "auditable_type", "auditable_id"], name: "index_events_on_action_and_auditable"
     t.index ["auditable_type", "auditable_id"], name: "index_events_on_auditable"
     t.index ["metadata"], name: "index_events_on_metadata", using: :gin
@@ -503,7 +498,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_170000) do
     t.datetime "payment_recorded_at"
     t.string "payment_reference"
     t.datetime "start_date", null: false
-    t.integer "status", default: 0, null: false
+    t.integer "status", default: 1, null: false
     t.decimal "total_amount", precision: 10, scale: 2, default: "0.0", null: false
     t.datetime "updated_at", null: false
     t.bigint "vendor_id", null: false

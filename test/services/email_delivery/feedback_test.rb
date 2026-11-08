@@ -45,12 +45,20 @@ class EmailDeliveryFeedbackTest < ActiveSupport::TestCase
   end
 
   test 'one provider message can have independent recipient feedback' do
+    @attempt.update!(origin: create(:invoice))
     second = @attempt.dup
     second.assign_attributes(destination: 'second@example.test', recipient_key: EmailDeliveryAttempt.recipient_key('second@example.test'))
     second.save!
     apply('Bounce', 'Email' => 'second@example.test', 'Recipient' => 'second@example.test', 'ID' => 22)
     assert_nil @attempt.reload.bounced_at
     assert second.reload.bounced_at
+    apply('Bounce', 'ID' => 23)
+    assert @attempt.reload.bounced_at
+    events = Event.where(auditable: @attempt.origin, action: 'email_bounced').to_a
+    assert_equal [@attempt.id, second.id].sort, events.map { |event| event.metadata['email_delivery_attempt_id'] }.sort
+    assert_equal 2, events.map { |event| event.metadata['operation_id'] }.uniq.size
+    assert(events.all? { |event| event.metadata['__service_generated'] })
+    assert_equal events.map(&:id).sort, [@attempt.bounce_event_id, second.reload.bounce_event_id].sort
   end
 
   test 'missing actor does not lose feedback or change any users and replay can repair breadcrumb' do
@@ -63,6 +71,23 @@ class EmailDeliveryFeedbackTest < ActiveSupport::TestCase
     PublicAuditActor.unstub(:system_audit_actor)
     apply('Bounce', 'ID' => 42)
     assert @attempt.reload.bounce_event_id
+    assert_equal 1, @attempt.email_delivery_receipts.count
+  end
+
+  test 'a failed bounce audit rolls back the receipt and attempt so a replay can finish' do
+    Event.expects(:create!).once.raises(ActiveRecord::StatementInvalid, 'simulated audit failure')
+
+    assert_no_difference('Event.count') do
+      assert_raises(ActiveRecord::StatementInvalid) { apply('Bounce', 'ID' => 42) }
+    end
+    assert_nil @attempt.reload.bounced_at
+    assert_nil @attempt.bounce_event_id
+    assert_empty @attempt.email_delivery_receipts
+
+    Event.unstub(:create!)
+    apply('Bounce', 'ID' => 42)
+    assert @attempt.reload.bounced_at
+    assert @attempt.bounce_event_id
     assert_equal 1, @attempt.email_delivery_receipts.count
   end
 

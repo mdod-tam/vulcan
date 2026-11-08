@@ -41,6 +41,7 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
 
   test 'the rejection that reaches the limit warns an administrator and keeps the application open' do
     @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1)
+    assert_equal 2, @application.proof_submission_attempts_remaining
 
     assert_difference -> { Event.where(action: 'max_rejections_warning', auditable: @application).count }, 1 do
       assert_difference -> { Notification.where(action: 'max_rejections_warning', notifiable: @application).count }, 1 do
@@ -50,6 +51,7 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
 
     assert_equal ProofReview::MAX_REJECTIONS, @application.reload.total_rejections
     assert_not_predicate @application, :status_archived?
+    assert_equal 1, @application.proof_submission_attempts_remaining
     notification = Notification.find_by!(action: 'max_rejections_warning', notifiable: @application)
     assert_equal @admin.id, notification.recipient_id
     assert_equal @admin.id, notification.actor_id
@@ -71,6 +73,7 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
       @application.reload
       assert_predicate @application, :status_archived?
       assert_equal ProofReview::MAX_REJECTIONS + 1, @application.total_rejections
+      assert_equal 0, @application.proof_submission_attempts_remaining
 
       status_change = @application.status_changes.last
       assert_equal initial_status.to_s, status_change.from_status

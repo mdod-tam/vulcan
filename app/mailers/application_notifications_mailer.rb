@@ -377,7 +377,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   def build_proof_rejected_variables(application, proof_review, secure_upload_url, recipient, template:, locale: nil)
     user                 = application.user
-    remaining_attempts   = 8 - application.total_rejections
+    remaining_attempts   = application.proof_submission_attempts_remaining
+    archived             = application.status_archived?
     proof_type_formatted = format_proof_type(proof_review.proof_type, locale: locale)
     recipient ||= user
 
@@ -406,8 +407,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                            rejection_reason: rejection_reason,
                            secure_upload_url: secure_upload_url,
                            remaining_attempts_message_text: remaining_attempts.positive? ? remaining_attempts_message : '',
-                           default_options_text: remaining_attempts.positive? ? default_options_text : '',
-                           archived_message_text: remaining_attempts.positive? ? '' : archived_message
+                           default_options_text: archived ? '' : default_options_text,
+                           archived_message_text: archived ? archived_message : ''
                          }).compact
   end
 

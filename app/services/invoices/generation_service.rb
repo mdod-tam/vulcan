@@ -3,20 +3,20 @@
 require 'zlib'
 
 module Invoices
-  # Called by GenerateVendorInvoicesJob every 14 days, and by staff ("Invoice now" / retry) for one vendor.
+  # Called by GenerateVendorInvoicesJob's recurring schedule and by staff ("Invoice now" / retry) for one vendor.
   #
-  # Each run uses one cutoff: the start of the run day, Eastern. Every completed, uninvoiced purchase
-  # processed before it and not on a staff billing hold is invoiced, however old, so a missed or failed
-  # run loses nothing. A purchase at exactly midnight belongs to the next run.
+  # Each run uses one cutoff: the start of the run day, Eastern. Completed, uninvoiced purchases
+  # before that cutoff and off billing hold are eligible, however old. Failed vendors stay on the
+  # retry list. A purchase at exactly midnight belongs to the next run.
   #
   # For each vendor, one transaction creates the invoice and claims the purchases with a conditional
   # update (invoice_id IS NULL), so a purchase can be on only one invoice. The invoice period and total
   # come from what was claimed; if nothing was claimed, no invoice is left behind.
   #
-  # Runs never overlap: scheduled runs and staff retries share one session-level advisory lock. A run
+  # Scheduled runs and staff retries share one session-level advisory lock. A run
   # that finds the lock taken reports that invoicing is already running; it is not a failure.
   # A vendor whose invoicing fails is recorded in InvoiceGenerationFailure for staff to retry; a later
-  # success resolves it. Invoice email is queued after commit and never undoes a committed invoice.
+  # success resolves it. Notices are requested after commit; an enqueue failure does not undo the invoice.
   class GenerationService < BaseService
     LOCK_KEY = Zlib.crc32('invoices.generation')
     ZONE = 'Eastern Time (US & Canada)'
@@ -26,7 +26,7 @@ module Invoices
       now.in_time_zone(ZONE).beginning_of_day
     end
 
-    # vendor_ids limits the run to those vendors (staff retry); nil means every vendor with eligible purchases.
+    # vendor_ids limits eligible purchases and unresolved failures to the selected vendors.
     def initialize(vendor_ids: nil, now: Time.current)
       super()
       @vendor_ids = vendor_ids
@@ -74,9 +74,9 @@ module Invoices
       scopes.flat_map { |scope| scope.distinct.pluck(:vendor_id) }.uniq
     end
 
-    # Returns the committed invoice, or nil when nothing was claimed or the vendor failed.
-    # Only creating the invoice can fail the vendor. Once it commits, the notice is always queued, and
-    # clearing the retry entry is best effort: a later run clears an entry left behind.
+    # Returns the committed invoice, or nil when nothing was claimed or creation failed.
+    # Notification and retry-entry resolution follow invoice creation. Their failures do not undo it;
+    # a later run can clear a retry entry left behind.
     def invoice_vendor(vendor_id)
       invoice = create_invoice_with_unique_number(vendor_id)
     rescue StandardError => e
@@ -138,14 +138,16 @@ module Invoices
     def create_invoice_event(invoice, claimed)
       return unless (actor = PublicAuditActor.system_audit_actor_or_report('invoice generated event'))
 
-      invoice.events.create!(
-        user: actor,
+      AuditEventService.log(
+        actor: actor,
+        auditable: invoice,
         action: 'generated',
         metadata: {
           transaction_count: claimed,
           total_amount: invoice.total_amount,
           period: { start: invoice.start_date, end: invoice.end_date },
-          cutoff: cutoff
+          cutoff: cutoff,
+          operation_id: "invoice-#{invoice.id}-generated"
         }
       )
     end
@@ -164,10 +166,12 @@ module Invoices
     def record_notification_enqueue_failure(invoice, error_class)
       return unless (actor = PublicAuditActor.system_audit_actor_or_report('invoice notice enqueue failure'))
 
-      invoice.events.create!(
-        user: actor,
+      AuditEventService.log(
+        actor: actor,
+        auditable: invoice,
         action: 'invoice_notification_enqueue_failed',
-        metadata: { error_class: error_class }
+        metadata: { error_class: error_class, notice_kind: 'invoice_generated',
+                    operation_id: "invoice-#{invoice.id}-generated-notice" }
       )
     rescue StandardError => e
       log_error(e, "Failed to record invoice notice failure for invoice #{invoice.id}")

@@ -43,6 +43,26 @@ class DuplicateDetectionService < BaseService
     end
   end
 
+  def self.identity_facts(attrs)
+    data = if attrs.respond_to?(:to_unsafe_h)
+             attrs.to_unsafe_h.with_indifferent_access
+           else
+             attrs.to_h.with_indifferent_access
+           end
+    {
+      email: User.normalize_email(data[:email]),
+      phone: PhoneNumber.normalize(data[:phone]),
+      first_name: data[:first_name],
+      last_name: data[:last_name],
+      date_of_birth: DateInputNormalizer.normalize(data[:date_of_birth]),
+      physical_address_1: data[:physical_address_1],
+      physical_address_2: data[:physical_address_2],
+      city: data[:city],
+      state: data[:state],
+      zip_code: data[:zip_code]
+    }
+  end
+
   def initialize(context:, attrs:, excluding_user_id: nil)
     super()
     @context = context.to_sym

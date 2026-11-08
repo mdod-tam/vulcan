@@ -2,7 +2,7 @@
 
 module Invoices
   # The one writer for an invoice after it is generated: approval, payment, withdrawal, and
-  # correction notes. Every operation locks the invoice row and decides from what is stored there.
+  # correction notes. Status and payment changes lock the invoice row and decide from stored state.
   #
   # expected_status is what the staff member's form showed. A different stored status means the form
   # was stale or was submitted twice; the operation then changes nothing and says what happened.
@@ -91,7 +91,11 @@ module Invoices
 
     def record_notice_failure(invoice, error_class)
       Rails.logger.error("Payment notice for invoice #{invoice.id} could not be queued: #{error_class}")
-      invoice.events.create!(user: @actor, action: 'invoice_notification_enqueue_failed', metadata: { error_class: error_class })
+      AuditEventService.log(
+        actor: @actor, auditable: invoice, action: 'invoice_notification_enqueue_failed',
+        metadata: { error_class: error_class, notice_kind: 'payment_issued',
+                    operation_id: "invoice-#{invoice.id}-payment-notice" }
+      )
     rescue StandardError => e
       Rails.logger.error("Recording the payment notice failure for invoice #{invoice.id} failed: #{e.class}")
     end

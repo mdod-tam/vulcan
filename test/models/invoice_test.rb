@@ -70,11 +70,20 @@ class InvoiceTest < ActiveSupport::TestCase
     assert_includes @invoice.errors[:payment_reference], 'cannot change after payment is recorded'
   end
 
-  test 'issued invoices cannot be deleted' do
-    @invoice.update!(status: :invoice_pending)
+  test 'an invoice created without a status starts awaiting approval' do
+    invoice = Invoice.create!(vendor: @vendor, start_date: 2.weeks.ago, end_date: Time.current)
 
-    assert_not @invoice.destroy
-    assert Invoice.exists?(@invoice.id)
+    assert_predicate invoice.reload, :status_invoice_pending?
+    assert_equal 1, invoice.status_before_type_cast
+  end
+
+  test 'every invoice state retains its financial record' do
+    Invoice.statuses.each_key do |status|
+      invoice = create(:invoice, vendor: @vendor, status: status, gad_invoice_reference: 'GAD-RETAIN')
+
+      assert_no_difference('Invoice.count') { assert_not invoice.destroy, status }
+      assert Invoice.exists?(invoice.id), status
+    end
   end
 
   test 'a paid invoice created before payment details existed keeps its unknown values' do

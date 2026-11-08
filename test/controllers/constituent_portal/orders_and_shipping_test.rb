@@ -6,7 +6,7 @@ module ConstituentPortal
   # Orders and shipping on the application page and the dashboard. Both list purchases through
   # VoucherTransaction.purchases_visible_to, so only the applicant of an unmanaged application or the
   # application's managing guardian sees them.
-  class OrdersAndShippingTest < ActionDispatch::IntegrationTest
+  class OrdersAndShippingControllerTest < ActionDispatch::IntegrationTest
     setup do
       @vendor = create(:vendor, :approved, business_name: 'Accessible Phones Co')
     end

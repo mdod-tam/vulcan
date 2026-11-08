@@ -9,7 +9,7 @@ module Applications
     setup do
       @admin = create(:admin)
       @other_admin = create(:admin)
-      # The caller's duplicate_detection_attrs canonicalizes these facts. The receipt does not
+      # DuplicateDetectionService.identity_facts canonicalizes these facts. The receipt does not
       # normalize them again, so only one definition of "the same facts" exists.
       @identity = { first_name: 'John', last_name: 'Smith', date_of_birth: Date.new(1990, 4, 2),
                     email: 'john.smith@example.com', phone: '5555550100',
