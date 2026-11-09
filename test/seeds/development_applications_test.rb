@@ -9,6 +9,28 @@ class DevelopmentApplicationsTest < ActiveSupport::TestCase
     @admin = User.find_by_email('admin@example.com')
   end
 
+  test 'demo reseeding removes registration and contact authority before rebuilding users' do
+    user = create(:constituent)
+    session_record = user.sessions.create!(ip_address: '127.0.0.1', user_agent: 'Seed cleanup regression')
+    verification = RegistrationVerification.create!(
+      email: user.email, locale: 'en', expires_at: RegistrationVerification::LIFETIME.from_now,
+      consumed_at: Time.current, created_user: user
+    )
+    change = ContactChangeRequest.create!(
+      user: user, session: session_record, kind: 'email', old_value: user.email,
+      proposed_value: 'seed-cleanup-contact@example.test', security_version: user.security_version,
+      expires_at: ContactChangeRequest::LIFETIME.from_now
+    )
+
+    Rails.application.load_seed
+
+    assert_not ContactChangeRequest.exists?(change.id)
+    assert_not RegistrationVerification.exists?(verification.id)
+    assert_not Session.exists?(session_record.id)
+    assert_not User.exists?(user.id)
+    assert_predicate User.find_by_email('admin@example.com'), :admin?
+  end
+
   test 'development examples do not consume real upload allocation quotas' do
     stub_const(DocumentScans::Stager, :GLOBAL_DAILY_LIMIT, 0) do
       applications = Seeds::DevelopmentApplications.new(admin: @admin).call
