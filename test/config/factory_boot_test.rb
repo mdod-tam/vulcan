@@ -11,6 +11,9 @@ class FactoryBootTest < ActiveSupport::TestCase
     require_relative 'config/environment'
     raise 'General test helpers were loaded' if defined?(DocumentScanHelper)
 
+    vendor_emails = %i[vendor vendor_user].map { |factory| FactoryBot.build(factory).email }
+    raise 'Vendor factories reuse default email addresses' unless vendor_emails.uniq.size == vendor_emails.size
+
     ActiveRecord::Base.transaction(requires_new: true) do
       identity = SecureRandom.uuid
       vendor = FactoryBot.create(:vendor_user, email: "factory-boot-#{identity}@example.test")

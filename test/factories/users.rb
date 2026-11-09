@@ -267,7 +267,7 @@ FactoryBot.define do
   end
 
   factory :vendor_user, parent: :user, class: 'Users::Vendor' do
-    sequence(:email) { |n| "vendor#{n}@example.com" }
+    email { generate(:vendor_email) }
     type { 'Users::Vendor' }
     business_name { "Vendor Business #{rand(1000)}" }
     phone { "555-#{rand(100..999)}-#{rand(1000..9999)}" }

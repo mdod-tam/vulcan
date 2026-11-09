@@ -5,7 +5,7 @@ require_relative '../support/document_scan_fixtures' if Rails.env.test?
 FactoryBot.define do
   factory :vendor, parent: :user, class: 'Users::Vendor' do
     type { 'Users::Vendor' }
-    sequence(:email) { |n| "vendor#{n}@example.com" }
+    email { generate(:vendor_email) }
     sequence(:phone) { |n| "444-#{format('%03d', (n % 900) + 100)}-#{format('%04d', (n % 9000) + 1000)}" }
     first_name { 'Test' }
     last_name { 'Vendor' }

@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 FactoryBot.define do
+  sequence(:vendor_email) { |n| "vendor#{n}@example.com" }
+
   unless FactoryBot.factories.registered?(:email)
     sequence(:email) { |n| "user#{n}@factory.com" } # Use a different domain for factory emails
     sequence(:certifying_professional_name) { |n| "Dr. Jane Smith #{n}" }
