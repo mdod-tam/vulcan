@@ -1,124 +1,97 @@
-<div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="mb-6 flex items-center justify-between">
+<div class="container mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-2xl font-semibold">Security Key Recovery Request</h1>
-    <%= link_to "Back to All Requests", admin_recovery_requests_path, class: "text-primary-600 hover:text-primary-900" %>
+    <%= link_to 'Back to All Requests', admin_recovery_requests_path, class: 'text-primary-600 hover:text-primary-900' %>
   </div>
-  
-  <div class="card overflow-hidden">
-    <div class="px-4 py-5 sm:px-6">
-      <h3 class="text-lg leading-6 font-medium text-gray-900">Request Details</h3>
-      <p class="mt-1 max-w-2xl text-sm text-gray-500">Submitted <%= @recovery_request.created_at.strftime("%B %d, %Y at %I:%M %p") %></p>
-    </div>
-    
-    <div class="border-t border-gray-200">
-      <dl>
-        <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">User</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <%= @recovery_request.user.full_name %>
-          </dd>
-        </div>
-        
-        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Email</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <%= display_contact_email(@recovery_request.user) %>
-          </dd>
-        </div>
-        
-        <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Request Status</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <span class="badge badge-warning"><%= @recovery_request.status.titleize %></span>
-          </dd>
-        </div>
-        
-        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">IP Address</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <%= @recovery_request.ip_address %>
-          </dd>
-        </div>
-        
-        <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">User Agent</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <div class="text-xs font-mono whitespace-pre-wrap">
-              <%= @recovery_request.user_agent %>
-            </div>
-          </dd>
-        </div>
-        
-        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Additional Details</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <% if @recovery_request.details.present? %>
-              <div class="whitespace-pre-wrap">
-                <%= @recovery_request.details %>
-              </div>
-            <% else %>
-              <span class="text-gray-500 italic">No additional details provided.</span>
-            <% end %>
-          </dd>
-        </div>
-      </dl>
-    </div>
-  </div>
-  
-  <div class="card overflow-hidden mt-6">
-    <div class="px-4 py-5 sm:p-6">
-      <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Security Keys</h3>
-      
-      <% if @recovery_request.user.webauthn_credentials.any? %>
-        <p class="mb-4 text-sm text-gray-500">
-          This user currently has <%= pluralize(@recovery_request.user.webauthn_credentials.count, 'security key') %> registered.
-        </p>
-        
-        <ul class="mb-6 space-y-2">
-          <% @recovery_request.user.webauthn_credentials.each do |credential| %>
-            <li class="text-sm text-gray-700 bg-gray-50 p-2 rounded">
-              <strong><%= credential.nickname %></strong> 
-              <span class="text-xs text-gray-500">
-                (ID: <%= credential.external_id.truncate(16) %>... | Added on <%= credential.created_at.strftime("%B %d, %Y") %>)
-              </span>
-            </li>
-          <% end %>
-        </ul>
-      <% else %>
-        <p class="mb-4 text-sm text-gray-500">
-          This user currently has no security keys registered.
-        </p>
+
+  <section class="card overflow-hidden p-6" aria-labelledby="recovery-details-heading">
+    <h2 id="recovery-details-heading" class="text-lg font-medium">Request details</h2>
+    <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+      <div><dt class="font-medium">User</dt><dd><%= @recovery_request.user.full_name %></dd></div>
+      <div><dt class="font-medium">Email</dt><dd class="break-words"><%= display_contact_email(@recovery_request.user) %></dd></div>
+      <div><dt class="font-medium">Status</dt><dd><%= @recovery_request.status.titleize %></dd></div>
+      <div><dt class="font-medium">Submitted</dt><dd><%= l(@recovery_request.created_at, format: :long) %></dd></div>
+      <div><dt class="font-medium">IP address</dt><dd><%= @recovery_request.ip_address %></dd></div>
+      <div><dt class="font-medium">User agent</dt><dd class="break-words text-sm"><%= @recovery_request.user_agent %></dd></div>
+      <div class="sm:col-span-2">
+        <dt class="font-medium">Submitted details</dt>
+        <dd class="whitespace-pre-wrap"><%= @recovery_request.details.presence || 'No additional details provided.' %></dd>
+      </div>
+    </dl>
+    <p class="mt-4 text-sm text-gray-600">The public request and its details do not prove the requester's identity.</p>
+  </section>
+
+  <section class="card mt-6 p-6" aria-labelledby="recovery-keys-heading">
+    <h2 id="recovery-keys-heading" class="text-lg font-medium">Security Keys</h2>
+    <p class="mt-2"><%= pluralize(@credentials.size, 'registered security key') %>.</p>
+    <ul class="mt-3 space-y-2">
+      <% @credentials.each do |credential| %>
+        <li class="rounded bg-gray-50 p-2 text-sm"><%= credential.nickname %> — added <%= l(credential.created_at.to_date) %></li>
       <% end %>
-      
-      <div class="mt-5">
-        <h4 class="text-base font-medium text-gray-900 mb-2">Take Action</h4>
-        <% if @recovery_request.status == 'pending' %>
-          <div class="bg-warning-50 border-l-4 border-warning-400 p-4 mb-4">
-            <div class="flex">
-              <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-warning-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <div class="ml-3">
-                <p class="text-sm text-warning-700">
-                  Approving this request will delete all of the user's security keys. They will then need to register new ones.
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <%= button_to "Approve Security Key Reset", 
-                      approve_admin_recovery_request_path(@recovery_request), 
-                      method: :post,
-                      class: "btn btn-success",
-                      data: { turbo_confirm: "This action cannot be undone. The user will need to register new security keys. Continue?" } %>
-        <% else %>
-          <div class="text-sm text-gray-500">
-            This request has already been processed.
+    </ul>
+  </section>
+
+  <% if @recovery_request.pending? %>
+    <section class="card mt-6 p-6" aria-labelledby="recovery-approval-heading">
+      <h2 id="recovery-approval-heading" class="text-lg font-medium">Verify identity before approval</h2>
+      <p class="mt-3 rounded border-l-4 border-warning-400 bg-warning-50 p-4 text-warning-900">
+        Approval removes all WebAuthn security keys, signs this user out of every session, and cancels pending contact changes.
+        Authenticator-app and SMS factors remain enrolled. Reports of a stolen phone or broader compromise need the broader account-security process.
+      </p>
+      <% if current_user.id == @recovery_request.user_id %>
+        <p class="mt-4" role="status">A different administrator must approve your recovery request. Contact the security owner to arrange another administrator if none is available.</p>
+      <% elsif !@recent_authentication %>
+        <p class="mt-4">Verify your password and existing factor before completing the identity-check form.</p>
+        <%= link_to 'Verify my identity', new_reauthentication_path(return_to: admin_recovery_request_path(@recovery_request)), class: 'btn btn-primary mt-4' %>
+      <% else %>
+        <% if @recovery_request.errors.any? %>
+          <div class="mt-4 rounded border border-danger-300 bg-danger-50 p-4" role="alert" tabindex="-1">
+            <h3 class="font-medium">Complete the verification record</h3>
+            <ul class="mt-2 list-disc pl-5"><% @recovery_request.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
           </div>
         <% end %>
-      </div>
-    </div>
-  </div>
+        <p id="recovery-verification-guidance" class="mt-4 text-sm text-gray-600">Complete the agency-approved non-SMS identity-check procedure first. Record only its nonsecret case or procedure reference; do not enter identity-document details, passwords, codes, or contact values.</p>
+        <%= form_with model: @recovery_request, url: approve_admin_recovery_request_path(@recovery_request), method: :post, class: 'mt-5 space-y-4' do |form| %>
+          <div>
+            <%= form.label :verification_method, 'Verification method', class: 'block font-medium' %>
+            <%= form.select :verification_method, RecoveryRequest::VERIFICATION_METHODS.map { |value, label| [label, value] }, { prompt: 'Choose the completed method' }, { required: true, class: 'form-select mt-1 w-full', aria: { describedby: 'recovery-verification-guidance' } } %>
+          </div>
+          <div>
+            <%= form.label :verification_result, 'Verification result', class: 'block font-medium' %>
+            <%= form.select :verification_result, [['Identity verified', 'verified']], { prompt: 'Choose the result' },
+                            { required: true, class: 'form-select mt-1 w-full' } %>
+          </div>
+          <div>
+            <%= form.label :verification_reference, 'Nonsecret case or procedure reference', class: 'block font-medium' %>
+            <%= form.text_field :verification_reference, required: true, maxlength: RecoveryRequest::VERIFICATION_REFERENCE_LIMIT, class: 'form-input mt-1 w-full', aria: { describedby: 'recovery-verification-guidance' } %>
+          </div>
+          <div class="flex items-start gap-2">
+            <%= form.check_box :identity_check_completed, required: true, class: 'mt-1' %>
+            <%= form.label :identity_check_completed, 'I completed the approved non-SMS identity check and verified that this request belongs to this account owner.' %>
+          </div>
+          <%= form.submit 'Approve Security Key Reset', class: 'btn btn-success',
+                                                        data: { turbo_confirm: 'Remove WebAuthn keys, revoke all sessions, and cancel pending contact changes?' } %>
+        <% end %>
+      <% end %>
+    </section>
+  <% else %>
+    <section class="card mt-6 p-6" aria-labelledby="recovery-outcome-heading">
+      <h2 id="recovery-outcome-heading" class="text-lg font-medium">Recovery outcome</h2>
+      <p class="mt-3">This request has already been processed.</p>
+      <% if @recovery_request.approved? %>
+        <p class="mt-3">
+          Verification: <%= RecoveryRequest::VERIFICATION_METHODS[@recovery_request.verification_method] || 'Historical verification record' %>.
+          Reference: <%= @recovery_request.verification_reference.presence || 'Not recorded' %>.
+        </p>
+        <% if @approval_notification %>
+          <p class="mt-3" role="status">Notice status: <%= @approval_notification.delivery_status.presence || 'Awaiting dispatch' %>. Recovery remains approved if delivery fails.</p>
+          <% unless @approval_notification.delivery_status.in?(%w[submitted delivered opened]) %>
+            <%= button_to 'Retry recovery notice', retry_notice_admin_recovery_request_path(@recovery_request), method: :post, class: 'btn btn-secondary mt-4' %>
+          <% end %>
+        <% else %>
+          <p class="mt-3">No durable recovery notice is recorded. Review this historical approval before taking further action.</p>
+        <% end %>
+      <% end %>
+    </section>
+  <% end %>
 </div>

@@ -5,7 +5,7 @@ require 'application_system_test_case'
 module Accessibility
   class PasswordVisibilityAccessibilityTest < ApplicationSystemTestCase
     test 'password toggle updates its label and aria-pressed state' do
-      visit sign_up_path
+      visit registration_completion_path
 
       wait_for_stimulus_controller('visibility')
 
@@ -31,7 +31,7 @@ module Accessibility
     end
 
     test 'password fields have IDs and reference visibility status in separate containers' do
-      visit sign_up_path
+      visit registration_completion_path
 
       wait_for_stimulus_controller('visibility')
 
@@ -52,8 +52,8 @@ module Accessibility
       assert_equal 2, container_count, 'Should have 2 containers with visibility controllers'
     end
 
-    test 'password toggle buttons have SVG icons and the first has hover and focus classes' do
-      visit sign_up_path
+    test 'password toggle buttons have SVG icons and a visible keyboard focus outline' do
+      visit registration_completion_path
 
       wait_for_stimulus_controller('visibility')
 
@@ -63,13 +63,19 @@ module Accessibility
       assert second_button_has_svg, 'Second password toggle button should have SVG icon'
 
       first_button_has_hover = page.evaluate_script("document.querySelectorAll(\"button[aria-label='Show password']\")[0].className.includes('hover:')")
-      first_button_has_focus = page.evaluate_script("document.querySelectorAll(\"button[aria-label='Show password']\")[0].className.includes('focus:')")
       assert first_button_has_hover, 'First button should have hover styling classes'
-      assert first_button_has_focus, 'First button should have focus styling classes'
+
+      find_by_id('user_password').send_keys(:tab)
+      assert_selector "button[aria-label='Show password']:focus-visible"
+      outline_style = page.evaluate_script('getComputedStyle(document.activeElement).outlineStyle')
+      outline_width = page.evaluate_script('parseFloat(getComputedStyle(document.activeElement).outlineWidth)')
+      assert_not_equal 'none', outline_style, 'Keyboard focus should have a visible outline'
+      assert_operator outline_width, :>=, 2, 'Keyboard focus outline should be at least two CSS pixels'
+      take_screenshot('password-toggle-keyboard-focus')
     end
 
     test 'password toggle buttons measure at least 24 by 24 CSS pixels' do
-      visit sign_up_path
+      visit registration_completion_path
 
       wait_for_stimulus_controller('visibility')
 
@@ -85,7 +91,7 @@ module Accessibility
     end
 
     test 'password toggle buttons accept DOM focus and expose click methods' do
-      visit sign_up_path
+      visit registration_completion_path
 
       wait_for_stimulus_controller('visibility')
 
@@ -103,18 +109,25 @@ module Accessibility
       assert second_button_clickable, 'Second button should expose a click method'
     end
 
-    test 'DOM activation applies eye-open and removes eye-closed' do
-      visit sign_up_path
+    test 'keyboard activation reveals and conceals the password with accessible state' do
+      visit registration_completion_path
 
       wait_for_stimulus_controller('visibility')
 
-      page.execute_script("document.querySelector(\"button[aria-label='Show password']\").click()")
+      find_by_id('user_password').send_keys(:tab)
+      assert_selector 'button[aria-label="Show password"]:focus'
+      # Cuprite node send_keys clicks first; use the existing keyboard focus.
+      page.driver.browser.keyboard.type(:enter)
 
-      post_click_has_eye_open = page.evaluate_script("document.querySelector(\"button[aria-label='Hide password']\").classList.contains('eye-open')")
-      post_click_has_eye_closed = page.evaluate_script("document.querySelector(\"button[aria-label='Hide password']\").classList.contains('eye-closed')")
+      assert_selector "input#user_password[type='text']"
+      assert_selector "button[aria-label='Hide password'][aria-pressed='true']:focus svg[aria-hidden='true']"
+      assert_equal 'Password is visible', find_by_id('password-visibility-status-user_password', visible: :all).text(:all)
 
-      assert post_click_has_eye_open, "Button should have 'eye-open' class when password is visible"
-      assert_not post_click_has_eye_closed, "Button should not have 'eye-closed' class when password is visible"
+      page.driver.browser.keyboard.type(:space)
+
+      assert_selector "input#user_password[type='password']"
+      assert_selector "button[aria-label='Show password'][aria-pressed='false']:focus svg[aria-hidden='true']"
+      assert_equal 'Password is hidden', find_by_id('password-visibility-status-user_password', visible: :all).text(:all)
     end
   end
 end

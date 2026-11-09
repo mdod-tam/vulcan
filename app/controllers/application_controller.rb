@@ -146,7 +146,9 @@ class ApplicationController < ActionController::Base
 
       session_record = locked_user.sessions.new(
         user_agent: request.user_agent,
-        ip_address: request.remote_ip
+        ip_address: request.remote_ip,
+        reauthenticated_at: Time.current,
+        reauthenticated_security_version: locked_user.security_version
       )
       unless session_record.save
         session_record = nil
@@ -172,8 +174,10 @@ class ApplicationController < ActionController::Base
       return false unless locked_user.authenticate(submitted_password)
     end
 
-    two_factor_sign_in_token.blank? ||
-      User.find_by_token_for(:two_factor_sign_in, two_factor_sign_in_token) == locked_user
+    return !locked_user.second_factor_enabled? if submitted_login_identifier.present? && two_factor_sign_in_token.blank?
+    return false if two_factor_sign_in_token.blank?
+
+    User.find_by_token_for(:two_factor_sign_in, two_factor_sign_in_token) == locked_user && locked_user.second_factor_enabled?
   end
 
   def _session_cookie_options(token)

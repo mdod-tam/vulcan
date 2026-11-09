@@ -25,12 +25,12 @@ class EmailDeliveryAuditActorTest < ActionDispatch::IntegrationTest
   end
 
   test 'a public password reset while email is off does not promote a constituent at the system address' do
-    post sign_up_path, params: { user: {
-      email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
-      first_name: 'Synthetic', last_name: "Person#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
-      phone: nil, phone_type: 'contact_email', timezone: 'Eastern Time (US & Canada)', locale: 'en',
-      hearing_disability: true
-    } }
+    submit_verified_registration({
+                                   email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
+                                   first_name: 'Synthetic', last_name: "Person#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
+                                   phone: nil, phone_type: 'contact_email', timezone: 'Eastern Time (US & Canada)', locale: 'en',
+                                   hearing_disability: true
+                                 })
     constituent = User.find_by_email(PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     assert_equal 'Users::Constituent', constituent.type
     reset!
@@ -45,12 +45,12 @@ class EmailDeliveryAuditActorTest < ActionDispatch::IntegrationTest
   end
 
   test 'the recurring invoice job does not promote a constituent at the system address' do
-    post sign_up_path, params: { user: {
-      email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
-      first_name: 'Synthetic', last_name: "Person#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
-      phone: nil, phone_type: 'contact_email', timezone: 'Eastern Time (US & Canada)', locale: 'en',
-      hearing_disability: true
-    } }
+    submit_verified_registration({
+                                   email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
+                                   first_name: 'Synthetic', last_name: "Person#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
+                                   phone: nil, phone_type: 'contact_email', timezone: 'Eastern Time (US & Canada)', locale: 'en',
+                                   hearing_disability: true
+                                 })
     constituent = User.find_by_email(PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     vendor = create(:vendor)
     create(:voucher_transaction, vendor: vendor, amount: 75, processed_at: 1.day.ago)
@@ -65,12 +65,12 @@ class EmailDeliveryAuditActorTest < ActionDispatch::IntegrationTest
 
   test 'scheduled voucher expiry cannot promote a public constituent at the system address' do
     FeatureFlag.enable!(:vouchers_enabled)
-    post sign_up_path, params: { user: {
-      email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
-      first_name: 'Synthetic', last_name: "Expiry#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
-      phone: nil, phone_type: 'contact_email', timezone: 'Eastern Time (US & Canada)', locale: 'en',
-      hearing_disability: true
-    } }
+    submit_verified_registration({
+                                   email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
+                                   first_name: 'Synthetic', last_name: "Expiry#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
+                                   phone: nil, phone_type: 'contact_email', timezone: 'Eastern Time (US & Canada)', locale: 'en',
+                                   hearing_disability: true
+                                 })
     constituent = User.find_by!(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     assert_equal 'Users::Constituent', constituent.type
     reset!

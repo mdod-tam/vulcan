@@ -1,0 +1,45 @@
+<section class="max-w-lg mx-auto px-4 py-8" aria-labelledby="reauthentication-title">
+  <h1 id="reauthentication-title" class="text-2xl font-bold mb-4"><%= t('reauthentication.title') %></h1>
+  <p class="mb-6"><%= t('reauthentication.explanation') %></p>
+
+  <%= form_with url: reauthentication_path, method: :post, local: true,
+                class: 'space-y-5', data: { controller: 'reauthentication', action: 'submit->reauthentication#submit',
+                                            reauthentication_options_url_value: webauthn_options_reauthentication_path,
+                                            reauthentication_sms_url_value: sms_code_reauthentication_path,
+                                            reauthentication_preparing_value: t('security_key_verification.feedback.preparing'),
+                                            reauthentication_sending_value: t('two_factor_verification.sms.sending'),
+                                            reauthentication_error_value: t('reauthentication.invalid') } do |form| %>
+    <%= hidden_field_tag :return_to, @return_to %>
+    <%= hidden_field_tag :credential, nil, data: { reauthentication_target: 'credential' } %>
+    <div>
+      <%= form.label :password, t('reauthentication.password'), class: 'block font-medium mb-1' %>
+      <%= form.password_field :password, autocomplete: 'current-password', required: true,
+                                         class: 'w-full rounded border-gray-300', data: { reauthentication_target: 'password' } %>
+    </div>
+
+    <% if @totp_available || @webauthn_available || @sms_credentials.any? %>
+      <div>
+        <%= form.label :factor_type, t('reauthentication.factor'), class: 'block font-medium mb-1' %>
+        <%= form.select :factor_type, @factor_choices,
+                        { selected: @factor_type },
+                        { class: 'w-full rounded border-gray-300', data: { reauthentication_target: 'factor', action: 'change->reauthentication#changeMethod' } } %>
+      </div>
+      <div data-reauthentication-target="smsFields" <%= 'hidden' unless @factor_type == 'sms' %>>
+        <%= form.label :credential_id, t('reauthentication.sms_number'), class: 'block font-medium mb-1' %>
+        <%= form.select :credential_id, @sms_credentials.map { |credential| ["•••• #{credential.phone_number.last(4)}", credential.id] },
+                        { selected: params[:credential_id] }, class: 'w-full rounded border-gray-300', data: { action: 'change->reauthentication#clearProof' } %>
+        <button type="button" class="btn btn-secondary mt-3" data-action="reauthentication#sendSms"><%= t('reauthentication.send_sms') %></button>
+      </div>
+      <div data-reauthentication-target="codeFields" <%= 'hidden' if @factor_type == 'webauthn' %>>
+        <%= form.label :code, t('reauthentication.code'), class: 'block font-medium mb-1' %>
+        <%= form.text_field :code, autocomplete: 'one-time-code', inputmode: 'numeric', pattern: '[0-9]{6}', maxlength: 6,
+                                   class: 'w-full rounded border-gray-300', data: { reauthentication_target: 'code' } %>
+      </div>
+    <% else %>
+      <%= hidden_field_tag :factor_type, 'password' %>
+    <% end %>
+    <p data-reauthentication-target="feedback" role="status" aria-live="polite" tabindex="-1" class="text-sm"></p>
+    <%= form.submit t('reauthentication.submit'), class: 'btn btn-primary', data: { reauthentication_target: 'submit' } %>
+    <%= link_to t('reauthentication.cancel'), edit_profile_path, class: 'ml-4 underline' %>
+  <% end %>
+</section>

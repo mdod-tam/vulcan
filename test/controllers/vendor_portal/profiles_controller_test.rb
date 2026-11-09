@@ -127,7 +127,7 @@ module VendorPortal
         business_name: 'Updated vendor', business_tax_id: '123456789',
         website_url: 'ftp://example.com', physical_address_1: '42 New Street',
         physical_address_2: 'Suite 3', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        phone: '4105551234', email: @vendor_user.email, terms_accepted: '1'
+        terms_accepted: '1'
       }
       original_name = @vendor_user.business_name
       headers = { 'Accept' => 'text/vnd.turbo-stream.html, text/html' }
@@ -138,7 +138,7 @@ module VendorPortal
       assert_equal 'text/html', response.media_type
       assert_select 'li', text: /Website url must be a valid URL/
       assert_select 'input[type="checkbox"][name="users_vendor[terms_accepted]"][checked]'
-      attributes.except(:terms_accepted, :business_tax_id).merge(phone: '410-555-1234').each do |field, value|
+      attributes.except(:terms_accepted, :business_tax_id).each do |field, value|
         assert_select "input[name='users_vendor[#{field}]'][value=?]", value
       end
       assert_select 'input[name="users_vendor[business_tax_id]"][value=""]'

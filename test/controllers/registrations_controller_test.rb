@@ -6,1001 +6,188 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   setup do
-    ActionMailer::Base.deliveries.clear
-
-    admin = User.find_by(email: 'david.bahar@maryland.gov') || create(:admin, email: 'david.bahar@maryland.gov')
-    User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) || create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
-    template = EmailTemplate.find_or_initialize_by(
-      name: 'application_notifications_registration_confirmation',
-      format: :text,
-      locale: 'en'
-    )
-
-    template.assign_attributes(
-      subject: 'Welcome to the Maryland Accessible Telecommunications Program',
-      body: 'This is a test text body for registration confirmation. ' \
-            '%<user_first_name>s, %<user_full_name>s, %<dashboard_url>s, ' \
-            '%<new_application_url>s, %<header_text>s, %<footer_text>s, ' \
-            '%<active_vendors_text_list>s',
-      description: 'Sent to a user upon successful account registration confirmation.',
-      variables: {
-        'required' => %w[user_first_name user_full_name],
-        'optional' => %w[dashboard_url new_application_url header_text footer_text active_vendors_text_list]
-      },
-      updated_by: admin,
-      enabled: true
-    )
-    template.save!
+    load_seeded_email_templates('registration_email_verification')
+    clear_enqueued_jobs
   end
 
-  teardown do
-    ActionMailer::Base.deliveries.clear
-  end
-
-  test 'registration preserves a signed-in administrator as the creation actor' do
-    actor = create(:admin)
-    sign_in_for_integration_test(actor)
-    email = "actor-registration-#{SecureRandom.hex(4)}@example.com"
-
-    post sign_up_path, params: { user: {
-      email: email, password: 'password1234', password_confirmation: 'password1234',
-      first_name: 'New', last_name: 'Registrant', date_of_birth: '1990-01-01',
-      phone: nil, phone_type: 'contact_email', hearing_disability: true
-    } }
-
-    assert_redirected_to welcome_path
-    user = User.find_by!(email: email)
-    assert_equal actor, Event.find_by!(auditable: user, action: 'profile_updated_by_admin').user
-  end
-
-  def test_should_get_new
+  test 'initiation asks for email without accepting a password or phone' do
     get sign_up_path
+
     assert_response :success
-    assert_select '#phone-hint', text: I18n.t('portal_self_service.registrations.phone_hint')
-    assert_no_match(/You can use this number to sign in/i, response.body)
+    assert_select 'input[name="user[email]"][type=email]'
+    assert_select 'input[type=password]', count: 0
+    assert_select 'input[name="user[phone]"]', count: 0
+    assert_equal 'no-store', response.headers['Cache-Control']
   end
 
-  def test_should_create_constituent_with_required_fields
-    assert_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: 'newuser@example.com',
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: '555-555-5555',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true,
-        vision_disability: false,
-        speech_disability: false,
-        mobility_disability: false,
-        cognition_disability: false
-      } }
-    end
-
-    assert_redirected_to welcome_path
-    assert_equal 'Account created successfully. Welcome!', flash[:notice]
-
-    user = User.last
-    assert_equal 'Users::Constituent', user.type
-    assert user.hearing_disability
-    assert_not user.vision_disability
-    assert_equal 'newuser@example.com', user.email
-  end
-
-  def test_should_create_constituent_with_mm_dd_yyyy_date_of_birth
-    assert_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: 'newuser-mm-dd-yyyy@example.com',
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '01/15/1990',
-        phone: '555-555-5565',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_redirected_to welcome_path
-    assert_equal Date.new(1990, 1, 15), User.find_by!(email: 'newuser-mm-dd-yyyy@example.com').date_of_birth
-  end
-
-  def test_successful_registration_notice_follows_the_submitted_locale
-    post sign_up_path, params: { user: {
-      email: 'spanish-welcome@example.com',
-      password: 'password1234',
-      password_confirmation: 'password1234',
-      first_name: 'Nueva',
-      last_name: 'Persona',
-      date_of_birth: '1990-01-01',
-      timezone: 'Eastern Time (US & Canada)',
-      locale: 'es'
-    } }
-
-    assert_redirected_to welcome_path
-    assert_equal I18n.t('portal_self_service.registrations.account_created', locale: :es), flash[:notice]
-  end
-
-  def test_session_creation_failure_preserves_spanish_registration_locale
-    RegistrationsController.any_instance.stubs(:_create_and_set_session_cookie).returns(nil)
-
-    assert_difference('User.count') do
-      assert_no_difference('Session.count') do
-        post sign_up_path, params: { user: {
-          email: 'spanish-session-failure@example.com',
-          password: 'password1234',
-          password_confirmation: 'password1234',
-          first_name: 'Nueva',
-          last_name: 'Persona',
-          date_of_birth: '1990-01-01',
-          timezone: 'Eastern Time (US & Canada)',
-          locale: 'es'
-        } }
-      end
-    end
-
-    assert_redirected_to sign_in_path(locale: :es)
-    assert_equal 'No se pudo iniciar la sesión.', flash[:alert]
-    follow_redirect!
-    assert_select '[data-testid="flash-alert"]', text: 'No se pudo iniciar la sesión.', count: 1
-    assert_select '#signin-heading', text: 'Iniciar sesión'
-  end
-
-  def test_should_reject_malformed_text_date_of_birth
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: 'newuser-bad-dob@example.com',
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: 'January 15 1990',
-        phone: '555-555-5566',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:date_of_birth], 'is not a valid date. Enter it as MM/DD/YYYY'
-    assert_nil assigns(:user).read_attribute(:date_of_birth)
-    # Shown back as typed for correction, not blanked or reinterpreted.
-    assert_select 'input[name="user[date_of_birth]"][value="January 15 1990"]'
-  end
-
-  def test_should_create_constituent_without_disabilities
-    assert_difference('User.count', 1) do
-      post sign_up_path, params: { user: {
-        email: 'nodisability@example.com',
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: '555-555-5555',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: false,
-        vision_disability: false,
-        speech_disability: false,
-        mobility_disability: false,
-        cognition_disability: false
-      } }
-    end
-
-    assert_redirected_to welcome_path
-    assert_equal 'Account created successfully. Welcome!', flash[:notice]
-
-    user = User.find_by(email: 'nodisability@example.com')
-    assert_not_nil user
-    assert_not user.disability_selected?, 'User should not have any disability flags set at registration'
-  end
-
-  def test_should_not_create_phone_only_user_without_email
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'Phone',
-        last_name: 'Only',
-        date_of_birth: '1990-01-01',
-        phone: '555-555-5555',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:email], "can't be blank"
-  end
-
-  def test_should_not_create_user_with_invalid_phone
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: 'newuser@example.com',
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: 'invalid-phone',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:phone], 'must be a valid 10-digit US phone number'
-  end
-
-  def test_existing_email_redirects_to_sign_in_without_creating_account
-    existing_user = create(:constituent)
-
-    assert_no_difference(['User.count', 'Session.count', 'DuplicateReviewCase.count',
-                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
-      post sign_up_path, params: { user: {
-        email: existing_user.email,
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_redirected_to sign_in_path(locale: 'en')
-    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
-    assert_no_match(existing_user.email, flash[:notice])
-    assert_no_match(existing_user.email, response.location)
-
-    follow_redirect!
-    assert_response :success
-    assert_select '[data-testid=?]', 'flash-notice',
-                  text: I18n.t('portal_self_service.registrations.existing_email_account')
-    assert_select '#contact-input[value=?]', existing_user.email, count: 0
-  end
-
-  def test_existing_email_redirect_normalizes_uppercase_and_whitespace
-    existing_user = create(:constituent, email: "duplicate-case-#{SecureRandom.hex(4)}@example.com")
-
-    assert_no_difference(['User.count', 'Session.count']) do
-      post sign_up_path, params: { user: {
-        email: "  #{existing_user.email.upcase}  ",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_redirected_to sign_in_path(locale: 'en')
-    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
-  end
-
-  def test_should_not_create_user_with_existing_phone
-    test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
-    create(:constituent,
-           email: "phone-test-#{SecureRandom.hex(4)}@example.com",
-           phone: test_phone,
-           phone_type: 'text')
-
-    assert_no_difference(['User.count', 'DuplicateReviewCase.count',
-                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
-      post sign_up_path, params: { user: {
-        email: "unique-email-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: test_phone,
-        phone_type: 'text',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_nil assigns(:account_access_user)
-    assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a', text: '410-767-6960'
-    assert_select 'a', text: '443-453-5970 (VP)'
-    assert_no_sign_in_cta
-    assert_select 'form[action=?]', password_path, count: 0
-    assert_select 'input[name=?]', 'contact', count: 0
-    assert_select 'input[value=?]', 'Send account access link', count: 0
-    assert_no_match(/that email|that phone/i, response.body)
-  end
-
-  def test_should_create_constituent_with_email_only_without_phone
-    assert_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: "email-only-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'Email',
-        last_name: 'Only',
-        date_of_birth: '1990-01-01',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_redirected_to welcome_path
-    user = User.last
-    assert_nil user.phone
-    assert user.real_email?
-  end
-
-  def test_should_not_create_address_only_registration
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'Address',
-        last_name: 'Only',
-        date_of_birth: '1990-01-01',
-        communication_preference: 'letter',
-        physical_address_1: '123 Main St',
-        city: 'Baltimore',
-        state: 'MD',
-        zip_code: '21201',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:base].join, 'A portal account requires an email address'
-    assert_includes assigns(:user).errors[:base].join, '410-767-6960'
-    assert_includes assigns(:user).errors[:base].join, '443-453-5970 (VP)'
-  end
-
-  def test_should_not_create_address_and_phone_without_email_registration
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'Address',
-        last_name: 'AndPhone',
-        date_of_birth: '1990-01-01',
-        phone: '555-555-5599',
-        phone_type: 'voice',
-        communication_preference: 'letter',
-        physical_address_1: '123 Main St',
-        city: 'Baltimore',
-        state: 'MD',
-        zip_code: '21201',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:base].join, 'A portal account requires an email address'
-    assert_includes assigns(:user).errors[:base].join, '410-767-6960'
-    assert_includes assigns(:user).errors[:base].join, '443-453-5970 (VP)'
-    assert_includes assigns(:user).errors[:email], "can't be blank"
-  end
-
-  def test_phone_only_paper_record_renders_neutral_support_without_creating_portal_account
-    phone = '410-555-0199'
-    Current.paper_context = true
-    begin
-      Users::Constituent.create!(
-        first_name: 'Paper', last_name: 'PhoneOnly',
-        phone: phone,
-        phone_type: 'text',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
-
-    submitted_email = "new-signup-#{SecureRandom.hex(4)}@example.com"
-
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: submitted_email,
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'Registrant',
-        date_of_birth: '1990-01-01',
-        phone: phone,
-        phone_type: 'text',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_nil assigns(:account_access_user)
-    assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a', text: '410-767-6960'
-    assert_select 'a', text: '443-453-5970 (VP)'
-    assert_no_sign_in_cta
-    assert_select 'form[action=?]', password_path, count: 0
-    assert_select 'input[name=?]', 'contact', count: 0
-    assert_select 'input[value=?]', 'Send account access link', count: 0
-    assert_no_match(/phone-only|paper record|has already been taken|that phone/i, response.body)
-    assert_nil User.find_by_email(submitted_email)
-  end
-
-  def test_phone_only_paper_record_gets_support_without_account_access_handoff
-    phone = '410-555-0196'
-    Current.paper_context = true
-    begin
-      Users::Constituent.create!(
-        first_name: 'Paper', last_name: 'PhoneOnlyNoHandoff',
-        phone: phone,
-        phone_type: 'text',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
-
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: "new-no-handoff-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'Registrant',
-        date_of_birth: '1990-01-01',
-        phone: phone,
-        phone_type: 'text',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_nil assigns(:account_access_user)
-    assert_select 'h2', /We couldn't complete your registration/
-    assert_select 'a', text: '410-767-6960'
-    assert_select 'a', text: '443-453-5970 (VP)'
-    assert_no_sign_in_cta
-    assert_select 'form[action=?]', password_path, count: 0
-    assert_select 'input[name=?]', 'contact', count: 0
-  end
-
-  def test_synthetic_email_duplicate_renders_support_copy_without_uniqueness_error
-    synthetic_email = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
-    Current.paper_context = true
-    begin
-      Users::Constituent.create!(
-        first_name: 'Synthetic', last_name: 'Email',
-        email: synthetic_email,
-        dependent_email: 'dependent-contact@example.com',
-        phone: '410-555-0133',
-        phone_type: 'text',
-        communication_preference: :email,
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
-
-    assert_no_difference(['User.count', 'DuplicateReviewCase.count',
-                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
-      post sign_up_path, params: { user: {
-        email: synthetic_email,
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'Registrant',
-        date_of_birth: '1990-01-01',
-        phone: '410-555-0191',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_select 'h2', /We couldn't complete your registration/
-    assert_no_match(/has already been taken/i, response.body)
-  end
-
-  def test_re_render_preserves_submitted_phone_type_selection
-    post sign_up_path, params: { user: {
-      email: "phone-type-rerender-#{SecureRandom.hex(4)}@example.com",
-      password: 'password1234',
-      password_confirmation: 'wrong-password',
-      first_name: 'Phone',
-      last_name: 'Type',
-      date_of_birth: '1990-01-01',
-      phone: '555-555-7777',
-      phone_type: 'text',
-      timezone: 'Eastern Time (US & Canada)',
-      locale: 'en',
-      hearing_disability: true
-    } }
-
-    assert_response :unprocessable_content
-    assert_select 'input#phone_type_text[checked=checked]'
-    assert_select 'input#phone_type_voice[checked=checked]', count: 0
-  end
-
-  def test_requires_explicit_phone_type_when_phone_is_present
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: "missing-phone-type-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'Phone',
-        last_name: 'Type',
-        date_of_birth: '1990-01-01',
-        phone: '555-555-7788',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:phone_type],
-                    I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
-    assert_nil assigns(:user).phone_type
-    assert_select 'input#phone_type_voice[checked=checked]', count: 0
-  end
-
-  def test_rejects_blank_phone_type_when_phone_is_present
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: "blank-phone-type-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'Phone',
-        last_name: 'Type',
-        date_of_birth: '1990-01-01',
-        phone: '555-555-7789',
-        phone_type: '',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:phone_type],
-                    I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
-    assert_nil assigns(:user).phone_type
-    assert_select 'input#phone_type_voice[checked=checked]', count: 0
-  end
-
-  def test_rejects_non_phone_contact_method_as_phone_type_when_phone_is_present
-    { 'email' => '555-555-7790', 'letter' => '555-555-7791' }.each do |submitted_phone_type, phone|
-      assert_no_difference('User.count') do
-        post sign_up_path, params: { user: {
-          email: "invalid-phone-type-#{submitted_phone_type}-#{SecureRandom.hex(4)}@example.com",
-          password: 'password1234',
-          password_confirmation: 'password1234',
-          first_name: 'Phone',
-          last_name: 'Type',
-          date_of_birth: '1990-01-01',
-          phone: phone,
-          phone_type: submitted_phone_type,
-          timezone: 'Eastern Time (US & Canada)',
-          locale: 'en',
-          hearing_disability: true
-        } }
-      end
-
-      assert_response :unprocessable_content
-      assert_includes assigns(:user).errors[:phone_type],
-                      I18n.t('activerecord.errors.models.user.attributes.phone_type.portal_self_registration_phone_type_required')
-      assert_nil assigns(:user).phone_type
-    end
-  end
-
-  def test_should_not_offer_account_access_link_for_non_sms_phone_match
-    test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
-    create(:constituent,
-           email: "voice-phone-test-#{SecureRandom.hex(4)}@example.com",
-           phone: test_phone,
-           phone_type: 'voice')
-
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: "unique-email-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: test_phone,
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_response :unprocessable_content
-    assert assigns(:registration_support_needed)
-    assert_select 'h2', /We couldn't complete your registration/
-    assert_no_sign_in_cta
-    assert_select 'a[href^=?]', 'mailto:'
-    assert_select 'form[action=?]', password_path, count: 0
-    assert_select 'input[value=?]', 'Send account access link', count: 0
-    assert_no_match(/that email|that phone/i, response.body)
-  end
-
-  def test_duplicate_email_redirect_preserves_spanish_locale
-    existing_user = create(:constituent, email: "duplicate-es-#{SecureRandom.hex(4)}@example.com")
-
-    assert_no_difference(['User.count', 'Session.count']) do
-      post sign_up_path, params: { user: {
-        email: existing_user.email,
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'Nuevo',
-        last_name: 'Usuario',
-        date_of_birth: '1990-01-01',
-        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
-        phone_type: 'text',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'es',
-        hearing_disability: true
-      } }
-    end
-
-    assert_redirected_to sign_in_path(locale: 'es')
-    assert_equal I18n.t('portal_self_service.registrations.existing_email_account', locale: :es), flash[:notice]
-  end
-
-  def test_duplicate_email_takes_precedence_when_phone_matches_different_account
-    email_user = create(:constituent, email: "email-match-#{SecureRandom.hex(4)}@example.com")
-    phone_user = create(:constituent, email: "phone-match-#{SecureRandom.hex(4)}@example.com",
-                                      phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
-
-    assert_no_difference(['User.count', 'Session.count']) do
-      post sign_up_path, params: { user: {
-        email: email_user.email,
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: phone_user.phone,
-        phone_type: 'text',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
-    end
-
-    assert_redirected_to sign_in_path(locale: 'en')
-    assert_equal I18n.t('portal_self_service.registrations.existing_email_account'), flash[:notice]
-  end
-
-  def test_should_create_user_but_flag_for_review_on_name_dob_match
-    create(:constituent,
-           first_name: 'Duplicate',
-           last_name: 'User',
-           date_of_birth: '1985-05-15',
-           email: "existing-user-#{SecureRandom.hex(4)}@example.com")
-
-    test_email = "duplicate-name-dob-#{SecureRandom.hex(4)}@example.com"
-    assert_difference('User.count', 1) do
-      assert_difference(['DuplicateReviewCase.count', 'DuplicateReviewCaseCandidate.count'], 1) do
-        assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
-          post sign_up_path, params: { user: {
-            email: test_email,
-            password: 'password1234',
-            password_confirmation: 'password1234',
-            first_name: 'Duplicate',
-            last_name: 'USER',
-            date_of_birth: '05/15/1985',
-            phone: '555-123-4567',
-            phone_type: 'voice',
-            timezone: 'Eastern Time (US & Canada)',
-            locale: 'en',
-            hearing_disability: true
-          } }
+  test 'known unknown and normalized email requests have the same public result and no account authority' do
+    known = create(:constituent)
+    admin = create(:admin)
+    addresses = [known.email, admin.email, "  #{known.email.upcase}  ", 'unregistered@example.test']
+    public_results = addresses.map do |email|
+      assert_no_difference ['User.count', 'Session.count', 'DuplicateReviewCase.count'] do
+        assert_difference('RegistrationVerification.count') do
+          post sign_up_path, params: { user: { email: email, locale: 'en' } }
         end
       end
+      assert_nil cookies[:session_token]
+      [response.status, response.location, flash[:notice]]
     end
 
-    assert_redirected_to welcome_path
-    assert_equal 'Account created successfully. Welcome!', flash[:notice]
-
-    new_user = User.find_by(email: test_email)
-    assert_not_nil new_user, 'New user should have been created despite name/DOB match'
-    assert new_user.needs_duplicate_review, 'User should be flagged for duplicate review'
-
-    duplicate_case = DuplicateReviewCase.find_by!(subject_user: new_user)
-    assert_equal 'registration_soft_match', duplicate_case.source
-    assert_includes duplicate_case.metadata['reason_codes'], 'name_dob'
-    assert_equal 1, duplicate_case.duplicate_review_case_candidates.count
+    assert_equal 1, public_results.uniq.size
+    assert_equal I18n.t('registration_verification.check_email'), flash[:notice]
+    assert_equal addresses.map { |email| User.normalize_email(email) }, RegistrationVerification.order(:id).last(4).map(&:email)
   end
 
-  def test_name_dob_match_rolls_back_when_duplicate_review_actor_is_missing
-    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).find_each do |user|
-      Current.set(user: user) { user.update!(email: "former-system-audit-#{user.id}-#{SecureRandom.hex(3)}@example.com") }
+  test 'legacy full form cannot create an account or preserve a preselected password' do
+    assert_no_difference ['User.count', 'Session.count'] do
+      post sign_up_path, params: { user: { email: 'legacy@example.test', password: 'attacker-password',
+                                           password_confirmation: 'attacker-password', first_name: 'Injected',
+                                           phone: '4105550198', locale: 'en' } }
     end
-    create(:constituent,
-           first_name: 'MissingActor',
-           last_name: 'Duplicate',
-           date_of_birth: '1985-05-15',
-           email: "missing-actor-existing-#{SecureRandom.hex(4)}@example.com")
 
-    assert_no_difference(['User.count', 'Session.count', 'DuplicateReviewCase.count',
-                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
-      post sign_up_path, params: { user: {
-        email: "missing-actor-duplicate-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'password1234',
-        first_name: 'MissingActor',
-        last_name: 'Duplicate',
-        date_of_birth: '05/15/1985',
-        phone: '555-123-4599',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
+    proof = RegistrationVerification.order(:id).last
+    assert_equal 'legacy@example.test', proof.email
+    assert_not proof.has_attribute?(:password_digest)
+    assert_redirected_to sign_up_path(locale: 'en', check_email: true)
+  end
+
+  test 'queued verification arguments contain only a request reference and no raw credentials' do
+    post sign_up_path, params: { user: { email: 'private-job@example.test', locale: 'en', password: 'unverified-secret' } }
+
+    payload = enqueued_jobs.find { |job| job[:args].first == 'RegistrationMailer' }.fetch(:args).to_json
+    assert_includes payload, 'RegistrationVerification'
+    assert_not_includes payload, 'private-job@example.test'
+    assert_not_includes payload, 'unverified-secret'
+    assert_not_includes payload, RegistrationVerification.order(:id).last.proof_token
+  end
+
+  test 'syntax errors preserve the entered email without consulting accounts' do
+    User.expects(:find_by_email).never
+    assert_no_difference ['User.count', 'RegistrationVerification.count', 'AuthRateLimitCounter.count'] do
+      post sign_up_path, params: { user: { email: 'invalid', locale: 'en' } }
     end
 
     assert_response :unprocessable_content
-    assert_select 'li', text: I18n.t('portal_self_service.registrations.registration_blocked_heading')
+    assert_select 'input[name="user[email]"][value=invalid]'
+    assert_select '[role=alert]', text: I18n.t('registration_verification.invalid_email')
   end
 
-  def test_invalid_registration_with_name_dob_match_creates_no_duplicate_case
-    create(:constituent,
-           first_name: 'Invalid',
-           last_name: 'Duplicate',
-           date_of_birth: '1985-05-15',
-           email: "invalid-existing-#{SecureRandom.hex(4)}@example.com")
+  test 'initiation performs no account lookup even for a valid address' do
+    User.expects(:find_by_email).never
+    User.expects(:find_by_phone).never
+    post sign_up_path, params: { user: { email: 'no-lookup@example.test', locale: 'es' } }
 
-    assert_no_difference(['User.count', 'DuplicateReviewCase.count',
-                          'DuplicateReviewCaseCandidate.count', 'Event.count']) do
-      post sign_up_path, params: { user: {
-        email: "invalid-duplicate-name-dob-#{SecureRandom.hex(4)}@example.com",
-        password: 'password1234',
-        password_confirmation: 'different123',
-        first_name: 'Invalid',
-        last_name: 'Duplicate',
-        date_of_birth: '1985-05-15',
-        phone: '555-123-4588',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
+    assert_redirected_to sign_up_path(locale: 'es', check_email: true)
+    assert_equal I18n.t('registration_verification.check_email', locale: :es), flash[:notice]
+    assert_equal 'es', RegistrationVerification.order(:id).last.locale
+  end
+
+  test 'oversized email is rejected before issuance or browser-session storage' do
+    EmailDelivery.expects(:issuance).never
+    assert_no_difference ['User.count', 'RegistrationVerification.count', 'AuthRateLimitCounter.count'] do
+      post sign_up_path, params: { user: { email: "#{'a' * 5000}@example.test", locale: 'en' } }
     end
 
     assert_response :unprocessable_content
+    assert_select '[role=alert]', text: I18n.t('registration_verification.invalid_email')
   end
 
-  def test_submitted_duplicate_review_param_is_ignored
-    email = "ignore-review-param-#{SecureRandom.hex(4)}@example.com"
+  test 'synthetic destinations cannot issue registration proof or query accounts' do
+    User.expects(:find_by_email).never
+    User.expects(:find_by_phone).never
+    EmailDelivery.expects(:issuance).never
+    RegistrationMailer.expects(:with).never
 
-    assert_difference('User.count', 1) do
-      assert_no_difference('DuplicateReviewCase.count') do
-        post sign_up_path, params: { user: {
-          email: email,
-          password: 'password1234',
-          password_confirmation: 'password1234',
-          first_name: 'Ignore',
-          last_name: 'Param',
-          date_of_birth: '1990-01-01',
-          phone: '555-123-4599',
-          phone_type: 'voice',
-          timezone: 'Eastern Time (US & Canada)',
-          locale: 'en',
-          hearing_disability: true,
-          needs_duplicate_review: true
-        } }
-      end
-    end
-
-    assert_not User.find_by!(email: email).needs_duplicate_review
-  end
-
-  def test_should_not_create_user_with_mismatched_passwords
-    assert_no_difference('User.count') do
-      post sign_up_path, params: { user: {
-        email: 'newuser@example.com',
-        password: 'password1234',
-        password_confirmation: 'different123',
-        first_name: 'New',
-        last_name: 'User',
-        date_of_birth: '1990-01-01',
-        phone: '555-555-5555',
-        phone_type: 'voice',
-        timezone: 'Eastern Time (US & Canada)',
-        locale: 'en',
-        hearing_disability: true
-      } }
+    assert_no_difference ['User.count', 'Session.count', 'RegistrationVerification.count', 'AuthRateLimitCounter.count'] do
+      post sign_up_path, params: { user: { email: ' DEPENDENT@SYSTEM.MATVULCAN.LOCAL ', locale: 'en' } }
     end
 
     assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:password_confirmation], "doesn't match Password"
+    assert_select '[role=alert]', text: I18n.t('registration_verification.invalid_email')
   end
 
-  def test_should_send_registration_confirmation_email
-    ActionMailer::Base.deliveries.clear
-
-    user_params = {
-      email: 'testuser@example.com',
-      password: 'password1234',
-      password_confirmation: 'password1234',
-      first_name: 'Test',
-      last_name: 'User',
-      date_of_birth: '1990-01-01',
-      phone: '555-555-5555',
-      phone_type: 'voice',
-      timezone: 'Eastern Time (US & Canada)',
-      locale: 'en',
-      communication_preference: 'email',
-      hearing_disability: true,
-      vision_disability: false,
-      speech_disability: false,
-      mobility_disability: false,
-      cognition_disability: false
-    }
-
-    assert_difference('User.count') do
-      assert_enqueued_jobs 1 do
-        post sign_up_path, params: { user: user_params }
+  test 'shared ip budget permits thirty recipients and blocks the next issuance neutrally' do
+    30.times do |index|
+      assert_difference('RegistrationVerification.count') do
+        post sign_up_path, params: { user: { email: "budget#{index}@example.test", locale: 'en' } }
       end
     end
+    expected = [response.status, response.location, flash[:notice]]
 
-    perform_enqueued_jobs
-    assert_equal 1, ActionMailer::Base.deliveries.size, 'Email should have been delivered'
-
-    assert_redirected_to welcome_path
-    assert_equal 'Account created successfully. Welcome!', flash[:notice]
-
-    user = User.find_by(email: 'testuser@example.com')
-    assert_not_nil user, 'User should have been created'
-    assert_equal 'Test', user.first_name
-    assert_equal 'User', user.last_name
-    assert user.hearing_disability
-
-    assert_equal 1, ActionMailer::Base.deliveries.size, 'One email should have been sent'
-    email = ActionMailer::Base.deliveries.last
-
-    assert_not_nil email, 'Email should not be nil'
-    assert_equal ['no_reply@mdmat.org'], email.from, 'Email should be from no_reply@mdmat.org'
-    assert_equal ['testuser@example.com'], email.to, 'Email should be sent to the registered user'
-    assert_equal 'Welcome to the Maryland Accessible Telecommunications Program', email.subject
-
-    content = email.body.decoded
-
-    assert_match(/Test/, content, 'First name should be substituted')
-    assert_match(/Test User/, content, 'Full name should be substituted')
+    assert_no_difference ['RegistrationVerification.count', 'User.count', 'Session.count'] do
+      post sign_up_path, params: { user: { email: 'beyond-budget@example.test', locale: 'en' } }
+    end
+    assert_equal expected, [response.status, response.location, flash[:notice]]
   end
 
-  def test_registration_confirmation_uses_spanish_template_for_spanish_locale
-    ActionMailer::Base.deliveries.clear
+  test 'waiting page supports reload resend and correction without putting the address in the url or flash' do
+    email = 'correctable@example.test'
+    post sign_up_path, params: { user: { email: email, locale: 'es' } }
+    assert_not_includes response.location, email
+    assert_not_includes flash.to_hash.to_json, email
+    follow_redirect!
+    assert_select 'h1', text: I18n.t('registration_verification.check_email_title', locale: :es)
+    assert_select 'input[name="user[email]"][type=hidden][value=?]', email
+    assert_select 'input[type=submit][value=?]', I18n.t('registration_verification.resend', locale: :es)
+    assert_select 'a[href=?]', new_password_path(locale: 'es')
 
-    template_name = 'application_notifications_registration_confirmation'
-    admin = create(:admin)
+    get sign_up_path(locale: 'es', check_email: true)
+    assert_select 'input[name="user[email]"][type=hidden][value=?]', email
+    assert_difference('RegistrationVerification.count') do
+      post sign_up_path, params: { user: { email: email, locale: 'es' } }
+    end
+    get sign_up_path(locale: 'es')
+    assert_select 'input[name="user[email]"][type=email][value=?]', email
+    post sign_up_path, params: { user: { email: 'corrected@example.test', locale: 'es' } }
+    follow_redirect!
+    assert_select 'input[name="user[email]"][type=hidden][value="corrected@example.test"]'
+  end
 
-    EmailTemplate.where(name: template_name, format: :text).delete_all
+  test 'new issuance gives time for delayed email and profile entry without extending an issued deadline' do
+    freeze_time do
+      post sign_up_path, params: { user: { email: 'longer-window@example.test', locale: 'en' } }
+      proof = RegistrationVerification.order(:id).last
+      token = proof.proof_token
+      assert_equal 1.hour.from_now, proof.expires_at
+      travel 35.minutes
+      assert_equal proof, RegistrationVerification.resolve(token)
+      get edit_registration_verification_path(token: token)
+      assert_response :success
+      travel 26.minutes
+      assert_nil RegistrationVerification.resolve(token)
+    end
+  end
 
-    create(:email_template, :text,
-           name: template_name,
-           locale: 'en',
-           subject: 'Welcome EN',
-           body: 'EN body %<user_first_name>s %<user_full_name>s',
-           description: 'EN registration confirmation',
-           variables: {
-             'required' => %w[user_first_name user_full_name],
-             'optional' => %w[header_text footer_text dashboard_url new_application_url active_vendors_text_list support_email]
-           },
-           updated_by: admin,
-           enabled: true)
+  test 'normalized recipient cap spans ips and does not revoke delivered proofs' do
+    3.times do |index|
+      post sign_up_path, params: { user: { email: 'recipient@example.test', locale: 'en' } },
+                         headers: { 'REMOTE_ADDR' => "203.0.113.#{index + 1}" }
+    end
+    first_proof = RegistrationVerification.order(:id).first
+    token = first_proof.proof_token
 
-    create(:email_template, :text,
-           name: template_name,
-           locale: 'es',
-           subject: 'Bienvenido ES',
-           body: 'ES body %<user_first_name>s %<user_full_name>s',
-           description: 'ES registration confirmation',
-           variables: {
-             'required' => %w[user_first_name user_full_name],
-             'optional' => %w[header_text footer_text dashboard_url new_application_url active_vendors_text_list support_email]
-           },
-           updated_by: admin,
-           enabled: true)
+    assert_no_difference('RegistrationVerification.count') do
+      post sign_up_path, params: { user: { email: ' RECIPIENT@EXAMPLE.TEST ', locale: 'en' } },
+                         headers: { 'REMOTE_ADDR' => '203.0.113.99' }
+    end
+    assert_equal first_proof, RegistrationVerification.resolve(token)
+  end
 
-    email = "registro-es-#{SecureRandom.hex(4)}@example.com"
-
-    assert_difference('User.count', 1) do
-      assert_enqueued_jobs 1 do
-        post sign_up_path, params: { user: {
-          email: email,
-          password: 'password1234',
-          password_confirmation: 'password1234',
-          first_name: 'Prueba',
-          last_name: 'Usuario',
-          date_of_birth: '1990-01-01',
-          phone: '555-555-5555',
-          phone_type: 'voice',
-          timezone: 'Eastern Time (US & Canada)',
-          locale: 'es',
-          communication_preference: 'email',
-          hearing_disability: true,
-          vision_disability: false,
-          speech_disability: false,
-          mobility_disability: false,
-          cognition_disability: false
-        } }
+  test 'unavailable budget or delivery configuration preserves the neutral response' do
+    AuthRateLimitCounter.stub(:reserve!, ->(**) { raise ActiveRecord::ConnectionNotEstablished }) do
+      assert_no_difference ['User.count', 'Session.count', 'RegistrationVerification.count'] do
+        post sign_up_path, params: { user: { email: 'unavailable@example.test', locale: 'en' } }
       end
     end
-
-    perform_enqueued_jobs
-
-    assert_equal 1, ActionMailer::Base.deliveries.size
-    sent_email = ActionMailer::Base.deliveries.last
-    assert_equal [email], sent_email.to
-    assert_equal 'Bienvenido ES', sent_email.subject
-    assert_includes sent_email.body.to_s, 'ES body Prueba Prueba Usuario'
-  end
-
-  private
-
-  def assert_no_sign_in_cta
-    assert_select 'footer.text-center', count: 0
-    # The shared navigation logo accounts for the one sign-in link.
-    assert_select 'a[href=?]', sign_in_path, count: 1
-    assert_select 'body > header a[href=?]', sign_in_path, count: 1 do
-      assert_select 'img[alt=?]', 'TAM Logo', count: 1
+    expected = [response.status, response.location, flash[:notice]]
+    EmailTemplate.where(name: 'registration_email_verification').delete_all
+    assert_no_difference ['User.count', 'Session.count'] do
+      assert_difference('RegistrationVerification.count') do
+        post sign_up_path, params: { user: { email: 'missing-template@example.test', locale: 'en' } }
+      end
     end
-    assert_select 'a[href=?]', sign_in_path(locale: 'en'), count: 0
-    assert_select 'a', text: I18n.t('shared.header.sign_in'), count: 0
-    assert_select 'a', text: I18n.t('portal_self_service.registrations.sign_in_link'), count: 0
+    assert_equal expected, [response.status, response.location, flash[:notice]]
+    assert_equal 'queued', RegistrationVerification.order(:id).last.delivery_status
   end
 end

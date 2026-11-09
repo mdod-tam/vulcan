@@ -559,8 +559,12 @@
               <div data-controller="document-proof-handler" class="mt-6 pt-6 border-t border-gray-200">
                 <h4 class="text-sm font-semibold text-gray-900 mb-4">Disability Certification</h4>
 
-                <fieldset class="mb-4">
+                <fieldset class="mb-4" aria-describedby="disability-certification-action-help">
                   <legend class="text-sm font-medium text-gray-700 mb-2">Disability Certification Action</legend>
+                  <p id="disability-certification-action-help" class="mb-3 text-sm text-gray-600">
+                    If no certification came with the application, choose None Provided. No additional reason or notes are required.
+                    Choose Reject when a certification was received but is unacceptable, and select a reason so the signer knows what to correct.
+                  </p>
                   <div class="flex flex-wrap gap-4">
                     <label class="flex items-center p-3 bg-info-50 border border-info-200 rounded-lg cursor-pointer hover:bg-info-100 has-[:checked]:ring-2 has-[:checked]:ring-info-500">
                       <input type="radio"
@@ -1147,10 +1151,10 @@
           </div>
         <% end %>
         <%= render 'identity_review', review: @identity_review, submitted: submitted_params, guardian: false %>
-        <%# The gate status stays visible so a disabled submit button always explains the current
-            blocker: the upload scan state, a missing guardian, or the named outstanding items
-            once Stimulus connects. %>
-        <p id="paper-submit-gate-status" class="mt-2 text-xs text-gray-600 text-right" role="status" aria-live="polite" data-paper-application-target="status">Complete all required confirmations before submitting.</p>
+        <%# The gate names outstanding controls as links, while upload and guardian blockers keep priority. %>
+        <div id="paper-submit-gate-status" class="mt-2 text-sm text-gray-700" role="status" aria-live="polite" data-paper-application-target="status">
+          <p>Complete all required confirmations before submitting.</p>
+        </div>
         <div class="flex flex-col sm:flex-row justify-end gap-3">
           <%= link_to "Cancel", admin_applications_path,
               class: "btn btn-outline" %>

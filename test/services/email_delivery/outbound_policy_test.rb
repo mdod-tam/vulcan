@@ -9,6 +9,7 @@ module EmailDelivery
       ensure_system_audit_actor!
       @sms = create(:constituent).sms_credentials.create!(phone_number: '555-123-4567', verified_at: Time.current)
       @action = 'ApplicationNotificationsMailer#registration_confirmation'
+      @sms_owner = SecureRandom.hex(24)
     end
 
     test 'All off blocks ordinary messages on every channel' do
@@ -73,16 +74,18 @@ module EmailDelivery
     end
 
     test 'SMS emergency stop blocks required verification as well as ordinary SMS' do
+      pending = TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, owner: @sms_owner, sms_credential_id: @sms.id)
+      assert pending[:success]
       set(CHANNEL_CONTROLS['sms'], false)
       Twilio::REST::Client.expects(:new).never
 
       assert_raises(ApplicationMailer::DeliverySkipped) do
         SmsService.send_message('555-123-4567', 'Notice', action: 'SmsService#proof_resubmission')
       end
-      result = TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, sms_credential_id: @sms.id)
+      result = TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, owner: @sms_owner, sms_credential_id: @sms.id)
       assert_not result[:success]
       assert result[:delivery_suppressed]
-      assert TwilioVerifyService.check_verification('+15551234567', '123456', verification_sid: 'EXISTING')[:valid]
+      assert TwilioVerifyService.check_verification('+15551234567', '123456', verification_sid: pending[:verification_sid], purpose: :login, owner: @sms_owner)[:valid]
     end
 
     test 'unknown SMS caller is refused even without provider credentials' do
@@ -110,8 +113,8 @@ module EmailDelivery
 
     test 'All off allows login but blocks adding a new SMS factor' do
       set(ALL_CONTROL, false)
-      assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, sms_credential_id: @sms.id)[:success]
-      setup = TwilioVerifyService.send_verification('+15551234567', purpose: :setup)
+      assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, owner: @sms_owner, sms_credential_id: @sms.id)[:success]
+      setup = TwilioVerifyService.send_verification('+15551234567', purpose: :setup, owner: 'policy-setup')
       assert setup[:delivery_suppressed]
       assert_not setup[:verification_sid]
     end
@@ -127,17 +130,17 @@ module EmailDelivery
     test 'a passkey or an unverified SMS credential cannot use the exception' do
       set(ALL_CONTROL, false)
       create(:webauthn_credential, user: @sms.user)
-      assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, sms_credential_id: @sms.id)[:delivery_suppressed]
+      assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, owner: @sms_owner, sms_credential_id: @sms.id)[:delivery_suppressed]
       @sms.user.webauthn_credentials.destroy_all
       @sms.update!(verified_at: nil)
-      assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, sms_credential_id: @sms.id)[:delivery_suppressed]
+      assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, owner: @sms_owner, sms_credential_id: @sms.id)[:delivery_suppressed]
     end
 
     test 'each exception handoff has one audit event with the bypassed controls' do
       set(ALL_CONTROL, false)
       set(EmailDelivery.category_control('account_security'), false)
       assert_difference -> { Event.where(action: 'essential_communication_submitted').count }, 1 do
-        assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, sms_credential_id: @sms.id)[:success]
+        assert TwilioVerifyService.send_verification(@sms.phone_number, purpose: :login, owner: @sms_owner, sms_credential_id: @sms.id)[:success]
       end
       event = Event.where(action: 'essential_communication_submitted').last
       assert_equal 'TwoFactor#sms_login', event.metadata['mail_action']

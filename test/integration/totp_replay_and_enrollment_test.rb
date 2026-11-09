@@ -65,6 +65,7 @@ class TotpReplayAndEnrollmentTest < ActionDispatch::IntegrationTest
       assert_no_difference('TotpCredential.count') do
         post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: code, nickname: 'Retried setup' }
       end
+      assert_redirected_to new_reauthentication_path(return_to: new_credential_two_factor_authentication_path(type: 'totp'))
       assert_equal 'My app', credential.reload.nickname
       browser = password_session
       assert_no_difference('Session.count') { verify(browser, code) }
@@ -76,48 +77,56 @@ class TotpReplayAndEnrollmentTest < ActionDispatch::IntegrationTest
       assert_no_difference('TotpCredential.count') do
         post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: later_code }
       end
-      assert_redirected_to credential_success_two_factor_authentication_path(type: 'totp')
-      assert_equal Time.utc(2026, 11, 6, 12, 1), credential.reload.last_used_at, 'A later enrollment retry must consume its matched step'
-      assert_no_difference('Session.count') { verify(browser, later_code) }
-      browser.assert_response :unprocessable_content
+      assert_redirected_to new_reauthentication_path(return_to: new_credential_two_factor_authentication_path(type: 'totp'))
+      assert_equal Time.utc(2026, 11, 6, 12, 0, 30), credential.reload.last_used_at, 'A stale enrollment cannot consume another step'
+      assert_difference('Session.count', 1) { verify(browser, later_code) }
+      browser.assert_response :success
 
       cookies[Rails.application.config.session_options.fetch(:key)] = pending_cookie
       assert_no_difference('TotpCredential.count') do
         post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: code }
       end
-      assert_redirected_to credential_success_two_factor_authentication_path(type: 'totp')
+      assert_redirected_to new_reauthentication_path(return_to: new_credential_two_factor_authentication_path(type: 'totp'))
       assert_equal Time.utc(2026, 11, 6, 12, 1), credential.reload.last_used_at, 'An older enrollment retry must not rewind the consumed step'
       assert_equal 'My app', credential.nickname
-      assert_no_difference('Session.count') { verify(browser, later_code) }
-      browser.assert_response :unprocessable_content
+      another_browser = password_session
+      assert_no_difference('Session.count') { verify(another_browser, later_code) }
+      another_browser.assert_response :unprocessable_content
     end
   end
 
   test 'missing or expired pending enrollment cannot be replaced by submitted secret' do
-    post sign_in_path, params: { email: @user.email, password: 'password1234' }
-    supplied_secret = ROTP::Base32.random
-    assert_no_difference('TotpCredential.count') do
-      post create_credential_two_factor_authentication_path(type: 'totp'),
-           params: { secret: supplied_secret, code: ROTP::TOTP.new(supplied_secret).now }
-    end
-    assert_redirected_to new_credential_two_factor_authentication_path(type: 'totp')
-
     freeze_time do
+      post sign_in_path, params: { email: @user.email, password: 'password1234' }
+      assert_redirected_to constituent_portal_dashboard_path
+      supplied_secret = ROTP::Base32.random
+      assert_no_difference('TotpCredential.count') do
+        post create_credential_two_factor_authentication_path(type: 'totp'),
+             params: { secret: supplied_secret, code: ROTP::TOTP.new(supplied_secret).now }
+      end
+      assert_redirected_to new_credential_two_factor_authentication_path(type: 'totp')
+
       get new_credential_two_factor_authentication_path(type: 'totp')
+      assert_response :success
       secret = pending_secret
-      travel 9.minutes
+      assert secret.present?
+      travel 4.minutes
       get new_credential_two_factor_authentication_path(type: 'totp')
+      assert_response :success
       assert_equal secret, pending_secret
-      travel 1.minute
+      travel 6.minutes
       assert_no_difference('TotpCredential.count') do
         post create_credential_two_factor_authentication_path(type: 'totp'),
              params: { secret: secret, code: ROTP::TOTP.new(secret).now }
       end
+      assert_redirected_to new_reauthentication_path(return_to: new_credential_two_factor_authentication_path(type: 'totp'))
+      post reauthentication_path, params: {
+        password: 'password1234', factor_type: 'password',
+        return_to: new_credential_two_factor_authentication_path(type: 'totp')
+      }
       assert_redirected_to new_credential_two_factor_authentication_path(type: 'totp')
-      assert_nil session[TwoFactorAuth::SESSION_KEYS[:metadata]]
       follow_redirect!
       assert_not_equal secret, pending_secret
-      assert_select '[role="alert"]', text: /#{Regexp.escape(I18n.t('two_factor_verification.errors.expired_totp_setup'))}/
     end
   end
 

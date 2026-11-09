@@ -297,8 +297,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', auditable: @user).count
-    assert_cache_prefix_present('auth_rate_limit:account_access:user_ip:')
-    assert_cache_prefix_absent('account_access:')
+    assert_budget_prefix_present('auth_rate_limit:account_access:user_ip:')
+    assert_budget_prefix_absent('account_access:')
   ensure
     Rails.cache = old_cache
   end
@@ -327,8 +327,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert event.metadata['request_ip_digest'].present?
     assert event.metadata['submitted_contact_digest'].present?
     assert_not_includes event.metadata.values.join(' '), contact
-    assert_cache_prefix_present('auth_rate_limit:account_access:contact_ip:')
-    assert_cache_prefix_absent('account_access:')
+    assert_budget_prefix_present('auth_rate_limit:account_access:contact_ip:')
+    assert_budget_prefix_absent('account_access:')
   ensure
     Rails.cache = old_cache
   end
@@ -720,8 +720,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal limit, Event.where(action: 'account_access_instructions_delivery_unavailable', auditable: user).count
     assert_equal 1, Event.where(action: 'account_access_instructions_rate_limited', auditable: user).count
-    assert_cache_prefix_present('auth_rate_limit:account_access:user_ip:')
-    assert_cache_prefix_absent('account_access:')
+    assert_budget_prefix_present('auth_rate_limit:account_access:user_ip:')
+    assert_budget_prefix_absent('account_access:')
   ensure
     travel_back
     Rails.cache = old_cache
@@ -834,15 +834,15 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  def assert_cache_prefix_present(prefix)
-    assert cache_keys.any? { |key| key.start_with?(prefix) }, "Expected cache prefix #{prefix.inspect}"
+  def assert_budget_prefix_present(prefix)
+    assert budget_keys.any? { |key| key.start_with?(prefix) }, "Expected budget prefix #{prefix.inspect}"
   end
 
-  def assert_cache_prefix_absent(prefix)
-    assert cache_keys.none? { |key| key.start_with?(prefix) }, "Expected no cache prefix #{prefix.inspect}"
+  def assert_budget_prefix_absent(prefix)
+    assert budget_keys.none? { |key| key.start_with?(prefix) }, "Expected no budget prefix #{prefix.inspect}"
   end
 
-  def cache_keys
-    Rails.cache.instance_variable_get(:@data).keys.map(&:to_s)
+  def budget_keys
+    AuthRateLimitCounter.pluck(:key)
   end
 end

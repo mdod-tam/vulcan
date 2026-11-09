@@ -65,7 +65,7 @@ if ENV['CI']
       assert_redirected_to edit_profile_path
       follow_redirect!
       assert_response :success
-      assert_select 'input[name=?][value=?]', 'user[email]', user.email
+      assert_select 'section[aria-labelledby="contact-heading"]', text: /#{Regexp.escape(user.email)}/
 
       assert_equal user.id.to_s, Thread.current[:test_user_id].to_s if Thread.current[:test_user_id].present?
 
@@ -87,7 +87,8 @@ if ENV['CI']
       assert_redirected_to edit_profile_path
       follow_redirect!
       assert_response :success
-      assert_select 'input[name=?][value=?]', 'user[email]', user1.email
+      assert_select 'section[aria-labelledby="contact-heading"]', text: /#{Regexp.escape(user1.email)}/
+      assert_select 'section[aria-labelledby="contact-heading"]', text: /#{Regexp.escape(user2.email)}/, count: 0
 
       sign_out
 
@@ -107,7 +108,8 @@ if ENV['CI']
       assert_redirected_to edit_profile_path
       follow_redirect!
       assert_response :success
-      assert_select 'input[name=?][value=?]', 'user[email]', user2.email
+      assert_select 'section[aria-labelledby="contact-heading"]', text: /#{Regexp.escape(user2.email)}/
+      assert_select 'section[aria-labelledby="contact-heading"]', text: /#{Regexp.escape(user1.email)}/, count: 0
 
       sign_out
     end

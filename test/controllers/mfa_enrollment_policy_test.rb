@@ -111,7 +111,8 @@ class MfaEnrollmentPolicyTest < ActionDispatch::IntegrationTest
 
   test 'keeps required-role users with pending SMS setup out of application pages' do
     admin = create(:admin)
-    sign_in_for_integration_test(admin, bypass_mfa_enrollment: false)
+    post sign_in_path, params: { contact: admin.email, password: 'password1234' }
+    assert_redirected_to setup_two_factor_authentication_path
 
     assert_no_difference('SmsCredential.count') do
       post create_credential_two_factor_authentication_path(type: 'sms'), params: {

@@ -1,0 +1,104 @@
+en:
+  reauthentication:
+    title: Confirm your identity
+    explanation: Enter your current password and, if you use two-factor authentication, an enrolled
+      verification method. This confirmation lasts five minutes.
+    password: Current password
+    factor: Verification method
+    totp: Authenticator app
+    webauthn: Security key or passkey
+    sms: Text message
+    sms_number: Registered phone number
+    send_sms: Send verification code
+    code: Verification code
+    submit: Confirm and continue
+    cancel: Cancel
+    completed: Identity confirmed. You can continue.
+    invalid: We could not confirm your identity. Check your password and verification method,
+      or request a new code.
+    required: Confirm your identity before changing account security.
+    sms_sent: A verification code was sent to your registered phone.
+  contact_changes:
+    title: Change account email or phone
+    explanation: Confirm your identity and ownership before changing a login or recovery contact.
+      Other profile details can be edited separately.
+    kind: Contact to change
+    email: Email
+    phone: Phone
+    proposed_value: New email or phone number
+    value_help: For an email change, enter the new address. For a phone change, enter the new
+      number or leave it blank to remove the current number.
+    phone_type: Type of new phone (phone changes only)
+    text: Text/SMS
+    voice: Voice
+    videophone: Videophone
+    request: Request verified change
+    back: Back to profile
+    requested: Your request is pending. Complete the required confirmations; your current contact
+      remains active.
+    invalid: Check the contact value and phone type. No contact was changed.
+    unavailable: This change could not be completed. Check its status or contact the MAT Team
+      for help.
+    verification_unavailable: We could not send or confirm a verification code. Wait and try
+      again, or contact the MAT Team.
+    pending: 'Requested contact: %{value}'
+    removal: Remove phone number
+    old_active: Your current contact stays active until you complete this change.
+    staff_help_html: For a number that cannot receive text messages, staff must verify your
+      identity and the new number. Contact %{email} or %{phone} for help.
+    code: Text message verification code
+    verify: Confirm ownership
+    confirmed: Contact ownership confirmed.
+    completed: Your contact was changed and prior sessions ended. Sign in with your current
+      credentials.
+    canceled: Contact change canceled.
+    complete: Complete change and sign out
+    resend: Resend confirmations
+    check_status: Check confirmation status
+    cancel: Cancel this change
+    both_emails: Confirm both your current and new email addresses, then return here and check
+      confirmation status. If you cannot access your old address, contact the MAT Team.
+    check_email: Confirm the email we sent to your new address, then return here and check
+      confirmation status.
+    confirm_title: Confirm this email address
+    confirm_explanation: Confirm only if you requested this account contact change. This confirmation
+      does not sign you in or change the contact by itself.
+    return_to_browser: Return to the signed-in browser where you requested the change to complete
+      it. Choose Check confirmation status to continue.
+    invalid_link: This confirmation is invalid, expired or no longer current.
+    use_verified_flow: Use the verified email or phone change process to update account contacts.
+    view_pending: View pending contact change
+    mail_requested: A change to your account contact was requested. Your current contact remains
+      active until the required confirmations are complete.
+    mail_completed: Your account contact was changed. Existing sessions have ended.
+    completed_notice_failed: Your contact was changed and prior sessions ended. A security notice
+      could not be queued. Sign in with your updated contact. Contact the MAT Team if you need
+      help.
+  registration_verification:
+    check_email_title: Check your email
+    requested_email: 'Email address: %{email}'
+    next_step: Open the verification link in your email to choose a password and finish creating your account. A new link expires %{minutes} minutes after the request; finish the form before then.
+    delivery_help: Delivery can take a few minutes. Check your spam or junk folder before requesting another link. Repeated requests are limited.
+    resend: Send another verification link
+    change_email: Correct or change email address
+    password_access_link: Set or reset your password
+    support_html: 'Still need help? Contact the MAT Team at %{email}.'
+    introduction: Enter your email address to receive a link and finish creating your account.
+    email_help: You will choose your password after confirming your email. This step does not
+      sign you in.
+    invalid_email: Enter a valid email address.
+    send_link: Send verification link
+    sending: Sending…
+    check_email: If this address can receive email, a verification link will arrive shortly.
+      You can request another link here. This does not sign you in.
+    complete_title: Finish creating your account
+    verified_email: 'Verified email: %{email}'
+    phone_later: You can add a phone number after registration by verifying it in your profile.
+    invalid_link: This verification link is invalid, expired, or already used. Request a new
+      link.
+    existing_account: Email confirmed. Sign in or use account access instructions. Contact the
+      MAT Team if you need help.
+    completion_failed: We could not confirm that registration finished. Please try signing in
+      before starting again.
+    completed_sign_in: Your account was created. Please sign in to continue.
+    completed_notice_failed: Your account was created. The welcome email could not be queued.

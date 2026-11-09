@@ -17,10 +17,17 @@ Encryption covers the declarations below, not every piece of personal informatio
 | [VendorSecureRequestForm](../../app/models/vendor_secure_request_form.rb) | `recipient_email` | — |
 | [Application](../../app/models/application.rb) | — | `document_signing_audit_url`, `document_signing_document_url` |
 | [EmailDeliveryAttempt](../../app/models/email_delivery_attempt.rb) | — | `destination` |
+| [RegistrationVerification](../../app/models/registration_verification.rb) | — | `email` |
+| [ContactChangeRequest](../../app/models/contact_change_request.rb) | — | `old_value`, `proposed_value`, `notification_email` |
+| [SmsVerificationAttempt](../../app/models/sms_verification_attempt.rb) | — | `phone_number` |
 | [EquipmentItem](../../app/models/equipment_item.rb) | `normalized_imei`, `normalized_serial_number` | `imei`, `serial_number`, `tracking_number` |
 | [Event](../../app/models/event.rb) | — | `change_values` (see [audit events](#audit-events)) |
 
 Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. Ciphertext is the encrypted form of a value. This supports equality searches and unique indexes, but it reveals which values match. Use it only when lookup or uniqueness requires it.
+
+Registration/contact email proofs carry a signed request ID, purpose and absolute expiry rather than the encrypted contact values. The signature is readable and protects integrity; it is not encryption or single-use storage. The mutation owner rechecks the locked request's deadline and consumed/canceled state. SMS ownership and authentication budgets use keyed destination/owner digests for lookup, without storing raw contacts in those keys.
+
+Contact proof snapshots are retained for the notice and ownership workflow, with purge targeted seven days after request expiry and a required audit for unresolved completion notices. SMS phone payloads are eligible for purge one day after `ownership_expires_at`; this provider-ownership deadline can outlast the local ten-minute code-entry window. Cleanup policy and worker-downtime limits are described in [authentication maintenance](authentication_system.md#sms-ownership-and-maintenance). Staff verification references must be bounded nonsecret case references, not copies of identity documents; those operational fields are not added to the encrypted contact inventory above.
 
 Equipment identifiers use normalized encrypted equality for duplicate checks. Normalized means reformatted to one standard form before comparing. Partial database indexes enforce one active IMEI — a device identifier for mobile equipment — and one active serial within the recorded normalized manufacturer/model identity, including duplicate catalog entries. Shipped and detached devices retain those assignments. Withdrawn historical devices release them. Device identifier corrections use the encrypted audit values described below, and identifiers are excluded from bid exports.
 
@@ -44,7 +51,7 @@ Product resources have a different audience: they are public program guidance wi
 
 ## Looking up encrypted contacts
 
-`User.find_by_email`, `find_by_phone`, `exists_with_email?`, and `exists_with_phone?` are the contact lookup and uniqueness path. They share one normalization: lowercased email, and `XXX-XXX-XXXX` formatting for valid US numbers. That is what makes a deterministic match possible at all, because the ciphertext of an unnormalized value differs. Database unique indexes back the same two columns.
+`User.find_by_email`, `find_by_phone`, `exists_with_email?`, and `exists_with_phone?` are the contact lookup and uniqueness path. They share one normalization: lowercased email, and `XXX-XXX-XXXX` formatting for valid US numbers. That is what makes a deterministic match possible at all, because the ciphertext of an unnormalized value differs. Database unique indexes back the same two columns. Query failures propagate to the workflow owner instead of being treated as no match; public callers handle them without exposing account existence.
 
 Public sign-in and recovery use `find_by_login_identifier`. Account-access requests use `find_for_account_access`. These enforce eligibility beyond a matching contact value. A phone-only paper record must not become a public login account through a generic contact lookup. See [authentication](authentication_system.md) and [user management](../development/user_management_features.md).
 
@@ -60,7 +67,7 @@ The secretless build exception applies only when `assets:precompile` is the sole
 
 Run `bin/rails db:encryption:init` to generate keys for initial setup. Save all three entries in the matching credentials file before saving records, and reuse them across application instances and restarts. Losing the matching keys makes encrypted records unreadable.
 
-`RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too. Besides signed cookies and links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
+`RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too. Besides signed cookies and links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens. The same signing authority also derives persisted authentication-budget and SMS destination/owner digests. Coordinate rotation with active provider challenges and budgets; changing the secret must not be treated as an ordinary way to clear an attempt limit or release a live SMS ownership fence.
 
 Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery.
 
@@ -75,7 +82,7 @@ Rails encrypts fixture values before storage through `encrypt_fixtures: true`; p
 
 Diagnostic logs and error reports use the exception class and limited context such as record IDs. Exception messages, backtraces, validation text, and rejected metadata can contain personal data or credentials. Keep them out of diagnostics, including messages passed through shared logging helpers. Expected validation feedback can still explain a rejected form to the person submitting it. Unexpected application-creation failures show a generic message in the user's language.
 
-[Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB (date of birth), password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
+[Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB (date of birth), password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Registration/contact bearer tokens travel in filtered query/body parameters rather than URL path segments. Pending contact values and submitted verification data require the same filtering even before they become authoritative user attributes. Review storage and filtering together when adding a sensitive field.
 
 Training request filters cover exact `internal_notes`, `constituent_summary`, cancellation and no-show reason keys, and reschedule reasons. Audit and notification metadata contains structural training facts instead of those text bodies. [Product resource filtering](../../config/initializers/product_resource_parameter_filter.rb) hides uploaded document parameters, signed upload references, resource URLs, and manufacturer-documentation URLs. Model filtering also hides resource and manufacturer URLs from SQL and inspection output, because an external URL can carry query credentials even when its guidance is public.
 

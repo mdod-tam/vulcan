@@ -46,6 +46,23 @@ Rails.application.routes.draw do
   # Registration
   get 'sign_up', to: 'registrations#new'
   post 'sign_up', to: 'registrations#create'
+  get 'registration_verifications/edit', to: 'registration_verifications#edit', as: :edit_registration_verification
+  patch 'registration_verifications', to: 'registration_verifications#update', as: :registration_verification
+
+  resource :reauthentication, only: %i[new create] do
+    post :webauthn_options
+    post :sms_code
+  end
+
+  get 'contact_verifications/:purpose', to: 'contact_changes#verification', as: :contact_verification
+  post 'contact_verifications/:purpose', to: 'contact_changes#confirm_email'
+  resources :contact_changes, only: %i[new create show destroy] do
+    member do
+      post :resend
+      post :verify_sms
+      post :complete
+    end
+  end
   resource :password, only: %i[new create edit update]
   resource :profile, only: %i[edit update], controller: 'users'
 
@@ -100,6 +117,7 @@ Rails.application.routes.draw do
     resources :recovery_requests, only: %i[index show] do
       member do
         post :approve
+        post :retry_notice
       end
     end
 

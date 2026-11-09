@@ -91,6 +91,12 @@ module ConstituentPortal
         end
 
         if @dependent.update(params_to_update)
+          if @dependent.saved_changes.keys.intersect?(%w[email phone phone_type])
+            # Guardian edits retain their existing session policy, but cannot preserve
+            # pending credential proof or a recent-authentication grant for the old contact.
+            @dependent.advance_security_version!
+            ContactChangeRequest.unresolved.where(user_id: @dependent.id).find_each { |change| change.update!(canceled_at: Time.current) }
+          end
           redirect_after_successful_update
         else
           setup_edit_template_variables

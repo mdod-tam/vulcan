@@ -34,6 +34,7 @@
           </svg>
           <span>Edit User</span>
         <% end %>
+        <%= link_to 'Security-key recovery requests', admin_recovery_requests_path, class: 'btn btn-secondary' %>
         <%= button_to mfa_tokens_admin_user_path(@user),
             method: :delete,
             form: { class: "inline-flex", data: { turbo_confirm: "Are you sure?" } },

@@ -14,9 +14,9 @@ class Policy < ApplicationRecord
 
   after_update :log_change
 
-  RATE_LIMIT_ACTIONS = %i[proof_submission sign_in_attempt account_access account_recovery].freeze
+  RATE_LIMIT_ACTIONS = %i[proof_submission sign_in_attempt account_access account_recovery registration contact_change sms_verification].freeze
   PROOF_RATE_LIMIT_ACTIONS = %i[proof_submission].freeze
-  AUTH_RATE_LIMIT_ACTIONS = %i[sign_in_attempt account_access account_recovery].freeze
+  AUTH_RATE_LIMIT_ACTIONS = %i[sign_in_attempt account_access account_recovery registration contact_change sms_verification].freeze
   RATE_LIMIT_KEYS = %w[
     proof_submission_rate_limit_web
     proof_submission_rate_limit_email
@@ -31,6 +31,15 @@ class Policy < ApplicationRecord
     account_recovery_rate_limit_user_ip
     account_recovery_rate_limit_ip
     account_recovery_rate_period
+    registration_rate_limit_ip
+    registration_rate_limit_contact
+    registration_rate_period
+    contact_change_rate_limit_ip
+    contact_change_rate_limit_contact
+    contact_change_rate_limit_user_ip
+    contact_change_rate_period
+    sms_verification_rate_limit_contact
+    sms_verification_rate_period
     voucher_verification_max_attempts
   ].freeze
 

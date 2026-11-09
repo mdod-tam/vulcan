@@ -62,6 +62,32 @@
           </div>
         </div>
 
+        <fieldset class="border border-gray-300 rounded p-4 space-y-4">
+          <legend class="font-medium">Verification for email or phone changes</legend>
+          <p class="text-sm">Complete the agency-approved verification process before changing these contacts. Confirm both identity and association with the exact new contact. Do not enter identity documents or secret codes. Another administrator must verify changes to your own account.</p>
+          <% if @pending_contact_change&.pending? %>
+            <p class="text-sm">Pending <%= @pending_contact_change.kind %> request: <%= @pending_contact_change.proposed_value %>. Verify this value independently before entering it above.</p>
+          <% end %>
+          <div>
+            <%= check_box_tag 'contact_verification[identity_verified]', '1', @contact_verification['identity_verified'] == '1', id: 'contact_identity_verified' %>
+            <%= label_tag 'contact_identity_verified', 'Identity verified using the approved process' %>
+          </div>
+          <div>
+            <%= check_box_tag 'contact_verification[association_verified]', '1', @contact_verification['association_verified'] == '1', id: 'contact_association_verified' %>
+            <%= label_tag 'contact_association_verified', 'Association with the new contact verified' %>
+          </div>
+          <div>
+            <%= label_tag 'contact_verification_method', 'Verification method', class: 'form-label' %>
+            <%= text_field_tag 'contact_verification[method]', @contact_verification['method'],
+                               id: 'contact_verification_method', autocomplete: 'off', maxlength: 120, class: 'form-input' %>
+          </div>
+          <div>
+            <%= label_tag 'contact_verification_reference', 'Nonsecret case reference or rationale', class: 'form-label' %>
+            <%= text_field_tag 'contact_verification[reference]', @contact_verification['reference'],
+                               id: 'contact_verification_reference', autocomplete: 'off', maxlength: 240, class: 'form-input' %>
+          </div>
+        </fieldset>
+
         <div>
           <%= f.label :phone_type, "Phone Type", class: "form-label mb-2" %>
           <div role="radiogroup" class="space-y-2">

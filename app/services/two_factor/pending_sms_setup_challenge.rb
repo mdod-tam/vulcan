@@ -2,19 +2,9 @@
 
 module TwoFactor
   class PendingSmsSetupChallenge
-    TTL = 10.minutes
-    LOCK_TTL = 30.seconds
     RESEND_COOLDOWN_SECONDS = 30
-    TERMINAL_STATUSES = %w[approved expired max_attempts_reached not_found].freeze
+    TERMINAL_STATUSES = %w[approved expired canceled max_attempts_reached not_found deleted failed].freeze
     DUPLICATE_SEND_MESSAGE = 'A verification code is being sent. Please wait a moment.'
-
-    def self.cache_key(user_id, phone_number)
-      "two_factor:pending_sms_setup:#{user_id}:#{PhoneNumber.normalize(phone_number)}"
-    end
-
-    def self.lock_key(user_id, phone_number)
-      "#{cache_key(user_id, phone_number)}:lock"
-    end
 
     def self.session_phone_number(session)
       type_key = TwoFactorAuth::SESSION_KEYS[:type]
@@ -32,63 +22,46 @@ module TwoFactor
     end
 
     def prepare!
+      return false unless owner
       return :active if active_session?
 
-      return :active if hydrate_from_cache! && active_session?
-      return :sending unless acquire_lock
-
-      begin
-        return :active if hydrate_from_cache! && active_session?
-
-        send_and_store!
-      ensure
-        release_lock
-      end
+      send_and_store!
     end
 
     def active_session?
-      challenge_data[:type].to_s == 'sms_setup' &&
-        verification_sid.present? &&
+      owner.present? && challenge_data[:type].to_s == 'sms_setup' &&
+        verification_sid.present? && metadata[:owner] == owner &&
         metadata[:phone_number] == phone_number &&
-        unexpired?(metadata)
+        metadata[:code_expires_at].to_i > Time.current.to_i
     end
 
     def resend_wait_seconds
       return 0 unless active_session?
 
-      elapsed_seconds = Time.current.to_i - metadata[:last_sent_at].to_i
-      [RESEND_COOLDOWN_SECONDS - elapsed_seconds, 0].max
+      elapsed = Time.current.to_i - metadata[:last_sent_at].to_i
+      [RESEND_COOLDOWN_SECONDS - elapsed, 0].max
     end
 
     def resend!
       return false unless active_session?
       return :waiting if resend_wait_seconds.positive?
-      return :sending unless acquire_lock
 
-      begin
-        return false unless active_session?
-        return :waiting if resend_wait_seconds.positive?
-
-        send_and_store!
-      ensure
-        release_lock
-      end
+      send_and_store!
     end
 
     def check(code)
       return { success: true, status: 'expired', valid: false } unless active_session?
 
       TwilioVerifyService.check_verification(
-        phone_number,
-        code,
-        verification_sid: verification_sid
+        phone_number, code,
+        verification_sid: verification_sid, purpose: :setup, owner: owner
       )
     end
 
     def clear!
       TwoFactorAuth.clear_challenge(session)
-      Rails.cache.delete(cache_key)
-      release_lock
+      @challenge_data = nil
+      @metadata = nil
     end
 
     def terminal_status?(status)
@@ -99,78 +72,42 @@ module TwoFactor
 
     attr_reader :session, :user, :phone_number
 
-    def hydrate_from_cache!
-      cached_metadata = cached_active_metadata
-      return false unless cached_metadata
-
-      store_challenge(cached_metadata[:verification_sid], cached_metadata)
-      true
+    def authority
+      @authority ||= (session[:factor_enrollment_authority] || {}).with_indifferent_access
     end
 
-    def acquire_lock
-      Rails.cache.write(lock_key, true, expires_in: LOCK_TTL, unless_exist: true)
+    def owner
+      return unless authority[:user_id] == user.id && authority[:session_id].to_i.positive? &&
+                    authority[:token_digest].to_s.match?(/\A[a-f0-9]{64}\z/) &&
+                    authority[:security_version] == user.security_version &&
+                    authority[:nonce].present? && authority[:expires_at].to_i > Time.current.to_i
+
+      "setup:#{user.id}:#{authority[:session_id]}:#{authority[:token_digest]}:#{authority[:security_version]}:#{authority[:nonce]}"
     end
 
-    def cached_active_metadata
-      cached_metadata = (Rails.cache.read(cache_key) || {}).with_indifferent_access
-      return if cached_metadata.blank?
-      return if cached_metadata[:verification_sid].blank?
-      return unless unexpired?(cached_metadata)
+    def send_and_store!
+      result = TwilioVerifyService.send_verification(
+        phone_number, purpose: :setup, owner: owner, locale: user.effective_message_locale || I18n.default_locale
+      )
+      return :suppressed if result[:delivery_suppressed]
+      return :configuration_error if result[:configuration_error]
+      return false unless result[:success] && result[:verification_sid].present? &&
+                          result[:code_expires_at].to_i > Time.current.to_i
 
-      cached_metadata
-    end
-
-    def store_result!(result)
-      new_metadata = metadata_from_result(result)
-      store_challenge(result[:verification_sid], new_metadata)
-      Rails.cache.write(cache_key, new_metadata, expires_in: TTL)
-    end
-
-    def store_challenge(challenge, challenge_metadata)
-      TwoFactorAuth.store_challenge(session, :sms_setup, challenge, challenge_metadata)
+      TwoFactorAuth.store_challenge(
+        session, :sms_setup, result[:verification_sid],
+        verification_sid: result[:verification_sid], owner: owner, phone_number: phone_number,
+        last_sent_at: Time.current.to_i,
+        code_expires_at: [result[:code_expires_at].to_i, authority[:expires_at].to_i].min
+      )
       @challenge_data = nil
       @metadata = nil
-    end
-
-    def metadata_from_result(result)
-      {
-        verification_sid: result[:verification_sid],
-        phone_number: phone_number,
-        last_sent_at: Time.current.to_i,
-        code_expires_at: TTL.from_now.to_i
-      }
+      Rails.logger.info("[SMS] Sent setup verification code to user #{user.id} via Twilio Verify")
+      :sent
     end
 
     def verification_sid
       challenge_data[:challenge].presence
-    end
-
-    def unexpired?(source_metadata)
-      expires_at = source_metadata[:code_expires_at].to_i
-      expires_at.positive? && expires_at > Time.current.to_i
-    end
-
-    def cache_key
-      self.class.cache_key(user.id, phone_number)
-    end
-
-    def lock_key
-      self.class.lock_key(user.id, phone_number)
-    end
-
-    def release_lock
-      Rails.cache.delete(lock_key)
-    end
-
-    def send_and_store!
-      result = TwilioVerifyService.send_verification(phone_number, purpose: :setup)
-      return :suppressed if result[:delivery_suppressed]
-      return :configuration_error if result[:configuration_error]
-      return false unless result[:success] && result[:verification_sid].present?
-
-      store_result!(result)
-      Rails.logger.info("[SMS] Sent setup verification code to user #{user.id} via Twilio Verify")
-      :sent
     end
 
     def challenge_data

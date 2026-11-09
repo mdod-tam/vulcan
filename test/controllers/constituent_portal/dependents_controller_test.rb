@@ -637,6 +637,71 @@ module ConstituentPortal
       assert_equal 'u***@e***.com', changes['email']['new']
     end
 
+    test 'guardian primary contact edit expires dependent freshness and pending proof while retaining its existing session identity' do
+      clear_test_identity
+      credential = @dependent.totp_credentials.create!(secret: ROTP::Base32.random, nickname: 'Dependent app', last_used_at: 1.minute.ago)
+      existing_browser = open_session
+      existing_browser.post sign_in_path, params: { contact: @dependent.email, password: 'password1234' }
+      existing_browser.post process_verification_two_factor_authentication_path(type: 'totp'),
+                            params: { code: ROTP::TOTP.new(credential.secret).now }, as: :json
+      existing_browser.assert_response :success
+      record = @dependent.sessions.sole
+      version = @dependent.security_version
+      assert record.freshly_authenticated?(user: @dependent)
+      existing_browser.post contact_changes_path, params: {
+        contact_change_request: { kind: 'email', proposed_value: 'pending-dependent-email@example.test', phone_type: 'text' }
+      }
+      change = ContactChangeRequest.where(user_id: @dependent.id).sole
+      existing_browser.assert_redirected_to contact_change_path(change)
+      original_email = @dependent.email
+      pending_browser = open_session
+      pending_browser.post sign_in_path, params: { contact: @dependent.email, password: 'password1234' }
+      pending_browser.assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
+      pending_token = pending_browser.request.session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]]
+      assert_equal @dependent, User.find_by_token_for(:two_factor_sign_in, pending_token)
+
+      post sign_in_path, params: { contact: @guardian.email, password: 'password1234' }
+      patch constituent_portal_dependent_path(@dependent), params: { dependent: { phone: '2405550197', phone_type: 'voice' } }
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal version + 1, @dependent.reload.security_version
+      assert_equal original_email, @dependent.email, 'Changing phone must also cancel the pending email operation'
+      assert change.reload.canceled_at
+      assert_not record.reload.freshly_authenticated?(user: @dependent)
+      assert_nil User.find_by_token_for(:two_factor_sign_in, pending_token)
+
+      existing_browser.get edit_profile_path
+      existing_browser.assert_response :success
+      assert_equal @dependent.id, record.reload.user_id
+      assert_equal record.id, @dependent.sessions.sole.id, 'Guardian edits retain the existing ordinary session disposition'
+      existing_browser.get new_contact_change_path
+      existing_browser.assert_redirected_to new_reauthentication_path(return_to: new_contact_change_path)
+      assert_no_difference('Session.count') do
+        pending_browser.post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: '000000' }, as: :json
+      end
+      pending_browser.assert_response :unprocessable_content
+      assert_equal 'user_session', pending_browser.response.parsed_body['error_code']
+    end
+
+    test 'guardian ordinary profile and equivalent contact updates preserve pending contact authority' do
+      version = @dependent.security_version
+      record = @dependent.sessions.create!(
+        ip_address: '127.0.0.1', user_agent: 'Existing dependent session',
+        reauthenticated_at: Time.current, reauthenticated_security_version: version
+      )
+      change = Users::ContactChange.new(user: @dependent, actor: @dependent, session: record, token: record.session_token)
+                                   .request!(kind: 'email', proposed_value: 'pending-unchanged-dependent@example.test')
+
+      patch constituent_portal_dependent_path(@dependent), params: {
+        dependent: { first_name: 'Updated', email: @dependent.email.upcase, phone: PhoneNumber.national_digits(@dependent.phone),
+                     phone_type: @dependent.phone_type }
+      }
+
+      assert_redirected_to constituent_portal_dashboard_path
+      assert_equal version, @dependent.reload.security_version
+      assert_nil change.reload.canceled_at
+      assert record.reload.freshly_authenticated?(user: @dependent)
+    end
+
     test 'should update dependent when submitted contact matches guardian contact' do
       patch constituent_portal_dependent_path(@dependent), params: {
         dependent: {

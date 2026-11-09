@@ -99,7 +99,12 @@ module Users
         transfer_guardian_relationships!
         reconcile_person_references!
         expire_duplicate_sessions!
+        @canonical_user.advance_security_version!
+        @duplicate_user.advance_security_version!
         retire_duplicate!
+        ContactChangeRequest.unresolved.where(user_id: [@canonical_user.id, @duplicate_user.id]).find_each do |change|
+          change.update!(canceled_at: Time.current)
+        end
         reconcile_related_cases!
         audit_event = log_merge!
         resolve_selected_case!(audit_event)

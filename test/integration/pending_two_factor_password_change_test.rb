@@ -84,7 +84,7 @@ class PendingTwoFactorPasswordChangeTest < ActionDispatch::IntegrationTest
     user, = user_with_totp
     user.sms_credentials.create!(phone_number: '410-555-0188', verified_at: Time.current)
     start_password_step(user)
-    TwilioVerifyService.expects(:send_verification).once.returns(success: true, verification_sid: 'TEST_PASSWORD_CHANGE', status: 'pending')
+    TwilioVerifyService.expects(:send_verification).once.returns(success: true, verification_sid: 'TEST_PASSWORD_CHANGE', status: 'pending', code_expires_at: 10.minutes.from_now.to_i)
     post select_sms_verification_two_factor_authentication_path
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
     user.update!(new_password_params)
@@ -101,7 +101,7 @@ class PendingTwoFactorPasswordChangeTest < ActionDispatch::IntegrationTest
     user, = user_with_totp
     user.sms_credentials.create!(phone_number: '410-555-0189', verified_at: Time.current)
     start_password_step(user)
-    TwilioVerifyService.expects(:send_verification).once.returns(success: true, verification_sid: 'TEST_PASSWORD_CHANGE_DURING_CHECK', status: 'pending')
+    TwilioVerifyService.expects(:send_verification).once.returns(success: true, verification_sid: 'TEST_PASSWORD_CHANGE_DURING_CHECK', status: 'pending', code_expires_at: 10.minutes.from_now.to_i)
     post select_sms_verification_two_factor_authentication_path
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
 

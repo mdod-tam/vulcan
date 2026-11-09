@@ -13,6 +13,12 @@
     </div>
 
     <%= render 'vendor_portal/shared/onboarding_guidance', vendor: @vendor %>
+    <section class="card p-6 mb-6" aria-labelledby="vendor-contact-title">
+      <h2 id="vendor-contact-title" class="text-lg font-medium"><%= t('contact_changes.title') %></h2>
+      <p><%= t('contact_changes.email') %>: <%= display_contact_email(@vendor) %></p>
+      <p><%= t('contact_changes.phone') %>: <%= display_contact_phone(@vendor) %></p>
+      <%= link_to t('contact_changes.title'), new_contact_change_path, class: 'btn btn-primary mt-4' %>
+    </section>
 
     <%= form_with model: @vendor, url: vendor_portal_profile_path, local: true, class: "space-y-8" do |f| %>
       <% if @vendor.errors.any? %>
@@ -121,22 +127,6 @@
               <%= f.label :zip_code, "Zip Code", class: 'form-label' %>
               <div class="mt-1">
                 <%= f.text_field :zip_code,
-                    class: 'form-input',
-                    required: true %>
-              </div>
-            </div>
-            <div class="sm:col-span-2">
-              <%= f.label :phone, "Phone", class: 'form-label' %>
-              <div class="mt-1">
-                <%= f.telephone_field :phone,
-                    class: 'form-input',
-                    required: true %>
-              </div>
-            </div>
-            <div class="sm:col-span-4">
-              <%= f.label :email, "Email", class: 'form-label' %>
-              <div class="mt-1">
-                <%= f.email_field :email,
                     class: 'form-input',
                     required: true %>
               </div>

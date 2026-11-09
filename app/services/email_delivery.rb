@@ -30,6 +30,8 @@ module EmailDelivery
     end
   end
 
+  class NotAccepted < StandardError; end
+
   Decision = Data.define(:outcome, :reason) do
     def self.allowed = new(outcome: :allowed, reason: nil)
     def self.suppressed(reason) = new(outcome: :suppressed, reason: reason.to_s)
@@ -98,7 +100,7 @@ module EmailDelivery
       decision.raise_if_configuration_error!
       raise ApplicationMailer::DeliverySkipped.new(reason: decision.reason)
     end
-    raise 'Email delivery was not accepted' if result == false
+    raise NotAccepted, 'Email delivery was not accepted' if result == false
 
     result
   end

@@ -10,6 +10,12 @@ module Authentication
 
   private
 
+  def presented_session_token
+    return @presented_session_token if defined?(@presented_session_token)
+
+    @presented_session_token = cookies.signed[:session_token]
+  end
+
   def session_activity_deadlines
     return unless current_user && current_session&.persisted?
     return if current_user.force_password_change?
@@ -52,7 +58,7 @@ module Authentication
   def find_production_session
     return if cookies.signed[:session_token].blank?
 
-    Session.for_token(cookies.signed[:session_token]).take
+    Session.for_token(presented_session_token).take
   end
 
   def find_test_session

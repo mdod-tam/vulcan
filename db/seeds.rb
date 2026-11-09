@@ -118,7 +118,7 @@ def clear_existing_data
   # they point to (e.g., User).
 
   # Clear models with dependencies first. User is cleared last.
-  [PrintQueueItem, SecureRequestForm, GuardianRelationship,
+  [ContactChangeRequest, RegistrationVerification, PrintQueueItem, SecureRequestForm, GuardianRelationship,
    ApplicationNote, TrainingSession, VoucherTransactionProduct, VoucherTransaction, Voucher,
    W9Review, Invoice, ApplicationStatusChange, Evaluation, ProofReview,
    Notification, RoleCapability, PolicyChange, EmailTemplate, Product, Event, Policy, Application].each do |model|

@@ -18,11 +18,9 @@ module VendorPortal
       else
         # A usable new W-9 rides along so the vendor need not choose it again
         saved_errors = @vendor.errors.dup
-        retry_phone = @vendor.phone
         @vendor.reload
         @retained_w9 = @vendor.with_lock { Vendors::W9Document.retained(params[:users_vendor], vendor: @vendor) }
-        @vendor.assign_attributes(vendor_params.except(:w9_form, :w9_form_signed_id))
-        @vendor.phone = retry_phone if vendor_params.key?(:phone)
+        @vendor.assign_attributes(vendor_params.except(:w9_form, :w9_form_signed_id, :email, :phone))
         @vendor.errors.copy!(saved_errors)
         submitted_reference = params[:users_vendor][:w9_form_signed_id]
         @retained_w9_reference = if @retained_w9 && Vendors::W9Document.resolve_reference(submitted_reference, vendor: @vendor)&.id == @retained_w9.id
@@ -40,9 +38,13 @@ module VendorPortal
     # A new W-9 is resolved through UploadedDocument in the same transaction as the update,
     # so a refused file leaves the profile and the W-9 on file unchanged.
     def update_vendor
-      attributes = vendor_params.except(:w9_form, :w9_form_signed_id)
+      attributes = vendor_params.except(:w9_form, :w9_form_signed_id, :email, :phone)
       w9_form = UploadedDocument.submitted(params[:users_vendor], 'w9_form')
       @vendor.with_lock do
+        if Users::ContactChange.primary_attributes_changed?(@vendor, vendor_params)
+          @vendor.errors.add(:base, I18n.t('contact_changes.use_verified_flow'))
+          raise ActiveRecord::RecordInvalid, @vendor
+        end
         if w9_form.present?
           Vendors::ReplaceW9.call(vendor: @vendor, file: w9_form, attributes: attributes)
         else

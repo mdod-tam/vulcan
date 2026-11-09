@@ -9,10 +9,13 @@ class SessionsController < ApplicationController
 
   def new
     respond_to do |format|
-      format.turbo_stream do
-        render turbo_stream: turbo_stream.replace('sign_in_form', partial: 'sessions/form')
+      format.any(:html, :turbo_stream) do
+        if current_user
+          redirect_to(_dashboard_for(current_user))
+        else
+          render :new, formats: [:html], content_type: 'text/html'
+        end
       end
-      format.html { redirect_to(_dashboard_for(current_user)) if current_user }
     end
   end
 
