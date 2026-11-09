@@ -77,7 +77,7 @@ describe("PaperApplicationController", () => {
     expect(element).toBeDefined();
   });
 
-  test("inactive adult verification fields do not block submit", () => {
+  test("existing adult verification has a field link and inactive controls do not block submit", () => {
     const directController = new PaperApplicationController()
     const submitButton = document.querySelector("[data-paper-application-target='submitButton']")
     const existingAdultField = document.querySelector("input[name='existing_constituent_id']")
@@ -106,6 +106,13 @@ describe("PaperApplicationController", () => {
       writable: false,
       configurable: true
     })
+    const status = document.createElement("div")
+    element.append(status)
+    Object.defineProperty(directController, "hasStatusTarget", { value: true, configurable: true })
+    Object.defineProperty(directController, "statusTarget", { value: status, configurable: true })
+    const label = document.createElement("label")
+    verificationCheckbox.before(label)
+    label.append(verificationCheckbox, "I verified contact info against the paper application")
 
     existingAdultField.value = "42"
     existingAdultField.disabled = true
@@ -115,6 +122,17 @@ describe("PaperApplicationController", () => {
     directController.syncAdultVerificationGate()
 
     expect(submitButton.disabled).toBe(false)
+
+    existingAdultField.disabled = false
+    verificationCheckbox.disabled = false
+    directController.syncAdultVerificationGate()
+    expect(submitButton.disabled).toBe(true)
+    expect(status.querySelector('a').textContent).toBe("I verified contact info against the paper application")
+    expect(document.getElementById(status.querySelector('a').hash.slice(1))).toBe(verificationCheckbox)
+    verificationCheckbox.checked = true
+    directController.syncAdultVerificationGate()
+    expect(submitButton.disabled).toBe(false)
+    expect(status.querySelector('a')).toBeNull()
   })
 
   test("certifying professional toggle manages provider and release requirements", () => {
@@ -274,7 +292,7 @@ describe("PaperApplicationController", () => {
             <p id="disability_release_hint">The program may contact this provider to verify my disability certification.</p>
           </div>
         </fieldset>
-        <p data-paper-application-target="status"></p>
+        <div data-paper-application-target="status"></div>
         <button type="submit" data-paper-application-target="submitButton">Submit</button>
       </form>
     `
@@ -315,15 +333,24 @@ describe("PaperApplicationController", () => {
       configurable: true
     })
     directController.elementIsVisible = () => true
+    const missingLabels = () => Array.from(status.querySelectorAll('a')).map(link => link.textContent)
 
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe(
-      "Complete all required confirmations before submitting. " +
-      "Still needed: The applicant has marked that they are a resident of Maryland, " +
-      "I verify that the information entered from the paper application is accurate and complete, " +
-      "First Name, Income proof file, No certifying professional information provided, Income proof, Disability type."
-    )
+    expect(missingLabels()).toEqual([
+      "The applicant has marked that they are a resident of Maryland",
+      "I verify that the information entered from the paper application is accurate and complete",
+      "First Name", "Income proof file", "No certifying professional information provided", "Income proof", "Disability type"
+    ])
+    const residencyLink = status.querySelector('a[href="#application_maryland_resident"]')
+    expect(residencyLink).not.toBeNull()
+    residencyLink.focus()
+    directController.syncFormState()
+    expect(document.activeElement).toBe(residencyLink)
+    expect(status.querySelector('a')).toBe(residencyLink)
+    status.querySelectorAll('a').forEach(link => {
+      expect(document.getElementById(decodeURIComponent(link.hash.slice(1)))).not.toBeNull()
+    })
 
     document.querySelector('input[name="constituent[hearing_disability]"]').checked = true
     document.querySelector('input[name="application[maryland_resident]"]').checked = true
@@ -333,16 +360,13 @@ describe("PaperApplicationController", () => {
 
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe(
-      "Complete all required confirmations before submitting. Still needed: First Name, Income proof file."
-    )
+    expect(missingLabels()).toEqual(["First Name", "Income proof file"])
+    expect(status.querySelector('a[href="#application_maryland_resident"]')).toBeNull()
 
     document.querySelector('input[name="constituent[first_name]"]').value = "Ada"
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe(
-      "Complete all required confirmations before submitting. Still needed: Income proof file."
-    )
+    expect(missingLabels()).toEqual(["Income proof file"])
 
     const incomeProof = document.querySelector('input[name="income_proof"]')
     Object.defineProperty(incomeProof, "files", {
@@ -358,19 +382,16 @@ describe("PaperApplicationController", () => {
     directController.syncFormState()
 
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe(
-      "Complete all required confirmations before submitting. " +
-      "Still needed: Provider Phone, Provider Email, I authorize the release and sharing of my disability-related information."
-    )
+    expect(missingLabels()).toEqual([
+      "Provider Phone", "Provider Email", "I authorize the release and sharing of my disability-related information."
+    ])
 
     document.querySelector('input[name="application[certifying_professional_phone]"]').value = "555-111-2222"
     document.querySelector('input[name="application[certifying_professional_email]"]').value = "dr.test@example.com"
     directController.syncFormState()
 
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe(
-      "Complete all required confirmations before submitting. Still needed: I authorize the release and sharing of my disability-related information."
-    )
+    expect(missingLabels()).toEqual(["I authorize the release and sharing of my disability-related information."])
 
     // The form renders a hidden "0" companion before the checkbox, so scope by type like the real markup.
     document.querySelector('input[type="checkbox"][name="application[disability_information_release_authorized]"]').checked = true
@@ -385,7 +406,7 @@ describe("PaperApplicationController", () => {
       <form data-controller="paper-application">
         <input type="radio" name="applicant_type" value="dependent" checked>
         <input type="hidden" name="guardian_id" value="">
-        <p data-paper-application-target="status"></p>
+        <div data-paper-application-target="status"></div>
         <button type="submit" data-paper-application-target="submitButton">Submit</button>
       </form>
     `

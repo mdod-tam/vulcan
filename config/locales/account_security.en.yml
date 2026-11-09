@@ -81,6 +81,7 @@ en:
     delivery_help: Delivery can take a few minutes. Check your spam or junk folder before requesting another link. Repeated requests are limited.
     resend: Send another verification link
     change_email: Correct or change email address
+    password_access_link: Set or reset your password
     support_html: 'Still need help? Contact the MAT Team at %{email}.'
     introduction: Enter your email address to receive a link and finish creating your account.
     email_help: You will choose your password after confirming your email. This step does not

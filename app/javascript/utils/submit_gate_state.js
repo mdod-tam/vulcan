@@ -83,13 +83,26 @@ export function controlLabel(element) {
   return controlName(element) || groupLabel(element)
 }
 
-export function incompleteGroupLabels(root, isVisible = elementIsVisible) {
-  const labels = [
-    ...blockingRequiredControls(root, isVisible).map(controlLabel),
-    ...blockingRadioGroups(root, isVisible).map((group) => groupLabel(group[0])),
-    ...blockingCheckboxGroups(root, isVisible).map(groupLabel)
+export function incompleteRequirements(root, isVisible = elementIsVisible) {
+  const requirements = [
+    ...blockingRequiredControls(root, isVisible).map((control) => ({ label: controlLabel(control), control })),
+    ...blockingRadioGroups(root, isVisible).map((group) => ({ label: groupLabel(group[0]), control: group[0] })),
+    ...blockingCheckboxGroups(root, isVisible).map((group) => ({
+      label: groupLabel(group),
+      control: enabledVisibleFields(group, 'input[type="checkbox"]', isVisible)[0]
+    }))
   ]
-  return [...new Set(labels.filter(Boolean))]
+  const labels = new Set()
+  return requirements.filter(({ label }) => {
+    if (!label || labels.has(label)) return false
+
+    labels.add(label)
+    return true
+  })
+}
+
+export function incompleteGroupLabels(root, isVisible = elementIsVisible) {
+  return incompleteRequirements(root, isVisible).map(({ label }) => label)
 }
 
 // Forms may supply a detail template ("Still needed: %{items}."); without one the base

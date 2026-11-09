@@ -6,8 +6,8 @@ import {
   blockingRadioGroups,
   blockingRequiredControls,
   elementIsVisible as isElementVisible,
-  formatIncompleteMessage,
-  incompleteGroupLabels
+  controlLabel,
+  incompleteRequirements
 } from "../../utils/submit_gate_state";
 
 export default class extends Controller {
@@ -53,16 +53,14 @@ export default class extends Controller {
     picker?.highlightChanges();
   }
 
-  _adultVerificationBlocksSubmit() {
+  _adultVerificationBlocker() {
     const idInput = this.element.querySelector('[name="existing_constituent_id"]');
-    if (!idInput || idInput.disabled || !String(idInput.value || "").trim()) return false;
+    if (!idInput || idInput.disabled || !String(idInput.value || "").trim()) return null;
 
     const checkbox = this.element.querySelector(
       'input[type="checkbox"][name="contact_info_verified"][data-adult-picker-target="verificationCheckbox"]'
     );
-    if (!checkbox || checkbox.disabled) return false;
-
-    return !checkbox.checked;
+    return checkbox && !checkbox.disabled && !checkbox.checked ? checkbox : null;
   }
 
   /**
@@ -70,13 +68,13 @@ export default class extends Controller {
    */
   _applySubmitGating() {
     const incomeBlocks = !!this._incomeExceedsThreshold;
-    const verifyBlocks = this._adultVerificationBlocksSubmit();
+    const verificationBlocker = this._adultVerificationBlocker();
     const requiredControlBlocks = this._requiredControlsBlockSubmit();
     const proofActionBlocks = this._requiredRadioGroupBlocksSubmit();
     const checkboxGroupBlocks = this._checkboxGroupBlocksSubmit();
     const guardianSelectionBlocks = this._guardianSelectionBlocksSubmit();
     const uploadBlocker = documentUploadBlocker(this.element, field => this.elementIsVisible(field));
-    const disable = incomeBlocks || verifyBlocks || requiredControlBlocks || proofActionBlocks ||
+    const disable = incomeBlocks || !!verificationBlocker || requiredControlBlocks || proofActionBlocks ||
       checkboxGroupBlocks || uploadBlocker !== null || guardianSelectionBlocks;
 
     if (this.hasSubmitButtonTarget) {
@@ -90,12 +88,18 @@ export default class extends Controller {
     }
 
     if (this.hasStatusTarget) {
+      const requirements = disable && !uploadBlocker && !guardianSelectionBlocks
+        ? incompleteRequirements(this.element, field => this.elementIsVisible(field))
+        : [];
+      if (verificationBlocker && !uploadBlocker && !guardianSelectionBlocks) {
+        requirements.push({ label: controlLabel(verificationBlocker), control: verificationBlocker });
+      }
       const message = uploadBlocker?.validationMessage || (guardianSelectionBlocks
         ? "Select or create a guardian before submitting this dependent's application."
         : (disable
-          ? this._incompleteMessage()
+          ? `Complete all required confirmations before submitting.${requirements.length ? " Still needed:" : ""}`
           : "Paper application is ready to submit."));
-      if (this.statusTarget.textContent !== message) this.statusTarget.textContent = message;
+      this._renderSubmitStatus(message, requirements);
     }
 
     if (this.hasRejectionButtonTarget) {
@@ -210,17 +214,41 @@ export default class extends Controller {
     return blockingCheckboxGroups(this.element, (field) => this.elementIsVisible(field));
   }
 
-  // Names every blocking requirement the admin can see, so a disabled submit button never
-  // leaves staff hunting across this long form for the missing item (for example the
-  // disability information release under Certifying Professional Information).
-  _incompleteMessage() {
-    const base = "Complete all required confirmations before submitting.";
+  _renderSubmitStatus(message, requirements) {
+    requirements.forEach(({ control }) => {
+      control.classList.add("scroll-mt-24");
+      if (control.id) return;
+      let id;
+      do {
+        this._nextMissingFieldId = (this._nextMissingFieldId || 0) + 1;
+        id = `paper-required-${this._nextMissingFieldId}`;
+      } while (document.getElementById(id));
+      control.id = id;
+    });
 
-    return formatIncompleteMessage(
-      base,
-      "Still needed: %{items}.",
-      incompleteGroupLabels(this.element, (field) => this.elementIsVisible(field))
-    );
+    const signature = JSON.stringify([message, requirements.map(({ label, control }) => [label, control.id])]);
+    // Keep focus and live announcements stable when an input event changes no blocker.
+    if (signature === this._submitStatusSignature) return;
+    this._submitStatusSignature = signature;
+
+    const explanation = document.createElement("p");
+    explanation.textContent = message;
+    const content = [explanation];
+    if (requirements.length) {
+      const list = document.createElement("ul");
+      list.className = "mt-2 list-disc space-y-1 pl-5";
+      requirements.forEach(({ label, control }) => {
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = `#${encodeURIComponent(control.id)}`;
+        link.className = "text-primary-700 underline hover:text-primary-900 rounded";
+        link.textContent = label;
+        item.append(link);
+        list.append(item);
+      });
+      content.push(list);
+    }
+    this.statusTarget.replaceChildren(...content);
   }
 
   /**

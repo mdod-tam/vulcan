@@ -6,7 +6,8 @@ import {
   elementIsVisible,
   formatIncompleteMessage,
   groupLabel,
-  incompleteGroupLabels
+  incompleteGroupLabels,
+  incompleteRequirements
 } from "utils/submit_gate_state"
 
 function buildForm() {
@@ -89,6 +90,9 @@ describe("submit_gate_state", () => {
 
   test("incompleteGroupLabels names every blocker once, in form order", () => {
     const form = buildForm()
+    const provider = form.querySelector('input[name="application[certifying_professional_name]"]')
+    form.append(provider.closest("label").cloneNode(true))
+    const markup = form.outerHTML
 
     expect(incompleteGroupLabels(form, alwaysVisible)).toEqual([
       "I authorize the release and sharing of my disability-related information.",
@@ -96,6 +100,32 @@ describe("submit_gate_state", () => {
       "Income proof",
       "Disability type"
     ])
+    const requirements = incompleteRequirements(form, alwaysVisible)
+    expect(requirements.map(({ label }) => label)).toEqual(incompleteGroupLabels(form, alwaysVisible))
+    expect(requirements[0].control).toBe(form.querySelector("#release"))
+    expect(requirements[1].control).toBe(provider)
+    expect(requirements[2].control).toBe(form.querySelector('input[name="income_proof_action"]'))
+    expect(requirements[3].control).toBe(form.querySelector('input[name="constituent[hearing_disability]"]'))
+    expect(requirements[2].control.id).toBe("")
+    expect(requirements[3].control.id).toBe("")
+    expect(form.outerHTML).toBe(markup)
+  })
+
+  test("navigation targets the first enabled visible group member and excludes inactive requirements", () => {
+    const form = buildForm()
+    const visible = (field) => field.dataset.hidden !== "true"
+    form.querySelector("#release").disabled = true
+    form.querySelector('input[name="application[certifying_professional_name]"]').dataset.hidden = "true"
+    form.querySelector('input[name="income_proof_action"][value="accept"]').dataset.hidden = "true"
+    form.querySelector('input[name="constituent[hearing_disability]"]').disabled = true
+
+    const requirements = incompleteRequirements(form, visible)
+    expect(requirements.map(({ label }) => label)).toEqual(["Income proof", "Disability type"])
+    expect(requirements[0].control).toBe(form.querySelector('input[name="income_proof_action"][value="reject"]'))
+    expect(requirements[1].control).toBe(form.querySelector('input[name="constituent[vision_disability]"]'))
+
+    requirements.forEach(({ control }) => { control.checked = true })
+    expect(incompleteRequirements(form, visible)).toEqual([])
   })
 
   test("formatIncompleteMessage keeps the base message without a template or labels", () => {

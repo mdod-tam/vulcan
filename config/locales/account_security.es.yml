@@ -82,6 +82,7 @@ es:
     delivery_help: El correo puede tardar unos minutos. Revise la carpeta de correo no deseado antes de solicitar otro enlace. Las solicitudes repetidas tienen un límite.
     resend: Enviar otro enlace de verificación
     change_email: Corregir o cambiar la dirección de correo
+    password_access_link: Establecer o restablecer su contraseña
     support_html: '¿Todavía necesita ayuda? Comuníquese con el equipo MAT en %{email}.'
     introduction: Ingrese su correo para recibir un enlace y terminar de crear su cuenta.
     email_help: Elegirá su contraseña después de confirmar el correo. Este paso no inicia sesión.

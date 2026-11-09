@@ -33,10 +33,22 @@
       <% end %>
     <% end %>
     <% if @verification_requested %>
-      <p class="mt-4 text-sm"><%= link_to t('registration_verification.change_email'), sign_up_path(locale: public_form_locale_param) %></p>
+      <p class="mt-4 text-sm">
+        <%= link_to t('registration_verification.change_email'), sign_up_path(locale: public_form_locale_param),
+                    class: 'font-medium text-primary-600 hover:text-primary-500 rounded' %>
+      </p>
       <p class="mt-4 text-sm"><%= t('registration_verification.support_html', email: mail_to(ProgramContact.support_email, class: 'underline')) %></p>
     <% end %>
-    <p class="mt-4 text-sm"><%= link_to t('portal_self_service.registrations.sign_in_link'), sign_in_path(locale: public_form_locale_param) %></p>
-    <p class="mt-4 text-sm"><%= link_to t('portal_self_service.account_access.title'), new_password_path(locale: public_form_locale_param) %></p>
+    <div class="mt-6 text-center text-sm">
+      <p class="text-gray-600">
+        <%= t('portal_self_service.registrations.sign_in_prompt') %>
+        <%= link_to t('portal_self_service.registrations.sign_in_link'), sign_in_path(locale: public_form_locale_param),
+                    class: 'ml-1 font-medium text-primary-600 hover:text-primary-500 rounded' %>
+      </p>
+      <p class="mt-2">
+        <%= link_to t('registration_verification.password_access_link'), new_password_path(locale: public_form_locale_param),
+                    class: 'font-medium text-primary-600 hover:text-primary-500 rounded' %>
+      </p>
+    </div>
   </section>
 </div>

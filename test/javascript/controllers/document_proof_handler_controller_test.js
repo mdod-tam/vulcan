@@ -18,7 +18,11 @@ describe("DocumentProofHandlerController", () => {
         <select name="income_proof_rejection_reason">
           <option value="">Select a reason</option>
           <option value="none_provided">None provided</option>
+          <option value="other">Other</option>
         </select>
+        <div data-document-proof-handler-target="customReasonSection">
+          <textarea name="income_proof_custom_rejection_reason"></textarea>
+        </div>
       </form>
     `
 
@@ -90,14 +94,20 @@ describe("DocumentProofHandlerController", () => {
       configurable: true
     })
     Object.defineProperty(controller, "hasCustomReasonSectionTarget", {
-      value: false,
+      value: true,
       writable: false,
       configurable: true
     })
     Object.defineProperty(controller, "hasCustomReasonFieldTarget", {
-      value: false,
+      value: true,
       writable: false,
       configurable: true
+    })
+    Object.defineProperty(controller, "customReasonSectionTarget", {
+      value: form.querySelector('[data-document-proof-handler-target="customReasonSection"]'), configurable: true
+    })
+    Object.defineProperty(controller, "customReasonFieldTarget", {
+      value: form.querySelector('textarea'), configurable: true
     })
     Object.defineProperty(controller, "hasUploadSectionTarget", {
       value: true,
@@ -125,16 +135,31 @@ describe("DocumentProofHandlerController", () => {
     document.body.innerHTML = ""
   })
 
-  test("none provided dispatches a bubbling change event after selecting reject", () => {
+  test("none provided satisfies the standard reason without notes and updates the submit gate", () => {
     const changeHandler = jest.fn()
     form.addEventListener("change", changeHandler)
+    rejectionReasonSelect.value = "other"
+    controller.updateReasonInputMode()
+    expect(controller.customReasonFieldTarget.required).toBe(true)
+    controller.customReasonFieldTarget.value = "An earlier custom explanation"
 
     controller.handleNoneProvided()
 
     expect(controller.rejectRadioTarget.checked).toBe(true)
     expect(rejectionReasonSelect.value).toBe("none_provided")
     expect(fileInput.disabled).toBe(true)
+    expect(rejectionReasonSelect.checkValidity()).toBe(true)
+    expect(controller.customReasonFieldTarget.required).toBe(false)
+    expect(controller.customReasonFieldTarget.disabled).toBe(true)
+    expect(controller.customReasonFieldTarget.value).toBe("")
+    expect(new FormData(form).has('income_proof_custom_rejection_reason')).toBe(false)
     expect(changeHandler).toHaveBeenCalledTimes(1)
     expect(changeHandler.mock.calls[0][0].target).toBe(controller.rejectRadioTarget)
+
+    rejectionReasonSelect.value = "other"
+    controller.handleReasonSelectionChanged()
+    expect(controller.customReasonFieldTarget.required).toBe(true)
+    expect(controller.customReasonFieldTarget.disabled).toBe(false)
+    expect(controller.customReasonFieldTarget.checkValidity()).toBe(false)
   })
 })
