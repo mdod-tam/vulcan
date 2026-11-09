@@ -55,7 +55,12 @@ class TwilioVerifyService
       attempt, version = SmsVerificationAttempt.reserve_check!(
         service_sid: reservation_service_sid, phone: phone_number, purpose: purpose, owner: owner, verification_sid: verification_sid
       )
-      checked = provider_check(phone_number, code, verification_sid)
+      begin
+        checked = provider_check(phone_number, code, verification_sid)
+      rescue Twilio::REST::RestError => e
+        attempt.finish_check!(version: version, approved: false, terminal: terminal_provider_error?(e))
+        return refused
+      end
       matches = provider_identity_matches?(checked, sid: verification_sid, phone: phone_number)
       status = read_twilio_attribute(checked, :status).to_s
       approved = matches && status == 'approved'
@@ -63,9 +68,6 @@ class TwilioVerifyService
       { success: matches, status: matches ? status : 'failed', valid: approved,
         receipt_id: (attempt.id if approved), to: format_phone_to_e164(phone_number) }
     rescue SmsVerificationAttempt::Refused, ActiveRecord::RecordNotFound, AuthRateLimit::ExceededError
-      refused
-    rescue Twilio::REST::RestError => e
-      attempt&.finish_check!(version: version, approved: false, terminal: terminal_provider_error?(e)) if version
       refused
     rescue StandardError => e
       Rails.logger.warn("SMS verification check failed: #{e.class.name}")

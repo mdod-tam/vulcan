@@ -37,7 +37,9 @@ class SmsVerificationAttempt < ApplicationRecord
       else
         AuthRateLimit.check!(action: :sms_verification, scope: :contact, submitted_contact: phone)
         version = SecureRandom.hex(16)
-        current.update!(send_version: version, sending_until: now + CALL_TIMEOUT, last_sent_at: now)
+        # A lost response can still create a provider token on this send.
+        current.update!(send_version: version, sending_until: now + CALL_TIMEOUT, last_sent_at: now,
+                        ownership_expires_at: [current.ownership_expires_at, now + provider_lifetime + CALL_TIMEOUT].max)
         result = [current, version]
       end
     end
@@ -79,7 +81,7 @@ class SmsVerificationAttempt < ApplicationRecord
       raise Refused unless check_version == version && finished_at.nil? && expires_at > Time.current
 
       # Local exhaustion or an ambiguous provider refusal does not end Twilio's
-      # destination token. Keep ownership until its fixed expiry in those cases.
+      # destination token. Keep ownership until its conservative deadline.
       update!(checking_until: nil, approved_at: (Time.current if approved),
               checks_count: terminal ? MAX_CHECKS : checks_count, finished_at: (Time.current if approved))
     end

@@ -92,7 +92,7 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
     Rails.application.config.twilio = original_config
   end
 
-  test 'the real SDK client uses the bounded HTTP adapter for a public send' do
+  test 'the real SDK client uses the configured HTTP timeout for a public send' do
     original_client = TwilioVerifyService.instance_variable_get(:@client)
     TwilioVerifyService.instance_variable_set(:@client, nil)
     TwilioVerifyService.unstub(:provider_service)
@@ -103,7 +103,7 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
     payload = provider_send.merge(date_created: Time.current.iso8601)
     transport.expects(:request).returns(Twilio::Response.new(201, payload.to_json))
     assert send_code[:success]
-    assert_operator transport.timeout * 2, :<, SmsVerificationAttempt::CALL_TIMEOUT
+    assert_equal 15, transport.timeout
   ensure
     TwilioVerifyService.instance_variable_set(:@client, original_client)
   end
@@ -175,6 +175,72 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
     assert_nil SmsVerificationAttempt.sole.approved_at
   end
 
+  test 'a provider error arriving after local expiry returns a refusal without approving' do
+    freeze_time do
+      start_provider_challenge
+      attempt = SmsVerificationAttempt.sole
+      ownership_deadline = attempt.ownership_expires_at
+      travel_to attempt.expires_at - 1.second
+
+      result = check_with_provider_response do
+        travel 2.seconds
+        Twilio::Response.new(404, { code: 20_404, message: 'Verification absent' }.to_json)
+      end
+
+      assert_not result[:success]
+      assert_not result[:valid]
+      assert_equal 'unavailable', result[:status]
+      assert_nil attempt.reload.approved_at
+      assert_nil attempt.finished_at
+      assert_equal 1, attempt.checks_count
+      assert_equal ownership_deadline, attempt.ownership_expires_at
+    end
+  end
+
+  test 'an older provider error cannot alter a newer check reservation' do
+    freeze_time do
+      start_provider_challenge
+      attempt = SmsVerificationAttempt.sole
+      newer_version = nil
+      newer_deadline = nil
+
+      result = check_with_provider_response do
+        travel SmsVerificationAttempt::CALL_TIMEOUT + 1.second
+        newer, newer_version = SmsVerificationAttempt.reserve_check!(
+          service_sid: 'VA_TEST', phone: PHONE, purpose: :setup, owner: @owner, verification_sid: SID
+        )
+        newer_deadline = newer.checking_until
+        Twilio::Response.new(404, { code: 20_404, message: 'Verification absent' }.to_json)
+      end
+
+      assert_not result[:success]
+      assert_not result[:valid]
+      assert_equal newer_version, attempt.reload.check_version
+      assert_equal newer_deadline, attempt.checking_until
+      assert_equal 2, attempt.checks_count
+      assert_nil attempt.approved_at
+      assert_nil attempt.finished_at
+    end
+  end
+
+  test 'an approved provider response arriving after local expiry cannot approve' do
+    freeze_time do
+      start_provider_challenge
+      attempt = SmsVerificationAttempt.sole
+      travel_to attempt.expires_at - 1.second
+
+      result = check_with_provider_response do
+        travel 2.seconds
+        Twilio::Response.new(200, provider_check(status: 'approved').to_json)
+      end
+
+      assert_not result[:success]
+      assert_not result[:valid]
+      assert_nil attempt.reload.approved_at
+      assert_nil attempt.finished_at
+    end
+  end
+
   test 'test mode also requires owned live state and keeps phone numbers and codes out of logs' do
     TwilioVerifyService.stubs(:test_mode?).returns(true)
     TwilioVerifyService.expects(:client).never
@@ -188,19 +254,35 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
     assert_not_includes logs, '123456'
   end
 
-  test 'send errors expose only generic guidance and retain the uncertain reservation' do
-    error = StandardError.new(private_error_message)
-    error.set_backtrace([private_error_message])
-    @verifications.expects(:create).raises(error)
-    logs = capture_rails_logs do
-      result = send_code
-      assert_not result[:success]
-      assert_private_logs(result[:error])
+  test 'send errors expose generic guidance and retain ownership through an uncertain late retry' do
+    freeze_time do
+      error = StandardError.new(private_error_message)
+      error.set_backtrace([private_error_message])
+      @verifications.expects(:create).twice.raises(error)
+      logs = capture_rails_logs do
+        result = send_code
+        assert_not result[:success]
+        assert_private_logs(result[:error])
+      end
+      assert_private_logs(logs)
+      assert_includes logs, 'StandardError'
+      attempt = SmsVerificationAttempt.sole
+      original_ownership_deadline = attempt.ownership_expires_at
+      entry_deadline = attempt.expires_at
+      assert attempt.sending_until
+      assert_nil attempt.finished_at
+
+      travel 500.seconds
+      assert_not send_code[:success]
+      latest_ownership_deadline = attempt.reload.ownership_expires_at
+      assert_operator latest_ownership_deadline, :>, original_ownership_deadline
+      assert_equal entry_deadline, attempt.expires_at
+
+      travel_to original_ownership_deadline + 1.second
+      assert_not send_code(purpose: :contact_change, owner: 'different-context')[:success]
+      assert_nil attempt.reload.finished_at
+      assert_equal latest_ownership_deadline, attempt.ownership_expires_at
     end
-    assert_private_logs(logs)
-    assert_includes logs, 'StandardError'
-    assert SmsVerificationAttempt.sole.sending_until
-    assert_nil SmsVerificationAttempt.sole.finished_at
   end
 
   test 'provider check errors never log echoed contacts or tokens and never approve' do
@@ -217,6 +299,16 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
   end
 
   private
+
+  def check_with_provider_response(&response)
+    transport = Twilio::HTTP::Client.new(timeout: 15)
+    sdk_client = Twilio::REST::Client.new('AC_TEST', 'test-auth-token')
+    sdk_client.http_client = transport
+    TwilioVerifyService.unstub(:provider_service)
+    TwilioVerifyService.stub(:client, sdk_client) do
+      transport.stub(:request, response) { check_code }
+    end
+  end
 
   def send_code(purpose: :setup, owner: @owner, locale: 'en')
     TwilioVerifyService.send_verification(PHONE, purpose: purpose, owner: owner, locale: locale)

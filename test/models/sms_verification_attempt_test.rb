@@ -9,7 +9,7 @@ class SmsVerificationAttemptTest < ActiveSupport::TestCase
     @owner = 'contact-change:fixture-session:1'
   end
 
-  test 'cooldown reuses the bound receipt and resend never extends its original deadline' do
+  test 'cooldown reuses the bound receipt while resend extends only provider ownership' do
     freeze_time do
       attempt = sent_attempt
       deadline = attempt.expires_at
@@ -26,9 +26,11 @@ class SmsVerificationAttemptTest < ActiveSupport::TestCase
       same, version = reserve_send
       assert_equal attempt.id, same.id
       assert version.present?
+      resend_ownership_deadline = Time.current + SmsVerificationAttempt::TTL + SmsVerificationAttempt::CALL_TIMEOUT
+      assert_equal resend_ownership_deadline, same.ownership_expires_at
       same.finish_send!(version: version, sid: 'VE-resend', provider_created_at: Time.current)
       assert_equal deadline, same.reload.expires_at
-      assert_equal ownership_deadline, same.ownership_expires_at
+      assert_equal resend_ownership_deadline, same.ownership_expires_at
       assert_equal 'VE-resend', same.verification_sid
     end
   end
@@ -128,18 +130,54 @@ class SmsVerificationAttemptTest < ActiveSupport::TestCase
     end
   end
 
-  test 'an older provider creation time shortens the deadline without granting a new lifetime' do
+  test 'older provider timestamps shorten code entry without shortening an existing ownership fence' do
     freeze_time do
-      attempt, version = reserve_send
+      attempt, version = reserve_send(provider_lifetime: 20.minutes)
       ownership_deadline = attempt.ownership_expires_at
-      attempt.finish_send!(version: version, sid: 'VE-first', provider_created_at: 2.minutes.ago)
+      attempt.finish_send!(version: version, sid: 'VE-first', provider_created_at: 2.minutes.ago, provider_lifetime: 20.minutes)
       assert_equal 8.minutes.from_now, attempt.reload.expires_at
       assert_equal ownership_deadline, attempt.ownership_expires_at
       travel SmsVerificationAttempt::COOLDOWN + 1.second
+      # A later process may use a shorter configured provider lifetime.
       same, next_version = reserve_send
       same.finish_send!(version: next_version, sid: 'VE-resend', provider_created_at: Time.current)
       assert_equal attempt.expires_at, same.reload.expires_at
       assert_equal ownership_deadline, same.ownership_expires_at
+    end
+  end
+
+  [SmsVerificationAttempt::TTL, 20.minutes].each do |provider_lifetime|
+    test "a late ambiguous send retains ownership for its #{provider_lifetime.in_minutes.to_i} minute provider lifetime" do
+      freeze_time do
+        attempt, initial_version = reserve_send(provider_lifetime: provider_lifetime)
+        entry_deadline = attempt.expires_at
+        original_ownership_deadline = attempt.ownership_expires_at
+
+        travel 500.seconds
+        same, retry_version = reserve_send(provider_lifetime: provider_lifetime)
+        latest_ownership_deadline = Time.current + provider_lifetime + SmsVerificationAttempt::CALL_TIMEOUT
+        assert_equal attempt.id, same.id
+        assert_not_equal initial_version, retry_version
+        assert_nil same.verification_sid
+        assert_equal latest_ownership_deadline, same.ownership_expires_at
+        assert_equal entry_deadline, same.expires_at
+
+        travel_to original_ownership_deadline + 1.second
+        assert_operator Time.current, :<, latest_ownership_deadline
+        assert_raises(SmsVerificationAttempt::Refused) do
+          reserve_send(purpose: :reauthentication, owner: 'another-operation', provider_lifetime: provider_lifetime)
+        end
+        assert_nil attempt.reload.finished_at
+        assert_raises(SmsVerificationAttempt::Refused) { reserve_send(provider_lifetime: provider_lifetime) }
+        assert_equal entry_deadline, attempt.reload.expires_at
+
+        travel_to latest_ownership_deadline + 1.second
+        replacement, next_version = reserve_send(purpose: :reauthentication, owner: 'another-operation', provider_lifetime: provider_lifetime)
+        assert next_version.present?
+        assert_not_equal attempt.id, replacement.id
+        assert attempt.reload.finished_at
+        assert_nil attempt.approved_at
+      end
     end
   end
 
@@ -174,8 +212,8 @@ class SmsVerificationAttemptTest < ActiveSupport::TestCase
 
   private
 
-  def reserve_send(purpose: :contact_change, owner: @owner)
-    SmsVerificationAttempt.reserve_send!(service_sid: @service_sid, phone: @phone, purpose: purpose, owner: owner)
+  def reserve_send(purpose: :contact_change, owner: @owner, provider_lifetime: SmsVerificationAttempt::TTL)
+    SmsVerificationAttempt.reserve_send!(service_sid: @service_sid, phone: @phone, purpose: purpose, owner: owner, provider_lifetime: provider_lifetime)
   end
 
   def reserve_check(purpose: :contact_change, owner: @owner, verification_sid: 'VE-first')
