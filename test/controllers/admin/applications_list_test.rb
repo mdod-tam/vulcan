@@ -131,6 +131,7 @@ module Admin
       assert_select 'input[name="filter"][value="training_requests"]'
       assert_select 'select[name="status"][data-autosubmit-clear-param="filter"]'
       assert_select 'select[name="date_range"][data-autosubmit-clear-param]', count: 0
+      assert_select 'a[data-action="click->autosubmit#discardSearch"]', text: 'Clear filters'
     end
 
     private

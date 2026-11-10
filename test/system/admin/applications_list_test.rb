@@ -13,19 +13,44 @@ module Admin
     test 'review headers sort the current status duration and preserve filters through Turbo updates' do
       older = review_application('ZuluSorting', days: 31, created_at: 60.days.ago)
       newer = review_application('AlphaSorting', days: 4, created_at: 40.days.ago, with_proof: true)
+      old_query_only = review_application('SortOnly', days: 2, created_at: 10.days.ago)
       sign_in(@admin)
       visit admin_applications_path
 
       find_field('q').click
       assert_selector 'input#q:focus'
       fill_in 'q', with: 'Sort'
-      assert_selector '#application-table tbody tr.application-row', count: 2
+      assert_selector '#application-table tbody tr.application-row', count: 3
       take_screenshot('review-search-after-paused-typing', html: true, full: true)
       assert_selector 'input#q:focus'
-      page.driver.browser.keyboard.type('ing')
+      point = page.evaluate_script <<~JS
+        (() => {
+          const frame = document.getElementById('applications_list');
+          let formRequests = 0;
+          frame.addEventListener('turbo:before-fetch-request', event => {
+            if (event.target.tagName === 'FORM') formRequests += 1;
+            if (event.target === frame && event.detail.url.searchParams.get('sort') === 'applicant') {
+              const input = document.getElementById('q');
+              window.pendingSort = { value: input.value, rendered: input.getAttribute('value'), formRequests };
+            }
+          }, true);
+          const box = frame.querySelector('th a[href*="sort=applicant"]').getBoundingClientRect();
+          return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        })()
+      JS
+      browser = page.driver.browser
+      browser.keyboard.type('ing')
+      browser.mouse.click(x: point.fetch('x'), y: point.fetch('y'), wait: 0)
       assert_field 'q', with: 'Sorting'
       assert_selector 'input#q[value="Sorting"]'
-      assert_selector 'input#q:focus'
+      assert_selector 'th[aria-sort="ascending"] a', text: /Applicant/i
+      assert_equal({ 'value' => 'Sorting', 'rendered' => 'Sort', 'formRequests' => 0 }, page.evaluate_script('window.pendingSort'))
+      assert_no_selector "#application_#{old_query_only.id}"
+      assert_equal [newer.id, older.id], displayed_application_ids
+      query = Rack::Utils.parse_nested_query(URI.parse(page.current_url).query)
+      assert_equal 'Sorting', query['q']
+      assert_equal 'applicant', query['sort']
+      take_screenshot('sort-with-pending-search', html: true, full: true)
 
       fill_in 'managing_guardian_q', with: 'Guar'
       assert_text 'No applications found'

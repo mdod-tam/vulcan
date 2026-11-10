@@ -56,6 +56,8 @@ module Admin
     test 'independent constituent pages do not query capability grants' do
       user = create(:constituent, first_name: 'IndependentLookup')
       get admin_users_path # Warm the signed-in session before comparing page queries.
+      get admin_users_path(q: user.first_name)
+      assert_select 'a[data-action="click->autosubmit#discardSearch"]', text: 'Clear Filters'
 
       [admin_users_path(q: user.first_name), search_admin_users_path(q: user.first_name, role: 'constituent'), admin_user_path(user)].each do |path|
         statements = query_statements { get path }

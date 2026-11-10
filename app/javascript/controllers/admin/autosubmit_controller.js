@@ -13,7 +13,7 @@ export default class extends Controller {
     this.beforeFetchRequest = event => {
       if (event.target === this.frame) {
         this.debouncedSubmit.cancel();
-        this.searchFields.clear();
+        this.searchFields.forEach(input => event.detail.url.searchParams.set(input.name, input.value));
       }
     };
     this.beforeFrameRender = this.beforeFrameRender.bind(this);
@@ -30,6 +30,13 @@ export default class extends Controller {
   search(event) {
     if (event?.target) this.searchFields.add(event.target);
     this.debouncedSubmit();
+  }
+
+  discardSearch(event) {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+    this.debouncedSubmit.cancel();
+    this.searchFields.clear();
   }
 
   submit(event) {
