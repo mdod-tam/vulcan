@@ -13,9 +13,9 @@ module Applications
     def build_audit_logs
       return [] unless application
 
-      events = [build_creation_event] + combined_events
-      preload_delivery_owners(events)
-      events.sort_by(&:created_at).reverse
+      events = ([build_creation_event] + combined_events).sort_by(&:created_at).reverse
+      preload_display_dependencies(events)
+      events
     rescue StandardError => e
       Rails.logger.error "Failed to build audit logs: #{e.class.name}"
       add_error("Failed to build audit logs: #{e.message}")
@@ -25,30 +25,9 @@ module Applications
     def build_deduplicated_audit_logs
       return [] unless application
 
-      events = build_audit_logs
-
-      deduped = EventDeduplicationService.new.deduplicate(events)
-
-      # Preload only notification associations that the audit view reads.
-      notifications = deduped.grep(Notification)
-      if notifications.any?
-        ActiveRecord::Associations::Preloader.new(
-          records: notifications,
-          associations: :actor
-        ).call
-
-        recipient_notifications = notifications.select do |notification|
-          notification.action.in?(%w[provider_info_requested proof_resubmission_requested])
-        end
-        if recipient_notifications.any?
-          ActiveRecord::Associations::Preloader.new(
-            records: recipient_notifications,
-            associations: :recipient
-          ).call
-        end
-      end
-
-      deduped
+      events = EventDeduplicationService.new.deduplicate([build_creation_event] + combined_events)
+      preload_display_dependencies(events)
+      events
     rescue StandardError => e
       Rails.logger.error "Failed to build deduplicated audit logs: #{e.class.name}"
       add_error("Failed to build deduplicated audit logs: #{e.message}")
@@ -56,6 +35,22 @@ module Applications
     end
 
     private
+
+    def preload_display_dependencies(events)
+      ActiveRecord::Associations::Preloader.new(
+        records: events.grep(Event) + events.grep(ApplicationStatusChange), associations: :user
+      ).call
+      ActiveRecord::Associations::Preloader.new(records: events.grep(ProofReview), associations: :admin).call
+
+      notifications = events.grep(Notification)
+      ActiveRecord::Associations::Preloader.new(records: notifications, associations: :actor).call
+      recipient_notifications = notifications.select do |notification|
+        notification.action.in?(%w[provider_info_requested proof_resubmission_requested])
+      end
+      ActiveRecord::Associations::Preloader.new(records: recipient_notifications, associations: :recipient).call
+      EmailDelivery::Visibility.preload(notifications.select { |notification| notification.action == 'max_rejections_reached' })
+      preload_delivery_owners(events)
+    end
 
     def preload_delivery_owners(events)
       owner_ids = events.grep(Notification).filter_map do |notification|
@@ -68,7 +63,6 @@ module Applications
       # Prefer the persisted event to preserve its recorded actor.
       persisted = Event
                   .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
-                  .includes(:user)
                   .where(action: 'application_created', auditable_type: 'Application', auditable_id: application.id)
                   .order(created_at: :asc)
                   .first
@@ -77,7 +71,6 @@ module Applications
 
       persisted_by_metadata = Event
                               .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
-                              .includes(:user)
                               .where(action: 'application_created')
                               .where("(metadata->>'application_id' = ?) OR metadata @> ?", application.id.to_s, { application_id: application.id }.to_json)
                               .order(created_at: :asc)
@@ -112,7 +105,6 @@ module Applications
     def load_proof_reviews
       ProofReview
         .select('id, application_id, admin_id, proof_type, status, created_at, reviewed_at, rejection_reason, rejection_reason_code, notes')
-        .includes(admin: [])
         .where(application_id: application.id)
         .order(created_at: :desc)
         .to_a
@@ -121,40 +113,34 @@ module Applications
     def load_status_changes
       ApplicationStatusChange
         .select('id, application_id, user_id, from_status, to_status, created_at, metadata, notes')
-        .includes(user: [])
         .where(application_id: application.id)
         .order(created_at: :desc)
         .to_a
     end
 
-    # After deduplication, preload notification actors and selected recipients.
     def load_notifications
-      notifications = Notification
-                      .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata')
-                      .where(notifiable_type: 'Application', notifiable_id: application.id)
-                      .where(action: %w[
-                               disability_certification_requested
-                               disability_certification_received
-                               disability_certification_approved
-                               disability_certification_rejected
-                               provider_info_requested
-                               proof_resubmission_requested
-                               cert_upload_requested
-                               review_requested
-                               documents_requested
-                               max_rejections_reached
-                             ])
-                      .order(created_at: :desc)
-                      .to_a
-
-      EmailDelivery::Visibility.preload(notifications.select { |notification| notification.action == 'max_rejections_reached' })
-      notifications
+      Notification
+        .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata')
+        .where(notifiable_type: 'Application', notifiable_id: application.id)
+        .where(action: %w[
+                 disability_certification_requested
+                 disability_certification_received
+                 disability_certification_approved
+                 disability_certification_rejected
+                 provider_info_requested
+                 proof_resubmission_requested
+                 cert_upload_requested
+                 review_requested
+                 documents_requested
+                 max_rejections_reached
+               ])
+        .order(created_at: :desc)
+        .to_a
     end
 
     def load_application_events
       Event
         .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
-        .includes(:user)
         .where(
           "action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ? OR (auditable_type = 'Application' AND auditable_id = ?))",
           %w[
@@ -188,7 +174,6 @@ module Applications
 
       Event
         .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
-        .includes(:user)
         .where(action: ['profile_updated', *UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS])
         .where(
           "(action = 'profile_updated' AND user_id IN (?)) OR (action IN (?) AND metadata->>'user_id' IN (?))",
@@ -199,11 +184,11 @@ module Applications
     end
 
     def load_equipment_events
-      Event.includes(:user)
-           .where("action LIKE 'equipment\\_%' ESCAPE '\\'")
-           .where("(auditable_type = 'Application' AND auditable_id = ?) OR metadata->>'application_id' = ? OR metadata->'application_ids' @> ?::jsonb",
-                  application.id, application.id.to_s, [application.id].to_json)
-           .order(created_at: :desc, id: :desc).to_a
+      Event
+        .where("action LIKE 'equipment\\_%' ESCAPE '\\'")
+        .where("(auditable_type = 'Application' AND auditable_id = ?) OR metadata->>'application_id' = ? OR metadata->'application_ids' @> ?::jsonb",
+               application.id, application.id.to_s, [application.id].to_json)
+        .order(created_at: :desc, id: :desc).to_a
     end
   end
 end

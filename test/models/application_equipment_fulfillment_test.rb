@@ -60,4 +60,63 @@ class ApplicationEquipmentFulfillmentTest < ActiveSupport::TestCase
     application.transition_status!(:archived, actor: @admin)
     assert_equal :outside_catalog, application.reload.admin_fulfillment_responsibility_state
   end
+
+  test 'a direct catalog source renders recommendations without loading fallback reports or events' do
+    application = create(:application, :approved, :with_all_proofs)
+    report = create(:evaluation, :completed, application: application)
+    EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
+    loaded = Application.find(application.id)
+
+    Application.preload_equipment_fulfillment([loaded])
+
+    assert_not loaded.association(:equipment_needs_events).loaded?
+    assert_not loaded.association(:completed_equipment_reports).loaded?
+    expected_products = report.recommended_products.map(&:id).sort
+    assert_no_queries do
+      source = loaded.equipment_source_report
+      assert_equal report.id, source.id
+      assert_equal report.evaluator.full_name, source.evaluator.full_name
+      assert_equal expected_products, source.recommended_products.map(&:id).sort
+      assert_not loaded.equipment_catalog_product_pending?
+      assert_equal :needs_action, loaded.admin_fulfillment_responsibility_state
+    end
+  end
+
+  test 'a direct outside catalog source still loads the decision events needed by its badge' do
+    application = create(:application, :approved, :with_all_proofs)
+    report = build(:evaluation, :completed, application: application, recommendation_outcome: :outside_catalog,
+                                            recommendation_notes: 'Specialist recommendation')
+    report.recommended_products = []
+    report.products_tried = []
+    report.save!
+    EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
+    create(:equipment_need, application: application, source_evaluation: report, remaining_quantity: 0)
+    loaded = Application.find(application.id)
+    Application.preload_equipment_fulfillment([loaded])
+
+    assert_not loaded.association(:completed_equipment_reports).loaded?
+    assert_no_queries do
+      assert_equal report.id, loaded.equipment_source_report.id
+      assert_equal :needs_catalog_product, loaded.admin_fulfillment_responsibility_state
+    end
+
+    AuditEventService.log(actor: @admin, auditable: application, action: 'equipment_needs_updated')
+    loaded = Application.find(application.id)
+    Application.preload_equipment_fulfillment([loaded])
+
+    assert_no_queries do
+      assert_not loaded.equipment_catalog_product_pending?
+      assert_equal :no_equipment, loaded.admin_fulfillment_responsibility_state
+    end
+  end
+
+  test 'voucher responsibility does not load equipment associations' do
+    application = create(:application, :approved, :with_all_proofs, :voucher_fulfillment)
+    loaded = Application.find(application.id)
+
+    assert_no_queries do
+      Application.preload_equipment_fulfillment([loaded])
+      assert_equal :voucher_no_equipment, loaded.admin_fulfillment_responsibility_state
+    end
+  end
 end

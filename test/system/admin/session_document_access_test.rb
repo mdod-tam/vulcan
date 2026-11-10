@@ -84,6 +84,37 @@ module Admin
       end
     end
 
+    test 'proof preview explains an unfinished virus check and opens after it passes' do
+      ensure_system_audit_actor!
+      application = create(:application, :in_progress)
+      application.income_proof.attach(io: file_fixture('income_proof.pdf').open, filename: 'income_proof.pdf', content_type: 'application/pdf')
+      mark_document_clean!(application.income_proof.blob, user: @admin)
+      scan = DocumentScan.find_by!(blob_id: application.income_proof.blob.id)
+      scan.update!(status: :pending)
+      visit admin_application_path(application)
+
+      first('[data-modal-id="incomeProofReviewModal"]').click
+      assert_selector '#incomeProofReviewModal[open]'
+      within_frame(find('#incomeProofReviewModal iframe')) do
+        assert_selector 'h1', text: 'This document cannot be opened'
+        assert_text 'Checking this file for viruses.'
+        assert_text 'Refresh this page in a few minutes to try again.'
+      end
+      take_screenshot('proof-preview-check-pending', html: true, full: true)
+
+      within '#incomeProofReviewModal' do
+        click_button 'Close proof review modal'
+      end
+      scan.update!(status: :clean)
+      first('[data-modal-id="incomeProofReviewModal"]').click
+      frame_url = find('#incomeProofReviewModal iframe')['src']
+      response = browser_download(frame_url)
+      assert_equal 200, response.fetch('status')
+      assert_equal 'application/pdf', response.fetch('content_type')
+      assert_equal application.income_proof.blob.byte_size, response.fetch('bytes')
+      take_screenshot('proof-preview-check-passed', html: true, full: true)
+    end
+
     private
 
     def browser_download(url)

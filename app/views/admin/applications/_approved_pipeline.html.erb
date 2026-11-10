@@ -1,0 +1,117 @@
+<% summaries = @pipeline.summaries(@pipeline_group) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% group_labels = { equipment: 'Equipment', voucher: 'Vouchers', none: 'No equipment needed' } # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% stage_labels = summaries.to_h { |summary| [summary.stage, summary.label] } # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<section aria-label="Approved application stages" class="p-4 space-y-4">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <nav class="flex flex-wrap gap-2" aria-label="Approved application groups">
+      <% group_labels.each do |group, label| %>
+        <% next if group != :equipment && @pipeline.groups.fetch(group).empty? && @pipeline_group != group %>
+        <%= link_to "#{label} (#{@pipeline.groups.fetch(group).size})",
+                    application_list_path(view: 'pipeline', group: group, stage: 'all'),
+                    class: class_names('btn btn-outline', 'bg-primary-50 border-primary-600 text-primary-700' => @pipeline_group == group),
+                    aria: { current: @pipeline_group == group ? 'page' : nil },
+                    data: { turbo_frame: 'applications_list', turbo_action: 'advance' } %>
+      <% end %>
+    </nav>
+    <span class="inline-flex rounded-full bg-success-100 px-3 py-1 text-sm text-success-800">Application status: Approved</span>
+  </div>
+
+  <div class="grid gap-3 <%= @pipeline_group == :none ? 'grid-cols-1 max-w-lg' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5' %>">
+    <% summaries.each do |summary| %>
+      <% application_count = summary.count # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <article class="rounded-lg border <%= @pipeline_stage == summary.stage.to_s ? 'border-primary-600 bg-primary-50' : 'border-gray-200' %> flex flex-col">
+        <%= link_to application_list_path(stage: summary.stage),
+                    class: 'block p-3 text-primary-700 hover:underline',
+                    aria: { current: @pipeline_stage == summary.stage.to_s ? 'page' : nil, label: "#{summary.label}: #{pluralize(application_count, 'application')}" },
+                    data: { turbo_frame: 'applications_list', turbo_action: 'advance', pipeline_stage: summary.stage } do %>
+          <h3 class="min-h-12 font-medium"><%= summary.label %></h3>
+          <p class="mt-2 text-3xl font-semibold"><%= application_count %></p>
+          <p class="text-xs text-gray-600">applications</p>
+          <% if summary.stage == :voucher_expired %>
+            <p class="mt-1 text-sm text-warning-900"><%= number_to_currency(summary.remaining_value) %> unused</p>
+          <% end %>
+        <% end %>
+        <div class="border-t border-gray-200 p-3 text-sm flex-1">
+          <p class="text-xs text-gray-600"><%= summary.unknown_dates.positive? ? 'Longest with a known date' : 'Longest in this stage' %></p>
+          <% if summary.oldest %>
+            <%= link_to summary.oldest.application.user.full_name, admin_application_path(summary.oldest.application),
+                        class: 'mt-1 block text-primary-700 underline', data: { turbo_frame: '_top' } %>
+            <p class="mt-1"><%= pluralize(summary.oldest.days, 'day') %></p>
+          <% else %>
+            <p class="mt-1 text-gray-600">
+              <%= application_count.zero? ? 'No applications' : 'Date unavailable' %>
+            </p>
+          <% end %>
+        </div>
+        <p class="border-t border-gray-200 p-3 text-sm">
+          Average:
+          <% if summary.average_days %>
+            <%= number_with_precision(summary.average_days, precision: 1, strip_insignificant_zeros: true) %> days
+          <% else %>
+            <%= application_count.zero? ? '—' : 'Date unavailable' %>
+          <% end %>
+        </p>
+      </article>
+    <% end %>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+    <p class="text-gray-600">
+      Days since entering the current stage.
+      <% if (unknown_dates = summaries.sum(&:unknown_dates)).positive? %>
+        <%= pluralize(unknown_dates, 'application') %> <%= unknown_dates == 1 ? 'has' : 'have' %> no stage date and <%= unknown_dates == 1 ? 'is' : 'are' %> excluded from averages.
+      <% end %>
+    </p>
+    <%= link_to 'Show all applications in this group', application_list_path(stage: 'all'),
+                class: 'text-primary-700 underline', data: { turbo_frame: 'applications_list', turbo_action: 'advance' } %>
+  </div>
+</section>
+
+<div class="border-y border-gray-200 px-4 py-3">
+  <h2 class="text-lg font-medium text-gray-900"><%= @pipeline_stage == 'all' ? group_labels.fetch(@pipeline_group) : stage_labels.fetch(@pipeline_stage.to_sym) %></h2>
+  <p class="text-sm text-gray-600">Longest time in stage first</p>
+</div>
+<div class="overflow-x-auto">
+  <table class="min-w-full divide-y divide-gray-200" aria-label="Approved pipeline applications">
+    <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+      <tr>
+        <th scope="col" class="px-4 py-3">Applicant</th>
+        <th scope="col" class="px-4 py-3">Approved</th>
+        <th scope="col" class="px-4 py-3">Stage / time in stage</th>
+        <th scope="col" class="px-4 py-3">Progress</th>
+        <th scope="col" class="px-4 py-3">Next action</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-200 text-sm">
+      <% @pipeline_rows.each do |row| %>
+        <tr id="application_<%= row.application.id %>">
+          <td class="px-4 py-3 align-top">
+            <%= link_to row.application.user.full_name, admin_application_path(row.application),
+                        class: 'font-medium text-primary-700 underline', data: { turbo_frame: '_top' } %>
+            <p class="mt-1 text-xs text-gray-600">Application #<%= row.application.id %></p>
+            <% if row.application.managing_guardian %>
+              <p class="mt-1 text-xs text-gray-600">Guardian: <%= row.application.managing_guardian.full_name %></p>
+            <% end %>
+            <% if @pipeline_group != :equipment %>
+              <span class="mt-1 inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs"><%= group_labels.fetch(@pipeline_group) %></span>
+            <% end %>
+          </td>
+          <td class="px-4 py-3 align-top">
+            <%= row.application.current_status_entered_at ? row.application.current_status_entered_at.to_date.to_fs(:long) : 'Date unavailable' %>
+          </td>
+          <td class="px-4 py-3 align-top">
+            <%= stage_labels.fetch(row.stage) %>
+            <p class="mt-1 text-xs text-gray-600"><%= row.days.nil? ? 'Date unavailable' : pluralize(row.days, 'day') %></p>
+          </td>
+          <td class="px-4 py-3 align-top"><%= row.progress %></td>
+          <td class="px-4 py-3 align-top">
+            <%= link_to row.action_label, approved_pipeline_action_path(row), class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
+          </td>
+        </tr>
+      <% end %>
+      <% if @pipeline_rows.empty? %>
+        <tr><td colspan="5" class="p-6 text-center text-gray-600">No applications match these filters.</td></tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

@@ -57,6 +57,16 @@ Manual and automatic approval require the application's saved proof requirements
 
 Fulfillment type and whether income proof is required are stamped at creation from feature settings. Use the application's stored requirements for its subsequent review.
 
+## Admin application lists
+
+The Applications page opens **Review applications** for submitted, unapproved work. **All applications** also includes drafts, approved, rejected, and archived records. Click the Applicant, Created, Status, or Next action column heading to sort; click again to reverse it. Status sorts by time in the current status, with unknown dates last. The clock uses the latest lifecycle entry into that status, so ordinary edits do not reset it and re-entry starts a new stay.
+
+The Dashboard's Approved link opens **Approved pipeline** on the same page. Its equipment stages come from the existing fulfillment records: Needs evaluator, Awaiting evaluation report, Awaiting PO, Awaiting tracking, and Tracking recorded. Partly fulfilled applications remain in their earliest unfinished stage, with ordering and shipment progress shown. Application status remains Approved.
+
+Voucher applications have their own group, including Voucher issued and Expired with unused value. Cancelled and fully used vouchers do not enter the expired-value follow-up queue. No equipment needed is a separate group for an explicit equipment decision; training links appear when training was requested or recorded.
+
+**Approved during** filters by approval time, independently of application creation and stage age. It defaults to All time, with 30/60/90/120-day and 12-month options. Cards count applications currently in each stage and show the longest known stay and average days in that stage. Missing or ambiguous entry dates appear as Date unavailable and are excluded from averages.
+
 ## Documents have two review paths
 
 **Income, residency, and ID:** [ProofAttachmentService](../../app/services/proof_attachment_service.rb) and [ProofReview](../../app/models/proof_review.rb) own attachment/review behavior. Approval requires a file; rejection can record a missing document. Rejection delivery goes through `Applications::RequestProofResubmission`, which issues a secure upload request. A delivery failure does not erase the saved review.

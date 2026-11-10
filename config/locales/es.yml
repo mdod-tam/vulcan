@@ -227,6 +227,10 @@ es:
       failed: "No pudimos terminar la comprobación de virus. Intente subir el archivo de nuevo más tarde."
       limit_reached: "Se alcanzó el límite de cargas. Espere y luego elija el archivo de nuevo para reintentar."
       link_unavailable: "Este enlace de carga ya no está activo. Pida un enlace nuevo a la persona que lo envió."
+    preview:
+      unavailable: "No se puede abrir este documento"
+      not_scanned: "Este documento no se ha revisado para detectar virus y no se puede abrir."
+      try_again: "Actualice esta página en unos minutos para volver a intentarlo."
     refused_document: "%{document}: %{reason}"
     refused:
       scan_required: "Espere a que el archivo pase la comprobación de virus antes de enviar el formulario."

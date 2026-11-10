@@ -1,55 +1,34 @@
 <% provider_info_request_summaries = local_assigns.fetch(:provider_info_request_summaries, {}) %>
 
 <div class="card overflow-x-auto">
-  <table class="min-w-full divide-y divide-gray-200 applications-table table-fixed" role="table">
+  <table class="min-w-full divide-y divide-gray-200 applications-table" role="table">
     <thead class="bg-gray-50" role="rowgroup">
       <tr role="row">
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-[7%]" role="columnheader">
-          <%= link_to admin_applications_path(sort: 'application_date', direction: toggle_direction('application_date')),
-                      class: "flex items-center",
-                      aria: { label: "Sort applications by Date" },
-                      data: { turbo_frame: "applications_list" } do %>
-            Date
-            <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          <% end %>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
+            aria-sort="<%= application_sort_aria(:created_at) %>" role="columnheader">
+          <%= application_sort_link('Created', :created_at) %>
         </th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[11%]" role="columnheader">
-          <%= link_to admin_applications_path(sort: 'user.last_name', direction: toggle_direction('user.last_name')),
-                      class: "flex items-center",
-                      aria: { label: "Sort applications by Applicant" },
-                      data: { turbo_frame: "applications_list" } do %>
-            Applicant
-            <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          <% end %>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" aria-sort="<%= application_sort_aria(:applicant) %>" role="columnheader">
+          <%= application_sort_link('Applicant', :applicant) %>
         </th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[12%]" role="columnheader">Managing Guardian</th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell w-[9%]" role="columnheader">Phone</th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]" role="columnheader">Email</th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-[8%]" role="columnheader">
-          <%= link_to admin_applications_path(sort: 'status', direction: toggle_direction('status')),
-                      class: "flex items-center",
-                      aria: { label: "Sort applications by Status" },
-                      data: { turbo_frame: "applications_list" } do %>
-            Status
-            <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          <% end %>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" aria-sort="<%= application_sort_aria(:status) %>" role="columnheader">
+          <%= application_sort_link('Status', :status) %>
         </th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]" role="columnheader">Attachments</th>
         <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-[11%]" role="columnheader">Certification</th>
-        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap w-[8%]" role="columnheader">Action</th>
+        <th scope="col" class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" aria-sort="<%= application_sort_aria(:next_action) %>" role="columnheader">
+          <%= application_sort_link('Next action', :next_action) %>
+        </th>
       </tr>
     </thead>
     <tbody class="bg-white divide-y divide-gray-200" role="rowgroup">
       <% applications.each do |application| %>
         <tr id="application_<%= application.id %>" class="application-row h-20 <%= 'bg-blue-50' if application.for_dependent? %>" role="row">
           <td class="px-2 py-2 text-sm text-gray-900 whitespace-nowrap overflow-hidden" role="cell">
-            <%= application.application_date.strftime("%m/%d/%Y") %>
+            <%= application.created_at.strftime('%m/%d/%Y') %>
           </td>
           <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <div class="truncate" title="<%= application.user&.full_name || 'Unknown Applicant' %>">
@@ -104,6 +83,7 @@
           </td>
           <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <%= application_status_badge(application) %>
+            <span class="block mt-1 text-xs text-gray-600"><%= application_status_age(application) %></span>
           </td>
           <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <% 
@@ -151,11 +131,11 @@
             <% end %>
           </td>
           <td class="px-2 py-2 text-sm font-medium overflow-hidden">
-            <%= link_to "View Application",
-                admin_application_path(id: application.id),
-                class: "text-primary-600 hover:text-primary-900 whitespace-nowrap",
-                aria: { label: "View details for #{application.user&.full_name || 'Unknown User'}" },
-                data: { turbo_frame: "_top" } %>
+            <%= link_to application.next_action,
+                        application_next_action_path(application),
+                        class: 'text-primary-600 hover:text-primary-900 underline',
+                        aria: { label: "#{application.next_action} for #{application.user&.full_name || 'Unknown User'}" },
+                        data: { turbo_frame: '_top' } %>
           </td>
         </tr>
       <% end %>

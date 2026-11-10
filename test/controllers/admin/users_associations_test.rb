@@ -53,6 +53,19 @@ module Admin
       assert_select 'p', text: /neither a guardian nor a dependent/
     end
 
+    test 'independent constituent pages do not query capability grants' do
+      user = create(:constituent, first_name: 'IndependentLookup')
+      get admin_users_path # Warm the signed-in session before comparing page queries.
+
+      [admin_users_path(q: user.first_name), search_admin_users_path(q: user.first_name, role: 'constituent'), admin_user_path(user)].each do |path|
+        statements = query_statements { get path }
+
+        assert_response :success
+        assert_no_match(/FROM "role_capabilities"/, statements.join("\n"))
+        assert_includes response.body, user.email
+      end
+    end
+
     test 'search results carry the dependent count on both search paths' do
       [search_admin_users_path(q: 'Family', role: 'guardian'),
        admin_users_path(q: 'Family', role: 'guardian', turbo_frame_id: 'guardian_search_results')].each do |path|
@@ -64,14 +77,13 @@ module Admin
       end
     end
 
-    test 'the index and the search issue the same queries for one row as for a full page' do
-      # One row that is both guardian and dependent runs every association query once, as a full page does.
-      both = create(:constituent, first_name: 'Bea', last_name: 'Family')
+    test 'the constituent index and search keep relationship queries bounded across a full page' do
+      both = create(:constituent, first_name: 'Bea', last_name: 'Family', dependent_email: generate(:email))
       create(:guardian_relationship, guardian_user: both, dependent_user: create(:constituent, last_name: 'Family'))
       create(:guardian_relationship, guardian_user: create(:constituent, last_name: 'Family'), dependent_user: both)
 
       get admin_users_path # The first request of a session also loads its credentials.
-      one_index = query_count { get admin_users_path(q: 'Bea') }
+      one_index = query_count { get admin_users_path(q: 'Bea', role: 'constituent') }
       assert_select 'tbody tr', 1
       one_search = query_count { get search_admin_users_path(q: 'Bea', role: 'guardian') }
       assert_select 'li[data-user-id]', 1
@@ -80,13 +92,30 @@ module Admin
       create_list(:constituent, 3, :with_guardian, last_name: 'Family')
       create_list(:evaluator, 4, last_name: 'Family')
 
-      assert_equal(one_index, query_count { get admin_users_path(q: 'Family') })
+      assert_equal(one_index, query_count { get admin_users_path(q: 'Family', role: 'constituent') })
       assert_select 'tbody tr', 20
       assert_equal(one_search, query_count { get search_admin_users_path(q: 'Family', role: 'guardian') })
       assert_select 'li[data-user-id]', 10
     end
 
-    test 'constituent search preloads eligibility, products, contacts and grants at the selected limit' do
+    test 'the staff index loads capability grants in one query across a full page' do
+      evaluator = create(:evaluator, first_name: 'SingleGrantLookup', last_name: 'StaffLookup')
+      create(:role_capability, user: evaluator, capability: 'can_train')
+      get admin_users_path # Warm the signed-in session before comparing page queries.
+      one = query_statements { get admin_users_path(q: evaluator.first_name) }
+      assert_select 'tbody tr', 1
+      assert_equal 1, one.grep(/FROM "role_capabilities"/).size
+
+      create_list(:evaluator, 19, last_name: 'StaffLookup') # rubocop:disable FactoryBot/ExcessiveCreateList -- Fill the 20-row page to verify bounded queries.
+      full = query_statements { get admin_users_path(q: 'StaffLookup') }
+
+      assert_select 'tbody tr', 20
+      assert_select "tr:has(a[href='#{admin_user_path(evaluator)}']) input[data-capability=can_train][checked]"
+      assert_equal 1, full.grep(/FROM "role_capabilities"/).size
+      assert_equal one.size, full.size, 'capability queries must stay bounded across selected staff'
+    end
+
+    test 'constituent search preloads eligibility, products and contacts at the selected limit' do
       first = build_search_applicant('BoundedSingle')
       get search_admin_users_path(q: first.first_name, role: 'constituent')
       one = query_count { get search_admin_users_path(q: first.first_name, role: 'constituent') }
@@ -109,6 +138,23 @@ module Admin
       assert_select "li[data-user-id='#{@child.id}'][data-user-email='#{expected_email}'][data-user-phone='#{expected_phone}']"
       get admin_users_path(q: @child.first_name)
       assert_select "a[href='mailto:#{expected_email}']", text: expected_email
+    end
+
+    test 'show and search resolve a dependent phone snapshot without an email snapshot' do
+      @child.update!(dependent_email: nil, dependent_phone: @other_guardian.phone)
+      expected_email = User.find(@child.id).effective_email
+      expected_phone = User.find(@child.id).effective_phone
+
+      violations = strict_loading_violations do
+        get search_admin_users_path(q: @child.first_name, role: 'constituent')
+        assert_select "li[data-user-id='#{@child.id}'][data-user-email='#{expected_email}'][data-user-phone='#{expected_phone}']"
+
+        get admin_user_path(@child)
+        assert_response :success
+        assert_includes response.body, expected_phone
+      end
+
+      assert_empty violations
     end
 
     test 'the search and show pages load the relationships ahead of the rows' do
@@ -148,13 +194,17 @@ module Admin
     end
 
     def query_count(&)
-      count = 0
+      query_statements(&).size
+    end
+
+    def query_statements(&)
+      statements = []
       callback = lambda do |*, payload|
-        count += 1 unless payload[:name].in?(%w[SCHEMA TRANSACTION]) # Cache hits count: they would still be per-row calls.
+        statements << payload[:sql] unless payload[:name].in?(%w[SCHEMA TRANSACTION]) # Count cache hits to catch per-row calls.
       end
       ActiveSupport::Notifications.subscribed(callback, 'sql.active_record', &)
       assert_response :success
-      count
+      statements
     end
 
     # A lazy association load on a User while strict loading is on, logged instead of raised.

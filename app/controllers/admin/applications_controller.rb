@@ -17,33 +17,15 @@ module Admin
     ]
 
     def index
-      # The default view includes drafts and rejected applications. Archived records require an explicit filter.
-      excluded_statuses = %i[archived]
-      filtered_status = params[:status]&.to_sym || params[:filter]&.to_sym
-
-      excluded_statuses.delete(filtered_status) if filtered_status && excluded_statuses.include?(filtered_status)
-
-      # Preload attachment existence separately to avoid heavy ActiveStorage eager loading.
-      scoped = filtered_scope(build_application_base_scope(exclude_statuses: excluded_statuses))
-
-      scoped = if filtered_status == :training_requests
-                 scoped.includes(:user, :training_sessions)
-               elsif filtered_status == :evaluation_requests
-                 scoped.includes(:user)
-               else
-                 scoped.includes(:user, :managing_guardian)
-               end
-
-      @pagy, page_of_apps = paginate_or_first_page(scoped)
-      page_applications = page_of_apps.to_a
-      queue_view = %i[training_requests evaluation_requests].include?(filtered_status)
-      preload_dependent_guardians(page_applications) unless queue_view
-      # The array avoids PostgreSQL JSON DISTINCT errors when the relation has joins.
-      attachments_index = preload_attachments_for_applications(page_applications)
-      @delivery_attention = EmailDelivery::Visibility.application_attention(page_applications)
-      @provider_info_request_summaries = provider_info_request_summaries_for(page_applications)
-
-      @applications = decorate_applications_with_storage(page_applications, attachments_index)
+      @applications_view = applications_view
+      @application_view_counts = { review: Application.active.count, pipeline: Application.status_approved.count }
+      filtered_status = params[:filter].presence&.to_sym || params[:status].presence&.to_sym
+      scoped = application_list_scope
+      if @applications_view == 'pipeline'
+        prepare_approved_pipeline(scoped)
+      else
+        prepare_application_list(scoped, filtered_status)
+      end
 
       # Preload notifiable for Notification#message and actor for the view.
       @recent_notifications = Notification
@@ -170,6 +152,70 @@ module Admin
     end
 
     private
+
+    def applications_view
+      return params[:view] if %w[review pipeline all].include?(params[:view])
+
+      params[:status].present? || params[:filter].present? ? 'all' : 'review'
+    end
+
+    def application_list_scope
+      if @applications_view == 'pipeline'
+        filtered_scope(Application.status_approved, params.except(:status, :filter, :date_range))
+      else
+        scope = build_application_base_scope(exclude_statuses: [])
+        scope = scope.active if @applications_view == 'review'
+        filtered_scope(scope)
+      end
+    end
+
+    def prepare_application_list(scoped, filtered_status)
+      queue_view = %i[training_requests evaluation_requests].include?(filtered_status)
+      scoped = scoped.except(:includes) if queue_view
+      scoped = if filtered_status == :training_requests
+                 scoped.includes(:user, :training_sessions)
+               elsif filtered_status == :evaluation_requests
+                 scoped.includes(:user)
+               else
+                 scoped.includes(:user, :managing_guardian)
+               end
+      @pagy, page_of_apps = paginate_or_first_page(scoped)
+      applications = page_of_apps.to_a
+      preload_dependent_guardians(applications) unless queue_view
+      attachments_index = preload_attachments_for_applications(applications)
+      @delivery_attention = EmailDelivery::Visibility.application_attention(applications)
+      @provider_info_request_summaries = provider_info_request_summaries_for(applications)
+      @applications = decorate_applications_with_storage(applications, attachments_index)
+    end
+
+    def prepare_approved_pipeline(scoped)
+      cutoff = approved_pipeline_cutoff
+      scoped = scoped.where(current_status_entered_at: cutoff..Time.current) if cutoff
+      @pipeline = Applications::ApprovedPipeline.new(scoped.to_a)
+      @pipeline_group = params[:group].to_s.to_sym
+      @pipeline_group = @pipeline.groups.find { |_group, rows| rows.any? }&.first || :equipment unless @pipeline.groups.key?(@pipeline_group)
+      stages = Applications::ApprovedPipeline::STAGES.fetch(@pipeline_group).map { |definition| definition.key.to_s }
+      @pipeline_stage = stages.include?(params[:stage]) ? params[:stage] : 'all'
+      rows = @pipeline.groups.fetch(@pipeline_group)
+      rows = rows.select { |row| row.stage.to_s == @pipeline_stage } unless @pipeline_stage == 'all'
+      rows = rows.sort_by { |row| [row.entered_at ? row.entered_at.to_f : Float::INFINITY, row.application.id] }
+      @pagy, @pipeline_rows = paginate_or_first_page(rows)
+      preload_pipeline_display
+    end
+
+    def preload_pipeline_display
+      page_applications = @pipeline_rows.map(&:application)
+      oldest_applications = @pipeline.summaries(@pipeline_group).filter_map { |summary| summary.oldest&.application }
+      ActiveRecord::Associations::Preloader.new(records: (page_applications + oldest_applications).uniq, associations: :user).call
+      ActiveRecord::Associations::Preloader.new(records: page_applications, associations: :managing_guardian).call
+    end
+
+    def approved_pipeline_cutoff
+      days = { 'last_30' => 30, 'last_60' => 60, 'last_90' => 90, 'last_120' => 120 }[params[:date_range]]
+      return days.days.ago.beginning_of_day if days
+
+      12.months.ago.beginning_of_day if params[:date_range] == 'last_12_months'
+    end
 
     # Approval can reconcile application or certification status, so it requires a full Turbo redirect.
     def handle_successful_review(result)
@@ -447,12 +493,12 @@ module Admin
 
     # The service logs a failed filter and returns the original scope. The results frame shows the warning, because
     # the filter form updates only that frame.
-    def filtered_scope(scope)
-      result = Applications::FilterService.new(scope, params).apply_filters
+    def filtered_scope(scope, filters = params)
+      result = Applications::FilterService.new(scope, filters).apply_filters
       return result.data if result.success?
 
       @filter_failed = true
-      scope
+      Applications::FilterService.with_list_details(scope, filters)
     end
 
     def empty_index_chart_metrics

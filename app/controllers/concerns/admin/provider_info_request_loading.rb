@@ -21,9 +21,10 @@ module Admin
       notifications = EmailDelivery::Visibility.preload(
         Notification.where(notifiable: @application,
                            action: %w[disability_certification_requested disability_certification_rejected disability_certification_approved])
-                    .includes(:actor).order(created_at: :desc, id: :desc)
+                    .order(created_at: :desc, id: :desc)
       )
       @certification_delivery_notifications = notifications.select { |notification| notification.action == 'disability_certification_requested' }
+      ActiveRecord::Associations::Preloader.new(records: @certification_delivery_notifications, associations: :actor).call
       @certification_local_delivery_notifications = notifications.select do |notification|
         (notification.email_delivery_attempts.empty? || notification.local_delivery_outcome?) &&
           DeliveryStatusPresenter.new(notification).status != 'unknown'

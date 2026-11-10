@@ -10,38 +10,53 @@
       </h1>
     </div>
 
-    <section aria-labelledby="applications-heading" class="card mb-6" id="application-table">
+    <%= turbo_frame_tag 'applications_list' do %>
+      <nav class="mb-6 flex flex-wrap gap-6 border-b border-gray-200" aria-label="Application views">
+        <% { 'review' => 'Review applications', 'pipeline' => 'Approved pipeline', 'all' => 'All applications' }.each do |view, label| %>
+          <%= link_to application_list_path(view: view, status: nil, filter: nil, date_range: nil, group: nil, stage: nil, sort: nil, direction: nil),
+                      class: class_names('border-b-2 px-1 py-3 text-sm font-medium',
+                                         'border-primary-600 text-primary-700' => @applications_view == view,
+                                         'border-transparent text-gray-600 hover:text-primary-700' => @applications_view != view),
+                      aria: { current: @applications_view == view ? 'page' : nil },
+                      data: { turbo_frame: 'applications_list', turbo_action: 'advance' } do %>
+            <%= label %>
+            <% if (count = @application_view_counts[view.to_sym]) %>
+              <span>(<%= count %>)</span>
+            <% end %>
+          <% end %>
+        <% end %>
+      </nav>
+      <section aria-labelledby="applications-heading" class="card mb-6" id="application-table">
+        <h2 id="applications-heading" class="sr-only"><%= @applications_view == 'pipeline' ? 'Approved pipeline' : 'Applications' %></h2>
       <div class="p-4 border-b">
         <%= form_tag admin_applications_path, method: :get, class: "flex flex-wrap items-center gap-4", data: { turbo_frame: "applications_list", turbo_action: "advance", controller: "autosubmit" } do %>
+          <%= hidden_field_tag :view, @applications_view %>
+          <%= hidden_field_tag :sort, Applications::FilterService.sort_column(params) %>
+          <%= hidden_field_tag :direction, Applications::FilterService.sort_direction(params) %>
+          <% %i[filter dependent_q managing_guardian_id guardian_id dependent_id only_dependent_apps].each do |key| %>
+            <%= hidden_field_tag key, params[key] if params[key].present? %>
+          <% end %>
+          <% if @applications_view == 'pipeline' %>
+            <%= hidden_field_tag :group, @pipeline_group %>
+            <%= hidden_field_tag :stage, @pipeline_stage %>
+          <% else %>
           <div class="flex items-center gap-2">
             <%= label_tag :status, "Status:", class: "form-label" %>
             <%= select_tag :status,
                            options_for_select(
-                             [
-                               ['All', ''],
-                               ['Active', 'active'],
-                               ['Draft', 'draft'],
-                               ['In Progress', 'in_progress'],
-                               ['Approved', 'approved'],
-                               ['Rejected', 'rejected']
-                             ],
+                             application_status_filter_options(view: @applications_view),
                              params[:status]
                            ),
                            class: 'form-input w-auto',
                            data: { action: 'change->autosubmit#submit' } %>
           </div>
+          <% end %>
           
           <div class="flex items-center gap-2">
-            <%= label_tag :date_range, "Date Range:", class: "form-label" %>
+            <%= label_tag :date_range, @applications_view == 'pipeline' ? 'Approved during:' : 'Created during:', class: 'form-label' %>
             <%= select_tag :date_range,
                            options_for_select(
-                             [
-                               ['All Time', ''],
-                               ['Current FY', 'current_fy'],
-                               ['Previous FY', 'previous_fy'],
-                               ['Last 30 Days', 'last_30'],
-                               ['Last 90 Days', 'last_90']
-                             ],
+                             application_date_range_options(view: @applications_view),
                              params[:date_range]
                            ),
                            class: 'form-input w-auto',
@@ -83,12 +98,16 @@
             <%= label_tag :for_minors, "Show only dependent applications", class: "form-label" %>
           </div>
           <%= submit_tag "Search", class: "sr-only" %>
-          <%= link_to "Clear Filters", admin_applications_path, class: "btn btn-outline", data: { turbo_frame: "applications_list" } %>
+          <%= link_to 'Clear filters',
+                      admin_applications_path(view: @applications_view, group: @pipeline_group, sort: params[:sort], direction: params[:direction]),
+                      class: 'btn btn-outline', data: { turbo_frame: 'applications_list', turbo_action: 'advance' } %>
         <% end %>
       </div>
 
-      <%= turbo_frame_tag "applications_list" do %>
         <%= render 'admin/shared/filter_failure' if @filter_failed %>
+        <% if @applications_view == 'pipeline' %>
+          <%= render 'approved_pipeline' %>
+        <% else %>
         <div class="overflow-x-auto">
           <% if @applications.present? %>
             <% queue_partial = case params[:filter]
@@ -107,14 +126,15 @@
             </div>
           <% end %>
         </div>
+        <% end %>
 
         <% if @pagy && @pagy.pages > 1 %>
           <div class="px-4 py-3 border-t">
             <%== pagy_nav(@pagy) %>
           </div>
         <% end %>
-      <% end %>
-    </section>
+      </section>
+    <% end %>
 
     <section aria-labelledby="notifications-heading" class="card p-4 mb-6">
       <div class="flex items-center justify-between mb-4">

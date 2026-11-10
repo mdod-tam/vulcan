@@ -136,10 +136,6 @@ module Admin
       end
     end
 
-    def toggle_direction(column)
-      params[:sort] == column.to_s && params[:direction] == 'asc' ? 'desc' : 'asc'
-    end
-
     # Proof activity for one proof type, oldest first, with duplicate submissions removed.
     def get_chronological_proof_history(application, proof_type)
       ConstituentPortal::Activity
