@@ -11,8 +11,8 @@ module Applications
       equipment: [Definition.new(:evaluator, 'Needs evaluator', 'Assign evaluator'),
                   Definition.new(:report, 'Awaiting evaluation report', 'Open evaluation'),
                   Definition.new(:po, 'Awaiting PO', 'Order equipment'),
-                  Definition.new(:tracking, 'Awaiting tracking', 'Record shipment'),
-                  Definition.new(:recorded, 'Tracking recorded', 'View shipment')].freeze,
+                  Definition.new(:tracking, 'Awaiting shipment', 'Record shipment'),
+                  Definition.new(:recorded, 'Shipment recorded', 'View shipment')].freeze,
       voucher: [Definition.new(:voucher_missing, 'Needs voucher', 'Open application'),
                 Definition.new(:voucher_issued, 'Voucher issued', 'View voucher'),
                 Definition.new(:voucher_expired, 'Expired with unused value', 'Review voucher'),
@@ -159,7 +159,7 @@ module Applications
       shipped = items.count { |item| item.queue_status == 'shipped' }
       ordered = items.count { |item| %w[ordered shipped].include?(item.queue_status) }
       total = items.length + application.equipment_needs.sum(&:remaining_quantity)
-      "#{ordered} of #{total} #{'item'.pluralize(total)} ordered · #{shipped} #{shipped == 1 ? 'has' : 'have'} tracking"
+      "#{ordered} of #{total} #{'item'.pluralize(total)} ordered · #{shipped} shipped"
     end
 
     def equipment_entry(application, stage)

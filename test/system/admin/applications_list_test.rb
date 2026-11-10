@@ -80,6 +80,82 @@ module Admin
       page.current_window.resize_to(1400, 1000)
     end
 
+    test 'a delayed search response keeps newer text after focus moves to another field' do
+      application = review_application('DelayedSorting', days: 3, created_at: 4.days.ago)
+      sign_in(@admin)
+      visit admin_applications_path
+
+      browser = page.driver.browser
+      held = Queue.new
+      hold_next = true
+      browser.network.intercept(pattern: '*/admin/applications*', request_stage: 'Response')
+      browser.on(:request) do |request|
+        query = Rack::Utils.parse_nested_query(URI.parse(request.url).query)
+        if hold_next && query['q'] == 'Sort'
+          hold_next = false
+          held << request
+        else
+          request.continue
+        end
+      end
+      page.execute_script <<~JS
+        document.addEventListener('turbo:before-frame-render', event => {
+          if (event.target.id === 'applications_list' && event.detail.newFrame.querySelector('#q')?.value === 'Sort') {
+            window.oldSearchResponseRendered = true;
+          }
+        });
+      JS
+
+      fill_in 'q', with: 'Sort'
+      request = held.pop(timeout: 10)
+      assert request, 'the older search response should be held'
+      browser.keyboard.type('ing', :Tab)
+      request.continue
+
+      assert_selector 'input#q[value="Sorting"]'
+      assert_selector 'input#managing_guardian_q:focus'
+      assert_selector "#application_#{application.id}"
+      assert page.evaluate_script('window.oldSearchResponseRendered'), 'the older response must actually reach the frame'
+      take_screenshot('delayed-search-after-focus-change', html: true, full: true)
+      click_link 'Clear filters'
+      assert_field 'q', with: ''
+      assert_field 'managing_guardian_q', with: ''
+    ensure
+      request.continue if request && !request.status?(:continued)
+      browser&.network&.intercept(pattern: 'about:blank')
+    end
+
+    test 'choosing a status leaves the Dashboard shortcut queue and keeps the other filters' do
+      received = create(:application, :in_progress,
+                        disability_certification_status: :received,
+                        user: create(:constituent, last_name: 'QueueChange'), created_at: 2.days.ago)
+      awaiting = create(:application,
+                        status: :awaiting_dcf,
+                        disability_certification_status: :requested,
+                        user: create(:constituent, last_name: 'QueueChange'), created_at: 2.days.ago)
+      sign_in(@admin)
+      find('#common-tasks a[href*="filter=disability_certs_to_review"]').click
+      assert_selector "#application_#{received.id}"
+      assert_no_selector "#application_#{awaiting.id}"
+      fill_in 'q', with: 'QueueChange'
+      assert_selector 'input#q[value="QueueChange"]'
+      select 'Last 30 days', from: 'date_range'
+      assert_selector 'input[name="filter"][value="disability_certs_to_review"]', visible: :all
+      take_screenshot('dashboard-shortcut-before-status-change', html: true, full: true)
+
+      select 'Awaiting certification', from: 'status'
+
+      assert_selector "#application_#{awaiting.id}"
+      assert_no_selector "#application_#{received.id}"
+      assert_no_selector 'input[name="filter"]', visible: :all
+      assert_field 'q', with: 'QueueChange'
+      assert_field 'date_range', with: 'last_30'
+      query = Rack::Utils.parse_nested_query(URI.parse(page.current_url).query)
+      assert_nil query['filter']
+      assert_equal 'awaiting_dcf', query['status']
+      take_screenshot('dashboard-shortcut-after-status-change', html: true, full: true)
+    end
+
     test 'Dashboard enters the approved pipeline and date filters update cards and the actionable list together' do
       older = approved_application('Old backlog', days: 150)
       recent = approved_application('Recent backlog', days: 10)
@@ -88,6 +164,8 @@ module Admin
       voucher_application = approved_application('Expired voucher', days: 250)
       voucher_application.update!(fulfillment_type: :voucher)
       create(:voucher, application: voucher_application, issued_at: Policy.voucher_validity_period.ago - 8.days, remaining_value: 180)
+      tracking_only = approved_application('Tracking saved', days: 5)
+      create(:equipment_item, application: tracking_only, tracking_number: 'SAVED-BEFORE-SHIPPING', shipped_at: nil)
       sign_in(@admin)
 
       within('#dashboard-content') { click_link 'Open approved pipeline' }
@@ -96,6 +174,9 @@ module Admin
       assert_selector "#application_#{older.id}"
       assert_selector "#application_#{recent.id}"
       assert_selector '[data-pipeline-stage="evaluator"]', text: '2'
+      assert_selector '[data-pipeline-stage="tracking"]', text: 'Awaiting shipment'
+      assert_selector '[data-pipeline-stage="recorded"]', text: 'Shipment recorded'
+      assert_selector "#application_#{tracking_only.id}", text: '0 shipped'
       assert_no_selector '[data-pipeline-stage="voucher_expired"]'
       take_screenshot('approved-pipeline-equipment', html: true, full: true)
 

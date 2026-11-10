@@ -59,9 +59,9 @@ Fulfillment type and whether income proof is required are stamped at creation fr
 
 ## Admin application lists
 
-The Applications page opens **Review applications** for submitted, unapproved work. **All applications** also includes drafts, approved, rejected, and archived records. Click the Applicant, Created, Status, or Next action column heading to sort; click again to reverse it. Status sorts by time in the current status, with unknown dates last. The clock uses the latest lifecycle entry into that status, so ordinary edits do not reset it and re-entry starts a new stay.
+The Applications page opens **Review applications** for submitted, unapproved work. **All applications** also includes drafts, approved, rejected, and archived records. Click the Applicant, Created, Status, or Next action column heading to sort; click again to reverse it. Status sorts by time in the current status, with unknown dates last. The clock uses the latest lifecycle entry into that status, so ordinary edits do not reset it and re-entry starts a new stay. Changing Status clears a Dashboard shortcut queue; search, date, and sort changes keep that queue.
 
-The Dashboard's Approved link opens **Approved pipeline** on the same page. Its equipment stages come from the existing fulfillment records: Needs evaluator, Awaiting evaluation report, Awaiting PO, Awaiting tracking, and Tracking recorded. Partly fulfilled applications remain in their earliest unfinished stage, with ordering and shipment progress shown. Application status remains Approved.
+The Dashboard's Approved link opens **Approved pipeline** on the same page. Its equipment stages come from the existing fulfillment records: Needs evaluator, Awaiting evaluation report, Awaiting PO, Awaiting shipment, and Shipment recorded. Partly fulfilled applications remain in their earliest unfinished stage, with ordering and shipment progress shown. A saved tracking number alone does not record a shipment; the ship date is also needed. Application status remains Approved.
 
 Voucher applications have their own group, including Voucher issued and Expired with unused value. Cancelled and fully used vouchers do not enter the expired-value follow-up queue. No equipment needed is a separate group for an explicit equipment decision; training links appear when training was requested or recorded.
 

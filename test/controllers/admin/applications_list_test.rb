@@ -129,6 +129,8 @@ module Admin
       applications.each { |application| assert_select "#training_request_row_#{application.id}" }
       assert_equal 1, session_loads.length
       assert_select 'input[name="filter"][value="training_requests"]'
+      assert_select 'select[name="status"][data-autosubmit-clear-param="filter"]'
+      assert_select 'select[name="date_range"][data-autosubmit-clear-param]', count: 0
     end
 
     private

@@ -16,22 +16,35 @@ function connect(form) {
 }
 
 function fixture(value = '', insideFrame = true) {
-  const form = `<form data-turbo-frame="results"><input id="q" value="${value}"><a href="/applications" id="clear">Clear filters</a></form>`
+  const form = `<form data-turbo-frame="results">
+    <input id="q" name="q" value="${value}">
+    <input id="managing_guardian_q" name="managing_guardian_q" value="">
+    <input type="hidden" name="filter" value="disability_certs_to_review">
+    <select id="status" name="status" data-autosubmit-clear-param="filter">
+      <option value="awaiting_dcf">Awaiting certification</option>
+    </select>
+    <select id="date_range" name="date_range"><option value="last_30">Last 30 days</option></select>
+    <a href="/applications" id="clear">Clear filters</a>
+  </form>`
   document.body.innerHTML = insideFrame ? `<turbo-frame id="results">${form}</turbo-frame>` : `${form}<turbo-frame id="results"></turbo-frame>`
   const frame = document.getElementById('results')
   const field = document.getElementById('q')
   return { frame, field, ...connect(document.querySelector('form')) }
 }
 
-async function replaceFrame(frame, controller, value) {
+async function replaceFrame(frame, controller, value, { guardian = '', responseTarget = 'form' } = {}) {
   const newFrame = document.createElement('turbo-frame')
-  newFrame.innerHTML = `<form data-turbo-frame="results"><input id="q" value="${value}"></form>`
+  newFrame.innerHTML = `<form data-turbo-frame="results"><input id="q" name="q" value="${value}"><input id="managing_guardian_q" name="managing_guardian_q" value="${guardian}"></form>`
   let next
   const render = jest.fn((current, incoming) => {
     controller.disconnect()
     current.replaceChildren(...incoming.childNodes)
     next = connect(current.querySelector('form'))
   })
+  const response = new CustomEvent('turbo:before-fetch-response', { bubbles: true })
+  const responseElement = responseTarget === 'form' ? controller.element : frame
+  responseElement.dispatchEvent(new CustomEvent('turbo:before-fetch-request', { bubbles: true }))
+  responseElement.dispatchEvent(response)
   const event = new CustomEvent('turbo:before-frame-render', { detail: { newFrame, render } })
   frame.dispatchEvent(event)
   await event.detail.render(frame, newFrame)
@@ -98,18 +111,121 @@ test('newer typed text survives an older response and the replacement form submi
   expect(next.requestSubmit).toHaveBeenCalledTimes(1)
 })
 
+test('pending search text survives moving focus to another field during an older response', async () => {
+  const { frame, field, controller, requestSubmit } = fixture('Sort')
+  field.focus()
+  controller.search({ target: field })
+  jest.advanceTimersByTime(150)
+  field.value = 'Sorting'
+  controller.search({ target: field })
+  document.getElementById('managing_guardian_q').focus()
+
+  const next = await replaceFrame(frame, controller, 'Sort')
+
+  expect(document.getElementById('q').value).toBe('Sorting')
+  expect(document.activeElement.id).toBe('managing_guardian_q')
+  jest.advanceTimersByTime(150)
+  expect(requestSubmit).toHaveBeenCalledTimes(1)
+  expect(next.requestSubmit).toHaveBeenCalledTimes(1)
+})
+
+test('both edited search fields survive an older response and submit together once', async () => {
+  const { frame, field, controller } = fixture('Sort')
+  controller.search({ target: field })
+  jest.advanceTimersByTime(150)
+  field.value = 'Sorting'
+  controller.search({ target: field })
+  const guardian = document.getElementById('managing_guardian_q')
+  guardian.value = 'Guardian'
+  guardian.focus()
+  controller.search({ target: guardian })
+
+  const next = await replaceFrame(frame, controller, 'Sort')
+
+  expect(document.getElementById('q').value).toBe('Sorting')
+  expect(document.getElementById('managing_guardian_q').value).toBe('Guardian')
+  expect(document.activeElement.id).toBe('managing_guardian_q')
+  jest.advanceTimersByTime(150)
+  expect(next.requestSubmit).toHaveBeenCalledTimes(1)
+})
+
+test('an edit back to the original text survives without keeping focus in the form', async () => {
+  const { frame, field, controller } = fixture('Sort')
+  field.focus()
+  field.value = 'Sorting'
+  controller.search({ target: field })
+  jest.advanceTimersByTime(150)
+  field.value = 'Sort'
+  controller.search({ target: field })
+  field.blur()
+
+  const next = await replaceFrame(frame, controller, 'Sorting')
+
+  expect(document.getElementById('q').value).toBe('Sort')
+  expect(document.activeElement).toBe(document.body)
+  jest.advanceTimersByTime(150)
+  expect(next.requestSubmit).toHaveBeenCalledTimes(1)
+})
+
 test('Clear filters navigation accepts server values and does not restore the old search', async () => {
   const { frame, field, controller } = fixture('Sorting')
   field.focus()
   controller.search({ target: field })
   document.getElementById('clear').focus()
 
-  const next = await replaceFrame(frame, controller, '')
+  const next = await replaceFrame(frame, controller, '', { responseTarget: 'frame' })
   expect(document.getElementById('q').value).toBe('')
   expect(document.activeElement).not.toBe(document.getElementById('q'))
-  expect(next.wrappedRender).toBe(next.render)
   jest.advanceTimersByTime(150)
   expect(next.requestSubmit).not.toHaveBeenCalled()
+})
+
+test('link navigation discards older edits despite an interleaved form response and search focus', async () => {
+  const { frame, field, controller } = fixture('Sort')
+  field.focus()
+  field.value = 'Sorting'
+  controller.search({ target: field })
+  frame.addEventListener('turbo:before-fetch-response', event => {
+    if (event.target === frame) {
+      controller.element.dispatchEvent(new CustomEvent('turbo:before-fetch-response', { bubbles: true }))
+    }
+  })
+
+  const next = await replaceFrame(frame, controller, '', { responseTarget: 'frame' })
+
+  expect(document.getElementById('q').value).toBe('')
+  jest.advanceTimersByTime(150)
+  expect(next.requestSubmit).not.toHaveBeenCalled()
+})
+
+test('link navigation cancels the queued search while its response is pending and later typing still submits', () => {
+  const { frame, field, controller, requestSubmit } = fixture('Sort')
+  field.value = 'Sorting'
+  controller.search({ target: field })
+
+  frame.dispatchEvent(new CustomEvent('turbo:before-fetch-request', { bubbles: true }))
+  jest.advanceTimersByTime(150)
+  expect(requestSubmit).not.toHaveBeenCalled()
+
+  field.value = 'New search'
+  controller.search({ target: field })
+  jest.advanceTimersByTime(150)
+  expect(requestSubmit).toHaveBeenCalledTimes(1)
+})
+
+test('changing status clears its declared queue while other filter changes keep it', () => {
+  const { controller, requestSubmit } = fixture('Sorting')
+  const form = controller.element
+  controller.submit({ target: form.elements.date_range })
+  expect(new FormData(form).get('filter')).toBe('disability_certs_to_review')
+
+  controller.submit({ target: form.elements.status })
+  const parameters = new FormData(form)
+  expect(parameters.has('filter')).toBe(false)
+  expect(parameters.get('status')).toBe('awaiting_dcf')
+  expect(parameters.get('q')).toBe('Sorting')
+  expect(parameters.get('date_range')).toBe('last_30')
+  expect(requestSubmit).toHaveBeenCalledTimes(2)
 })
 
 test('forms outside their target frame keep their input without a render override', async () => {

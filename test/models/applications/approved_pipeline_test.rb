@@ -21,17 +21,21 @@ module Applications
       create(:equipment_need, application: awaiting_order, remaining_quantity: 2)
       create(:equipment_item, application: awaiting_order, shipped_at: Date.current, tracking_number: 'PARTIAL-SHIPMENT')
       awaiting_tracking = equipment_application
-      create(:equipment_item, application: awaiting_tracking)
+      create(:equipment_item, application: awaiting_tracking, tracking_number: 'TRACKING-BEFORE-SHIPMENT')
       create(:equipment_item, application: awaiting_tracking, shipped_at: Date.current, tracking_number: 'PARTIAL-TRACKING')
+      tracking_only = equipment_application
+      create(:equipment_item, application: tracking_only, tracking_number: 'SAVED-TRACKING')
       recorded = equipment_application
       create(:equipment_item, application: recorded, shipped_at: Date.current, tracking_number: 'RECORDED')
 
-      rows = projection(awaiting_order, awaiting_tracking, recorded).rows.index_by { |row| row.application.id }
+      rows = projection(awaiting_order, awaiting_tracking, tracking_only, recorded).rows.index_by { |row| row.application.id }
 
       assert_equal :po, rows.fetch(awaiting_order.id).stage
-      assert_equal '1 of 3 items ordered · 1 has tracking', rows.fetch(awaiting_order.id).progress
+      assert_equal '1 of 3 items ordered · 1 shipped', rows.fetch(awaiting_order.id).progress
       assert_equal :tracking, rows.fetch(awaiting_tracking.id).stage
-      assert_equal '2 of 2 items ordered · 1 has tracking', rows.fetch(awaiting_tracking.id).progress
+      assert_equal '2 of 2 items ordered · 1 shipped', rows.fetch(awaiting_tracking.id).progress
+      assert_equal :tracking, rows.fetch(tracking_only.id).stage
+      assert_equal '1 of 1 item ordered · 0 shipped', rows.fetch(tracking_only.id).progress
       assert_equal :recorded, rows.fetch(recorded.id).stage
       assert(rows.values.all? { |row| row.group == :equipment })
     end
