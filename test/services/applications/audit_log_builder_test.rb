@@ -78,6 +78,63 @@ module Applications
       assert_empty builder.errors
     end
 
+    test 'raw and deduplicated audit output preload the displayed actors and request recipients' do
+      request = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
+                                      action: 'provider_info_requested')
+
+      %i[build_audit_logs build_deduplicated_audit_logs].each do |method|
+        logs = AuditLogBuilder.new(@application).public_send(method)
+        event = logs.grep(Event).find { |entry| entry.id == @event.id }
+        status_change = logs.grep(ApplicationStatusChange).find { |entry| entry.id == @status_change.id }
+        review = logs.grep(ProofReview).find { |entry| entry.id == @proof_review.id }
+        notification = logs.grep(Notification).find { |entry| entry.id == request.id }
+
+        assert_predicate event.association(:user), :loaded?
+        assert_predicate status_change.association(:user), :loaded?
+        assert_predicate review.association(:admin), :loaded?
+        assert_predicate notification.association(:actor), :loaded?
+        assert_predicate notification.association(:recipient), :loaded?
+        assert_equal [@admin.id] * 4, [event.user.id, status_change.user.id, review.admin.id, notification.actor.id]
+        assert_equal @application.user.id, notification.recipient.id
+      end
+    end
+
+    test 'deduplicated audit output does not load actors belonging only to discarded certification rows' do
+      discarded_actor = create(:admin)
+      time = Time.current.beginning_of_minute
+      history = ApplicationStatusChange.create!(application: @application, user: @admin,
+                                                from_status: 'requested', to_status: 'received',
+                                                metadata: { change_type: 'disability_certification' }, created_at: time)
+      event = Event.create!(user: discarded_actor, auditable: @application, action: 'disability_certification_status_changed',
+                            metadata: { new_status: 'received' }, created_at: time)
+      notification = create(:notification, recipient: @application.user, actor: discarded_actor, notifiable: @application,
+                                           action: 'disability_certification_received', created_at: time)
+      loaded_user_ids = []
+      subscriber = lambda do |*, payload|
+        next unless payload[:name] == 'User Load'
+
+        loaded_user_ids.concat(payload[:binds].filter_map { |bind| bind.value_for_database if bind.name == 'id' })
+      end
+
+      logs = ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record') do
+        AuditLogBuilder.new(@application).build_deduplicated_audit_logs
+      end
+
+      assert_includes logs, history
+      assert_not_includes logs, event
+      assert_not_includes logs, notification
+      assert_includes loaded_user_ids.flatten, @admin.id
+      assert_not_includes loaded_user_ids.flatten, discarded_actor.id
+
+      raw_logs = AuditLogBuilder.new(@application).build_audit_logs
+      raw_event = raw_logs.grep(Event).find { |entry| entry.id == event.id }
+      raw_notification = raw_logs.grep(Notification).find { |entry| entry.id == notification.id }
+      assert_predicate raw_event.association(:user), :loaded?
+      assert_predicate raw_notification.association(:actor), :loaded?
+      assert_equal discarded_actor.id, raw_event.user.id
+      assert_equal discarded_actor.id, raw_notification.actor.id
+    end
+
     test 'returns empty array when application is nil' do
       with_mocked_attachments do
         builder = AuditLogBuilder.new(nil)

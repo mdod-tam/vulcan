@@ -207,6 +207,10 @@ en:
       failed: "We couldn't finish the virus check. Try uploading the file again later."
       limit_reached: "The upload limit has been reached. Wait, then choose the file again to retry."
       link_unavailable: "This upload link is no longer active. Ask the person who sent it for a new link."
+    preview:
+      unavailable: "This document cannot be opened"
+      not_scanned: "This document has not been checked for viruses and cannot be opened."
+      try_again: "Refresh this page in a few minutes to try again."
     refused_document: "%{document}: %{reason}"
     refused:
       scan_required: "Wait for the file to pass its virus check before submitting."

@@ -34,10 +34,7 @@ module Admin
     # only eligible users. Any other role finds nothing.
     PAPER_SEARCH_CANDIDATES = { 'constituent' => :paper_applicant_candidates, 'guardian' => :paper_guardian_candidates }.freeze
 
-    # Everything the index, show and search views read about a user. Each reflection caches separately, so
-    # :guardians is listed beside the join collections that dependent contact resolution does not read.
-    USER_PRELOADS = [
-      :role_capabilities, :guardians,
+    USER_RELATIONSHIP_PRELOADS = [
       { guardian_relationships_as_guardian: :dependent_user, guardian_relationships_as_dependent: :guardian_user }
     ].freeze
 
@@ -49,8 +46,12 @@ module Admin
 
       load_user_metrics
 
-      filtered_scope = apply_user_filters(User.preload(*USER_PRELOADS))
+      filtered_scope = apply_user_filters(User.preload(*USER_RELATIONSHIP_PRELOADS))
       @pagy, @users = paginate_or_first_page(filtered_scope)
+      preload_dependent_contact_guardians(@users)
+      ActiveRecord::Associations::Preloader.new(
+        records: @users.select { |user| user.grantable_capabilities.any? }, associations: :role_capabilities
+      ).call
 
       respond_to do |format|
         format.html
@@ -59,7 +60,8 @@ module Admin
     end
 
     def show
-      @user = User.preload(*USER_PRELOADS).find(params[:id])
+      @user = User.preload(*USER_RELATIONSHIP_PRELOADS).find(params.expect(:id))
+      preload_dependent_contact_guardians([@user], include_phone: true)
       ActiveRecord::Associations::Preloader.new(
         records: [@user, *@user.guardian_relationships_as_guardian.map(&:dependent_user)], associations: :applications
       ).call
@@ -527,9 +529,18 @@ module Admin
       return [] unless result.success?
 
       users = result.data.limit(limit).to_a
-      associations = role_filter == 'constituent' ? [*USER_PRELOADS, { applications: :purchased_products }] : USER_PRELOADS
+      associations = role_filter == 'constituent' ? [*USER_RELATIONSHIP_PRELOADS, { applications: :purchased_products }] : USER_RELATIONSHIP_PRELOADS
       ActiveRecord::Associations::Preloader.new(records: users, associations: associations).call
+      preload_dependent_contact_guardians(users, include_phone: true)
       users
+    end
+
+    # The through association is read when a dependent's stored contact must be compared with their guardians.
+    def preload_dependent_contact_guardians(users, include_phone: false)
+      dependents = users.select do |user|
+        user.dependent? && (User.real_email_address?(user.dependent_email) || (include_phone && PhoneNumber.real?(user.dependent_phone)))
+      end
+      ActiveRecord::Associations::Preloader.new(records: dependents, associations: :guardians).call
     end
 
     def role_class_for(raw_role)

@@ -2,6 +2,96 @@
 
 module Applications
   class FilterService < BaseService
+    SORT_COLUMNS = {
+      'created_at' => 'created_at', 'application_date' => 'created_at',
+      'applicant' => 'applicant', 'user.last_name' => 'applicant',
+      'status' => 'status', 'next_action' => 'next_action'
+    }.freeze
+    SORT_DIRECTIONS = { 'created_at' => 'desc', 'applicant' => 'asc', 'status' => 'desc', 'next_action' => 'asc' }.freeze
+    NEXT_ACTION_LABELS = {
+      review_proof: 'Review proof', review_certification: 'Review certification',
+      review_application: 'Review application', open_application: 'Open application'
+    }.freeze
+
+    class << self
+      def sort_column(params = {})
+        SORT_COLUMNS.fetch(params[:sort].to_s, 'created_at')
+      end
+
+      def sort_direction(params = {})
+        requested = params[:direction].to_s
+        requested.in?(%w[asc desc]) ? requested : SORT_DIRECTIONS.fetch(sort_column(params))
+      end
+
+      # The list and its sort use the same projected values. The derived table also keeps COUNT(*) valid.
+      def with_list_details(scope, params = {})
+        projection = scope.except(:order, :includes, :preload, :eager_load)
+                          .reselect(Application.arel_table[Arel.star], status_entry_expression.as('current_status_entered_at'), next_action_expression.as('next_action'))
+        result = Application.unscoped.from(projection, :applications)
+        result = result.includes(*scope.includes_values) if scope.includes_values.any?
+        result = result.preload(*scope.preload_values) if scope.preload_values.any?
+        result = result.eager_load(*scope.eager_load_values) if scope.eager_load_values.any?
+        apply_sort(result, params)
+      end
+
+      private
+
+      def apply_sort(result, params)
+        direction = sort_direction(params)
+        applications = Application.arel_table
+        order = case sort_column(params)
+                when 'applicant'
+                  result = result.left_joins(:user)
+                  [order_expression(User.arel_table[:last_name].lower, direction).nulls_last,
+                   order_expression(User.arel_table[:first_name].lower, direction).nulls_last]
+                when 'status'
+                  timestamp_direction = direction == 'desc' ? 'asc' : 'desc'
+                  [order_expression(applications[:current_status_entered_at], timestamp_direction).nulls_last]
+                when 'next_action'
+                  [order_expression(applications[:next_action], direction)]
+                else
+                  [order_expression(applications[:created_at], direction)]
+                end
+        result.reorder(*order, order_expression(applications[:id], direction))
+      end
+
+      def order_expression(expression, direction)
+        direction == 'asc' ? expression.asc : expression.desc
+      end
+
+      def status_entry_expression
+        applications = Application.arel_table
+        changes = ApplicationStatusChange.arel_table
+        lifecycle = ApplicationStatusChange.lifecycle.where(changes[:application_id].eq(applications[:id]))
+        current_status = Application.statuses.reduce(Arel::Nodes::Case.new(applications[:status])) do |expression, (name, value)|
+          expression.when(value).then(name)
+        end
+        latest = lifecycle.where(changes[:to_status].eq(current_status))
+                          .order(changed_at: :desc, id: :desc).limit(1).select(:changed_at)
+        initial_paper_statuses = applications[:status].in(Application.statuses.values_at('in_progress', 'awaiting_proof'))
+        paper_initial_state = applications[:submission_method].eq(Application.submission_methods.fetch('paper')).and(initial_paper_statuses)
+        known_initial_status = applications[:status].eq(Application.statuses.fetch('draft')).or(paper_initial_state)
+        initial_date = Arel::Nodes::Case.new.when(lifecycle.arel.exists.not.and(known_initial_status)).then(applications[:created_at])
+        Arel::Nodes::NamedFunction.new('COALESCE', [latest.arel, initial_date])
+      end
+
+      def next_action_expression
+        certification_files = ActiveStorage::Attachment.where(record_type: 'Application', name: 'disability_certification').select(:record_id)
+        certification_review = Application.active.where(disability_certification_status: %i[requested received], id: certification_files)
+        application_review = Application.active.where(disability_certification_status: :approved, residency_proof_status: :approved, id_proof_status: :approved)
+                                        .where('income_proof_required = FALSE OR income_proof_status = ?', Application.income_proof_statuses.fetch('approved'))
+        actions = {
+          review_proof: Application.awaiting_proof_review,
+          review_certification: certification_review,
+          review_application: application_review
+        }
+        expression = actions.reduce(Arel::Nodes::Case.new) do |clause, (action, relation)|
+          clause.when(Application.arel_table[:id].in(relation.select(:id).arel)).then(NEXT_ACTION_LABELS.fetch(action))
+        end
+        expression.else(NEXT_ACTION_LABELS.fetch(:open_application))
+      end
+    end
+
     attr_reader :scope, :params
 
     def initialize(scope, params = {})
@@ -11,7 +101,7 @@ module Applications
     end
 
     def apply_filters
-      filtered_scope = build_filtered_scope
+      filtered_scope = self.class.with_list_details(build_filtered_scope, params)
       success(nil, filtered_scope)
     rescue StandardError => e
       handle_filter_error(e)
@@ -106,10 +196,11 @@ module Applications
         fy = fiscal_year - 1
         date_range = FiscalYear.time_range(FiscalYear.start_date_for(fy), FiscalYear.end_date_for(fy))
         scope.where(created_at: date_range)
-      when 'last_30'
-        scope.where(created_at: 30.days.ago.beginning_of_day..)
-      when 'last_90'
-        scope.where(created_at: 90.days.ago.beginning_of_day..)
+      when 'last_30', 'last_60', 'last_90', 'last_120'
+        days = params[:date_range].delete_prefix('last_').to_i
+        scope.where(created_at: days.days.ago.beginning_of_day..)
+      when 'last_12_months'
+        scope.where(created_at: 12.months.ago.beginning_of_day..)
       else
         scope
       end

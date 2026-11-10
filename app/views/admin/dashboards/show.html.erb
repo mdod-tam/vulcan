@@ -295,10 +295,10 @@
           <p class="text-3xl font-bold text-primary-600" aria-labelledby="approved-heading" aria-live="polite"><%= @metrics[:pending_services_count] || 0 %></p>
           <p class="text-sm text-gray-500">Approved and awaiting services</p>
           <div class="mt-2">
-            <%= link_to admin_applications_path(status: 'approved'),
+            <%= link_to admin_applications_path(view: 'pipeline'),
                 class: "inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-500",
-                aria: { label: "View only approved applications" } do %>
-              <span>View Only Approved</span>
+                aria: { label: 'Open approved pipeline' } do %>
+              <span>Open approved pipeline</span>
               <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>

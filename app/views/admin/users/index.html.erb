@@ -124,9 +124,9 @@
             <%= submit_tag "Search", class: "btn btn-primary cursor-pointer" %>
             
             <% if params[:q].present? || params[:role].present? || params[:needs_review].present? || params[:relationship].present? %>
-              <%= link_to "Clear Filters", admin_users_path, 
-                  class: "btn btn-outline",
-                  data: { turbo_frame: "users_list" } %>
+              <%= link_to 'Clear Filters', admin_users_path,
+                          class: 'btn btn-outline',
+                          data: { turbo_frame: 'users_list', action: 'click->autosubmit#discardSearch' } %>
             <% end %>
           </div>
         <% end %>

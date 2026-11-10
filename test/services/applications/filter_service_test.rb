@@ -584,6 +584,127 @@ module Applications
       end
     end
 
+    test 'sorts by creation date before limiting results and ignores unsupported sort input' do
+      @active_app.update!(created_at: 4.days.ago, application_date: 1.day.ago)
+      @approved_app.update!(created_at: 2.days.ago, application_date: 7.days.ago)
+      @draft_app.update!(created_at: 3.days.ago)
+      scope = Application.where(id: [@active_app.id, @approved_app.id, @draft_app.id]).order(application_date: :desc)
+
+      newest = FilterService.new(scope, sort: 'created_at', direction: 'desc').apply_filters.data
+      assert_equal [@approved_app.id, @draft_app.id], newest.limit(2).pluck(:id)
+      assert_equal 3, newest.count
+      assert_equal [@active_app.id, @draft_app.id, @approved_app.id],
+                   FilterService.new(scope, sort: 'created_at', direction: 'asc').apply_filters.data.pluck(:id)
+      assert_equal newest.pluck(:id), FilterService.new(scope, sort: 'applications.id; SELECT 1', direction: 'sideways').apply_filters.data.pluck(:id)
+      malicious_direction = FilterService.new(scope, sort: 'created_at', direction: 'DESC; SELECT pg_sleep(10)').apply_filters
+      assert malicious_direction.success?
+      assert_equal newest.pluck(:id), malicious_direction.data.pluck(:id)
+      assert_not_includes malicious_direction.data.to_sql, 'pg_sleep'
+      assert_equal 'created_at', FilterService.sort_column(sort: 'application_date')
+      assert_equal 'desc', FilterService.sort_direction(sort: 'status')
+    end
+
+    test 'sorts applicant names case insensitively with a stable first name tie break' do
+      zebra = create(:application, user: create(:constituent, last_name: 'zebra', first_name: 'Alex'))
+      zoe = create(:application, user: create(:constituent, last_name: 'Alpha', first_name: 'Zoe'))
+      jamie = create(:application, user: create(:constituent, last_name: 'alpha', first_name: 'Jamie'))
+      scope = Application.where(id: [zebra.id, zoe.id, jamie.id])
+
+      assert_equal [jamie.id, zoe.id, zebra.id],
+                   FilterService.new(scope, sort: 'applicant').apply_filters.data.pluck(:id)
+      assert_equal [zebra.id, zoe.id, jamie.id],
+                   FilterService.new(scope, sort: 'user.last_name', direction: 'desc').apply_filters.data.pluck(:id)
+    end
+
+    test 'status duration uses the latest lifecycle entry and sorts unknown dates last in either direction' do
+      @active_app = create(:application, created_at: 60.days.ago, user: create(:constituent, speech_disability: true))
+      assert_predicate @active_app.reload.user, :disability_selected?
+      travel_to(40.days.ago) { @active_app.transition_status!(:awaiting_proof, actor: @guardian) }
+      travel_to(35.days.ago) { @active_app.transition_status!(:in_progress, actor: @guardian) }
+      latest_entry = 31.days.ago.change(usec: 0)
+      travel_to(latest_entry) { @active_app.transition_status!(:awaiting_proof, actor: @guardian) }
+      Current.set(user: @active_app.user) { @active_app.update!(alternate_contact_name: 'Routine edit') }
+      @active_app.transition_status!(:awaiting_proof, actor: @guardian)
+
+      approval_time = 50.days.ago.change(usec: 0)
+      @approved_app.status_changes.create!(from_status: 'in_progress', to_status: 'approved', changed_at: approval_time)
+      @approved_app.status_changes.create!(from_status: 'not_reviewed', to_status: 'approved', change_type: :proof, changed_at: 1.day.ago,
+                                           metadata: { change_type: 'proof' })
+      @approved_app.status_changes.create!(from_status: 'received', to_status: 'approved', change_type: :disability_certification,
+                                           changed_at: 1.hour.ago, metadata: { change_type: 'disability_certification' })
+      scope = Application.where(id: [@active_app.id, @approved_app.id, @dependent_app.id])
+
+      longest_first = FilterService.new(scope, sort: 'status').apply_filters.data.to_a
+      assert_equal [@approved_app.id, @active_app.id, @dependent_app.id], longest_first.map(&:id)
+      assert_equal approval_time, longest_first.first.current_status_entered_at
+      assert_equal latest_entry, longest_first.second.current_status_entered_at
+      assert_nil longest_first.last.current_status_entered_at
+      assert_equal [@active_app.id, @approved_app.id, @dependent_app.id],
+                   FilterService.new(scope, sort: 'status', direction: 'asc').apply_filters.data.pluck(:id)
+    end
+
+    test 'creation supplies status age only for known initial draft and paper intake states' do
+      @draft_app.update!(created_at: 45.days.ago)
+      paper = create(:application, status: :awaiting_proof, submission_method: :paper, created_at: 31.days.ago)
+      scope = Application.where(id: [@draft_app.id, paper.id, @active_app.id, @approved_app.id])
+      rows = FilterService.with_list_details(scope).index_by(&:id)
+
+      assert_equal @draft_app.created_at, rows.fetch(@draft_app.id).current_status_entered_at
+      assert_equal paper.created_at, rows.fetch(paper.id).current_status_entered_at
+      assert_nil rows.fetch(@active_app.id).current_status_entered_at
+      assert_nil rows.fetch(@approved_app.id).current_status_entered_at
+    end
+
+    test 'next action labels and sorting share actionable proof and certification state' do
+      proof = create(:application, :with_residency_proof)
+      certification = create(:application, :with_disability_certification, income_proof_status: :approved,
+                                                                           residency_proof_status: :approved, id_proof_status: :approved, disability_certification_status: :received)
+      ready = create(:application, income_proof_status: :approved, residency_proof_status: :approved, id_proof_status: :approved,
+                                   disability_certification_status: :approved)
+      income_not_required = create(:application, :with_income_proof, residency_proof_status: :approved, id_proof_status: :approved)
+      income_not_required.update!(income_proof_required: false)
+      scope = Application.where(id: [proof.id, certification.id, ready.id, income_not_required.id, @active_app.id, @approved_app.id])
+      result = FilterService.new(scope, sort: 'next_action').apply_filters.data
+      rows = result.index_by(&:id)
+
+      assert_predicate proof, :proof_review_pending?
+      assert_equal 'Review proof', rows.fetch(proof.id).next_action
+      assert_equal 'Review certification', rows.fetch(certification.id).next_action
+      assert_predicate ready, :required_proofs_approved?
+      assert_equal 'Review application', rows.fetch(ready.id).next_action
+      assert_not income_not_required.proof_review_pending?
+      assert_equal 'Open application', rows.fetch(income_not_required.id).next_action
+      assert_equal 'Open application', rows.fetch(@active_app.id).next_action, 'A missing file cannot be reviewed'
+      assert_equal 'Open application', rows.fetch(@approved_app.id).next_action, 'Approved applications are outside the review queue'
+      assert_equal ['Open application', 'Open application', 'Open application', 'Review application', 'Review certification', 'Review proof'],
+                   result.map(&:next_action)
+      assert_equal ['Review proof', 'Review certification', 'Review application', 'Open application', 'Open application', 'Open application'],
+                   FilterService.new(scope, sort: 'next_action', direction: 'desc').apply_filters.data.map(&:next_action)
+    end
+
+    test 'list projection retains filtered joins and supports filtering its approval timestamp alias' do
+      application = create(:application, user: create(:constituent, first_name: 'Projection', speech_disability: true))
+      application.status_changes.create!(from_status: 'draft', to_status: 'in_progress', changed_at: 31.days.ago)
+      assert @scope.joins(:user).exists?(id: application.id), 'The search joins an actual constituent applicant'
+      result = FilterService.new(@scope, q: application.user.first_name).apply_filters
+
+      assert result.success?
+      assert_equal [application.id], result.data.where(current_status_entered_at: 32.days.ago..).pluck(:id)
+      assert_equal 1, result.data.where(current_status_entered_at: 32.days.ago..).count
+      assert_empty result.data.where(current_status_entered_at: 30.days.ago..)
+    end
+
+    test 'supports the additional recent creation date windows' do
+      @active_app.update!(created_at: 50.days.ago)
+      @approved_app.update!(created_at: 100.days.ago)
+      @draft_app.update!(created_at: 13.months.ago)
+      scope = Application.where(id: [@active_app.id, @approved_app.id, @draft_app.id])
+
+      assert_equal [@active_app.id], FilterService.new(scope, date_range: 'last_60').apply_filters.data.pluck(:id)
+      assert_equal [@active_app.id, @approved_app.id], FilterService.new(scope, date_range: 'last_120').apply_filters.data.pluck(:id)
+      assert_equal [@active_app.id, @approved_app.id], FilterService.new(scope, date_range: 'last_12_months').apply_filters.data.pluck(:id)
+    end
+
     test 'handles errors gracefully' do
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with('Error applying filters: StandardError').once

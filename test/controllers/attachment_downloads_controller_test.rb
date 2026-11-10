@@ -23,7 +23,7 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
       scan.update!(status: status)
       paths.each do |path|
         assert_no_difference ['ActiveStorage::VariantRecord.count', 'ActiveStorage::Blob.count'] do
-          get path
+          get path, headers: { 'Accept' => 'application/pdf' }
         end
         assert_response :not_found
         assert_empty response.body
@@ -37,6 +37,63 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
     scan.destroy!
     get rails_blob_path(@blob)
     assert_response :not_found
+  end
+
+  test 'authorized browser requests explain an unfinished or refused check without showing the file' do
+    authenticate(@application.user)
+    { nil => 'documents.preview.not_scanned', pending: 'documents.scan.pending',
+      blocked: 'documents.scan.blocked', failed: 'documents.scan.failed' }.each do |status, message|
+      DocumentScan.find_by(blob_id: @blob.id)&.destroy!
+      if status
+        mark_document_clean!(@blob, user: @application.user)
+        DocumentScan.find_by!(blob_id: @blob.id).update!(status: status)
+      end
+
+      get document_attachment_path(@application.income_proof.attachment), headers: { 'Accept' => 'text/html' }
+
+      assert_response :not_found
+      assert_equal 'text/html', response.media_type
+      assert_select 'h1', text: I18n.t('documents.preview.unavailable')
+      assert_select 'p', text: I18n.t(message)
+      assert_not_includes response.body, @blob.filename.to_s
+      assert_private_response
+    end
+
+    authenticate(create(:constituent))
+    get document_attachment_path(@application.income_proof.attachment)
+    assert_response :not_found
+    assert_empty response.body
+
+    authenticate(create(:admin))
+    get document_attachment_path(@application.income_proof.attachment)
+    assert_response :not_found
+    assert_select 'h1', text: I18n.t('documents.preview.unavailable')
+  end
+
+  test 'the document explanation follows the signed-in constituent language' do
+    @application.user.update!(locale: 'es')
+    DocumentScan.find_by!(blob_id: @blob.id).destroy!
+    authenticate(@application.user)
+
+    get document_attachment_path(@application.income_proof.attachment)
+
+    assert_response :not_found
+    assert_select 'html[lang="es"]'
+    assert_select 'h1', text: 'No se puede abrir este documento'
+    assert_select 'p', text: I18n.t('documents.preview.not_scanned', locale: :es)
+    assert_equal :en, I18n.locale
+  end
+
+  test 'the document explanation uses a supported language when the saved locale is unsupported' do
+    @application.user.update!(locale: 'es-MX')
+    DocumentScan.find_by!(blob_id: @blob.id).destroy!
+    authenticate(@application.user)
+
+    get document_attachment_path(@application.income_proof.attachment)
+
+    assert_response :not_found
+    assert_select 'html[lang="en"]'
+    assert_select 'h1', text: 'This document cannot be opened'
   end
 
   test 'blob URLs require a current sign-in and check the owner' do

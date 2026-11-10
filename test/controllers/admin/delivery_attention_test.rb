@@ -85,6 +85,25 @@ module Admin
       assert_not_includes response.body, 'private provider diagnostics'
     end
 
+    test 'certification history preloads request actors without loading actors for delivery status cards' do
+      request_actor = create(:admin)
+      status_actor = create(:admin)
+      requested = create(:notification, notifiable: @application, actor: request_actor,
+                                        action: 'disability_certification_requested', delivery_status: :queued)
+      approved = create(:notification, notifiable: @application, actor: status_actor,
+                                       action: 'disability_certification_approved', delivery_status: :queued)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      history = @controller.view_assigns.fetch('certification_delivery_notifications')
+      status_cards = @controller.view_assigns.fetch('certification_local_delivery_notifications')
+      assert_predicate history.find { |notification| notification.id == requested.id }.association(:actor), :loaded?
+      assert_not_predicate status_cards.find { |notification| notification.id == approved.id }.association(:actor), :loaded?
+      assert_select "#viewCertificationHistoryModal #notification_#{requested.id}", text: /By: #{Regexp.escape(request_actor.full_name)}/
+      assert_select "#certification_delivery_notification_#{approved.id} [data-delivery-status='queued']", count: 1
+    end
+
     test 'legacy certification notification with only a placeholder message id does not show a delivery panel' do
       notification = create(:notification, notifiable: @application, action: 'disability_certification_requested',
                                            message_id: 'backfilled-123', delivery_status: :delivered)
