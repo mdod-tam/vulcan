@@ -14,7 +14,7 @@ module Trainers
       @product = create(:product)
       @other_trainer = create(:trainer)
       @other_session = create(:training_session, :scheduled, trainer: @other_trainer)
-      sign_in_for_controller_test(@trainer)
+      sign_in_for_controller_test(@trainer, bypass_mfa_enrollment: true)
     end
 
     test 'current trainer sees coordinating contact preparation and named outcome controls' do
@@ -48,7 +48,7 @@ module Trainers
     test 'completion defaults use recorded appointment details but rejected blanks still win' do
       @session.update!(product_trained_on: @product, duration_hours: '1.5')
       travel_to(@session.scheduled_for + 1.hour) do
-        sign_in_for_controller_test(@trainer)
+        sign_in_for_controller_test(@trainer, bypass_mfa_enrollment: true)
         get trainers_training_session_path(@session)
 
         assert_response :success
@@ -136,14 +136,14 @@ module Trainers
     end
 
     test 'admin oversight is read-only and another trainer has no report or contact access' do
-      sign_in_for_controller_test(@admin)
+      sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
       get trainers_training_session_path(@session)
       assert_response :success
       assert_includes response.body, 'This view is read-only.'
       assert_select "form[action='#{complete_trainers_training_session_path(@session)}']", count: 0
       assert_select '#preparation-heading'
 
-      sign_in_for_controller_test(@other_trainer)
+      sign_in_for_controller_test(@other_trainer, bypass_mfa_enrollment: true)
       get trainers_training_session_path(@session)
       assert_response :not_found
       assert_not_includes response.body, @application.user.email
@@ -360,7 +360,7 @@ module Trainers
       assert @session.reload.status_scheduled?
 
       travel_to 2.days.from_now do
-        sign_in_for_controller_test(@trainer)
+        sign_in_for_controller_test(@trainer, bypass_mfa_enrollment: true)
         get trainers_training_session_path(@session)
         assert_select '#training-outcome option[value=no_show]'
         assert_select '#training-outcome option[value=reschedule]'
@@ -479,7 +479,7 @@ module Trainers
       assert_equal [completed.id], assigns(:training_sessions).pluck(:id)
       assert_includes response.body, 'Duration: 2.5 hours'
 
-      sign_in_for_controller_test(@admin)
+      sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
       get filtered_trainers_training_sessions_path(scope: 'all', status: 'scheduled')
       assert_response :success
       assert_includes assigns(:training_sessions).pluck(:id), @session.id

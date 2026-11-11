@@ -7,7 +7,7 @@ module Admin
   class ApplicationPurchasedProductsTest < ActionDispatch::IntegrationTest
     setup do
       FeatureFlag.find_or_create_by!(name: 'vouchers_enabled').update!(enabled: true)
-      sign_in_for_integration_test(create(:admin))
+      sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
     end
 
     test 'lists each purchased product once with its latest purchase date in the program time zone' do

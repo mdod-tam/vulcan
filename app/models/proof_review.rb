@@ -4,6 +4,9 @@
 # Disability certification reviews also use this model. A decision's follow-up (notices, audit, secure resubmission
 # request) is Applications::ProofDecisionFollowUp, scheduled by the writer that records it.
 class ProofReview < ApplicationRecord
+  class DecisionConflict < StandardError; end
+  Decision = Data.define(:review, :recorded)
+
   belongs_to :application
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
 
@@ -30,36 +33,83 @@ class ProofReview < ApplicationRecord
   validates :proof_type, presence: true
   validates :status, presence: true
   validates :reviewed_at, presence: true
+  validates :decision_key, :decision_fingerprint, presence: true
   validates :rejection_reason, presence: true, if: :status_rejected?
-  validate :application_must_be_active
-  validate :proof_must_be_attached, unless: :attachment_optional?
+  validate :application_must_be_active, on: :create
+  validate :proof_must_be_attached, unless: :attachment_optional?, on: :create
   validate :admin_must_be_admin_type
 
   before_validation :set_reviewed_at, on: :create
 
-  scope :recent, -> { order(created_at: :desc) }
+  scope :chronological, -> { order(reviewed_at: :asc, id: :asc) }
+  scope :recent, -> { chronological.reverse_order }
   scope :by_admin, ->(admin_id) { where(admin_id: admin_id) }
   scope :rejections, -> { where(status: :rejected) }
-  scope :last_3_days, -> { where('created_at > ?', 3.days.ago) }
+  scope :last_3_days, -> { where('reviewed_at > ?', 3.days.ago) }
 
   # A rejection recorded because no document came with the application, not because a document was found wanting.
   def none_provided?
     status_rejected? && rejection_reason_code == 'none_provided'
   end
 
-  # The row for one decision on an application. A proof type and a status keep a single row between them,
-  # so a repeat decision updates that row instead of adding another.
-  def self.for_decision(application, proof_type:, status:)
-    application.proof_reviews.find_or_initialize_by(proof_type: proof_type, status: status)
+  def current_rejection?(application: self.application)
+    status_rejected? && application.id == application_id &&
+      application.public_send("#{document_type.attachment_name}_status") == 'rejected' &&
+      application.proof_reviews.where(proof_type: proof_type).recent.pick(:id) == id
   end
 
-  # Saves the decision. A new row stamps reviewed_at when it is created; a repeat decision stamps it here.
-  # A rejection is counted, and the application archived once it passes the limit, in the same transaction
-  # as the decision. If that fails, the decision rolls back with it.
+  # Resolve retries before checking today's attachment or reviewability. Only a new decision enters the writer.
+  # The submitted target remains an identifier even after a rejected blob has been purged.
+  def self.record_decision!(application:, decision_key:, reviewed_blob_id:, proof_type:, status:, admin:, # rubocop:disable Metrics/ParameterLists
+                            rejection_reason: nil, rejection_reason_code: nil, notes: nil)
+    raise DecisionConflict, 'Reload this application before submitting a review.' if decision_key.blank?
+
+    target_id = reviewed_target_id(reviewed_blob_id)
+
+    attributes = {
+      proof_type: proof_type.to_s, status: status.to_s, admin: admin, reviewed_blob_id: target_id,
+      rejection_reason: status.to_s == 'rejected' ? rejection_reason.to_s.presence : nil,
+      rejection_reason_code: status.to_s == 'rejected' ? rejection_reason_code.to_s.presence : nil,
+      notes: notes.to_s.presence
+    }
+    fingerprint = Digest::SHA256.hexdigest([
+      attributes[:proof_type], attributes[:status], admin&.id, target_id,
+      attributes[:rejection_reason], attributes[:rejection_reason_code], attributes[:notes]
+    ].to_json)
+
+    application.with_lock do
+      existing = application.proof_reviews.find_by(decision_key: decision_key)
+      if existing
+        raise DecisionConflict, 'This review was already submitted with different details. Reload this application.' unless existing.decision_fingerprint == fingerprint
+
+        Decision.new(review: existing, recorded: false)
+      else
+        current_blob_id = application.document_attachment_for(proof_type).blob&.id
+        raise DecisionConflict, 'The document changed after this review was opened. Reload this application.' unless current_blob_id == target_id
+
+        review = application.proof_reviews.new(**attributes, decision_key: decision_key, decision_fingerprint: fingerprint)
+        review.instance_variable_set(:@recording_decision, true)
+        yield review
+        raise ArgumentError, 'The proof decision writer did not record its review' unless review.persisted?
+
+        Decision.new(review: review, recorded: true)
+      end
+    end
+  end
+
+  def self.reviewed_target_id(value)
+    return if value.blank?
+
+    Integer(value.to_s, exception: false) || raise(DecisionConflict, 'The reviewed document is invalid. Reload this application.')
+  end
+  private_class_method :reviewed_target_id
+
+  # Internal insert for record_decision!'s writer block. Existing decisions cannot be changed or counted again.
   def record!(**attributes)
+    raise ArgumentError, 'Use ProofReview.record_decision! to record a new decision' unless @recording_decision && new_record?
+
     @rejection_total = nil
     assign_attributes(attributes)
-    self.reviewed_at = Time.current unless new_record?
     transaction do
       # The insert takes a shared lock on the application row for the foreign key. Two rejections that each
       # held it would deadlock asking for the exclusive lock, so the exclusive lock comes first.
@@ -68,6 +118,10 @@ class ProofReview < ApplicationRecord
       count_rejection! if counts_toward_rejection_limit?
     end
     self
+  end
+
+  def readonly?
+    persisted? || super
   end
 
   # The review committed and a later step failed. This event lets staff find the review and check it.

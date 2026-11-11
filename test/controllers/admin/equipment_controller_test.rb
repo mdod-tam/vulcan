@@ -7,7 +7,7 @@ module Admin
   class EquipmentControllerTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @vendor = create(:vendor)
       @product = create(:product, name: '=Unsafe model', manufacturer: '+Unsafe maker')
       @product.vendors << @vendor
@@ -75,7 +75,7 @@ module Admin
     end
 
     test 'vendor access cannot list equipment or download bid exports' do
-      sign_in_for_integration_test(@vendor)
+      sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
       get admin_equipment_index_path(format: :csv)
       assert_redirected_to root_path
     end

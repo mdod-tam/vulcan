@@ -8,7 +8,7 @@ class ChartLifecycleTest < ApplicationSystemTestCase
     product = create(:product, device_types: ['Tablet'])
     application = create(:application, skip_proofs: true, status: :in_progress, fulfillment_type: :equipment)
     create(:equipment_item, application: application, product: product, purchase_order: create(:purchase_order, sent_at: Date.current))
-    system_test_sign_in(create(:admin))
+    system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
     visit admin_reports_path
     assert_selector 'canvas', count: 15
     assert_charts_sized(15)
@@ -62,7 +62,7 @@ class ChartLifecycleTest < ApplicationSystemTestCase
 
   test 'application modal submission closes the dialog and replaces the current page' do
     application = create(:application, skip_proofs: true, status: :in_progress)
-    system_test_sign_in(create(:admin))
+    system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
     visit admin_user_path(application.user)
     find('[data-controller="application-modal"] button[data-action="click->application-modal#open"]').click
     assert_selector '#application-modal[open]'
@@ -88,7 +88,7 @@ class ChartLifecycleTest < ApplicationSystemTestCase
     FeatureFlag.enable!(:vouchers_enabled)
     vendor = create(:vendor, vendor_authorization_status: :approved, w9_status: :approved, terms_accepted_at: 1.day.ago)
     create(:voucher_transaction, vendor: vendor, amount: 125)
-    system_test_sign_in(vendor)
+    system_test_sign_in(vendor, bypass_mfa_enrollment: true)
     visit vendor_portal_dashboard_path
     assert_selector '#monthly-totals-chart.hidden', visible: :all
     assert_equal 1, chart_state.size

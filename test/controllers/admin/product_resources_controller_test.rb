@@ -7,7 +7,7 @@ module Admin
     setup do
       @admin = create(:admin)
       @product = create(:product, :archived)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'admin manages resources on archived products and the product shows public authoring guidance' do

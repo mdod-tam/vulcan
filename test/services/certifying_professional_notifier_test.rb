@@ -151,22 +151,22 @@ class CertifyingProfessionalNotifierTest < ActiveSupport::TestCase
     assert_not_includes log_output.string, 'raw-secret-token'
   end
 
-  test 'email failure is not silently routed to the unavailable fax provider' do
+  test 'email failure retains its transport outcome' do
     notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                          action: 'disability_certification_rejected')
     notifier = CertifyingProfessionalNotifier.new(@application)
     notifier.stubs(:notify_by_email).returns(success: false, method: 'email', outcome: :failed, error: 'smtp timeout')
-    FaxService.any_instance.expects(:send_fax).never
 
     result = notifier.send_certification_rejection_notice(rejection_reason: 'Missing signature', admin: @admin,
                                                           notification_id: notification.id)
     assert_not result[:success]
+    assert_equal 'email', result[:method]
     assert_equal :failed, result[:outcome]
-    assert_nil notification.reload.metadata['fax_sid']
+    assert_equal 'failed', notification.reload.metadata['provider_delivery_outcome']
     assert_equal 'Provider notification could not be sent.', notification.metadata['provider_notification_error']
   end
 
-  test 'fax-only provider gets an explicit unavailable result' do
+  test 'a provider without email gets an explicit unavailable result' do
     @application.update_column(:certifying_professional_email, nil)
     notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                          action: 'disability_certification_rejected')
@@ -175,8 +175,12 @@ class CertifyingProfessionalNotifierTest < ActiveSupport::TestCase
     )
     assert_not result[:success]
     assert_equal :unavailable, result[:outcome]
-    assert_equal FaxService::UNAVAILABLE_MESSAGE, result[:error]
-    assert_equal 'Provider notification could not be sent.', notification.reload.metadata['provider_notification_error']
+    assert_nil result[:method]
+    assert_equal CertifyingProfessionalNotifier::UNAVAILABLE_MESSAGE, result[:error]
+    notification.reload
+    assert_empty notification.metadata['notification_methods']
+    assert_equal 'unavailable', notification.metadata['provider_delivery_outcome']
+    assert_equal 'Provider notification could not be sent.', notification.metadata['provider_notification_error']
   end
 
   %i[queued deferred suppressed configuration_error enqueue_failed].each do |outcome|

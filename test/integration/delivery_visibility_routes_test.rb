@@ -4,7 +4,7 @@ require 'test_helper'
 
 class DeliveryVisibilityRoutesTest < ActionDispatch::IntegrationTest
   setup do
-    sign_in_for_controller_test(create(:admin))
+    sign_in_for_controller_test(create(:admin), bypass_mfa_enrollment: true)
   end
 
   test 'authorized decision screens render the attempts belonging to their own record' do

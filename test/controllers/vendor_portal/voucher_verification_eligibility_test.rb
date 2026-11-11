@@ -19,7 +19,7 @@ module VendorPortal
       }
     }.each do |description, build_vendor|
       test "#{description} cannot open or submit DOB verification" do
-        sign_in_for_integration_test(instance_exec(&build_vendor))
+        sign_in_for_integration_test(instance_exec(&build_vendor), bypass_mfa_enrollment: true)
 
         get verify_vendor_portal_voucher_path(@voucher.code)
         assert_redirected_to vendor_portal_dashboard_path
@@ -34,7 +34,7 @@ module VendorPortal
     end
 
     test 'an unapproved vendor learns nothing about whether a code exists' do
-      sign_in_for_integration_test(create(:vendor, :pending))
+      sign_in_for_integration_test(create(:vendor, :pending), bypass_mfa_enrollment: true)
 
       get verify_vendor_portal_voucher_path('NO-SUCH-CODE')
 
@@ -44,7 +44,7 @@ module VendorPortal
 
     # A real code and a made-up one get the same answer on every path that takes a code.
     test 'an unapproved vendor gets the same answer for real and unknown codes everywhere' do
-      sign_in_for_integration_test(create(:vendor, :pending))
+      sign_in_for_integration_test(create(:vendor, :pending), bypass_mfa_enrollment: true)
 
       [@voucher.code, 'NO-SUCH-CODE'].each do |code|
         get vendor_portal_vouchers_path(code: code)
@@ -59,7 +59,7 @@ module VendorPortal
 
     test 'a refusal is logged with the vendor and action, never the code' do
       vendor = create(:vendor, :pending)
-      sign_in_for_integration_test(vendor)
+      sign_in_for_integration_test(vendor, bypass_mfa_enrollment: true)
       Rails.logger.stubs(:warn)
       Rails.logger.expects(:warn).with("VendorPortal: refused vouchers#verify for vendor #{vendor.id}: not approved to process vouchers")
 
@@ -67,7 +67,7 @@ module VendorPortal
     end
 
     test 'an unapproved vendor still sees their voucher list, without the code form' do
-      sign_in_for_integration_test(create(:vendor, :pending))
+      sign_in_for_integration_test(create(:vendor, :pending), bypass_mfa_enrollment: true)
 
       get vendor_portal_vouchers_path
 
@@ -79,7 +79,7 @@ module VendorPortal
     test 'an unapproved vendor sees no Redeem link for a voucher on their list' do
       vendor = create(:vendor, :pending)
       create(:voucher, :active, vendor: vendor, application: create(:application, user: @constituent))
-      sign_in_for_integration_test(vendor)
+      sign_in_for_integration_test(vendor, bypass_mfa_enrollment: true)
 
       get vendor_portal_vouchers_path
 
@@ -88,18 +88,18 @@ module VendorPortal
     end
 
     test 'the dashboard offers Process Voucher only to an eligible vendor' do
-      sign_in_for_integration_test(create(:vendor, :pending))
+      sign_in_for_integration_test(create(:vendor, :pending), bypass_mfa_enrollment: true)
       get vendor_portal_dashboard_path
       assert_select 'a', text: 'Process Voucher', count: 0
       assert_select 'span[aria-disabled=true][aria-describedby=process-voucher-unavailable]', text: 'Process Voucher'
 
-      sign_in_for_integration_test(create(:vendor, :approved))
+      sign_in_for_integration_test(create(:vendor, :approved), bypass_mfa_enrollment: true)
       get vendor_portal_dashboard_path
       assert_select 'a[href=?]', vendor_portal_vouchers_path, text: 'Process Voucher'
     end
 
     test 'an eligible vendor reaches verification' do
-      sign_in_for_integration_test(create(:vendor, :approved))
+      sign_in_for_integration_test(create(:vendor, :approved), bypass_mfa_enrollment: true)
 
       get verify_vendor_portal_voucher_path(@voucher.code)
 

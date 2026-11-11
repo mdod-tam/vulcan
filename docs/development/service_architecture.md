@@ -58,11 +58,15 @@ The service checks durable state when handling transaction errors rather than tr
 
 ### Reviews say whether the decision saved
 
-[`ProofReviewer`](../../app/services/applications/proof_reviewer.rb) and [`DisabilityCertificationReviewer`](../../app/services/applications/disability_certification_reviewer.rb) ask the same question when an error escapes a review: did the decision commit? [`Applications::ReviewCommit`](../../app/services/applications/review_commit.rb) answers it from facts the reviewer reads from the database before the writes, inside the transaction after them, and again after the error.
+[`ProofReview`](../../app/models/proof_review.rb) records immutable decisions; the application's proof status records current state. Each intent has an application-scoped decision key and the reviewed document's blob ID, or an explicit missing-document target. The form preserves that key and target on validation failure. Under the application lock, the model returns an identical replay without repeating status changes, rejection counts, purges or follow-up; changed input with the same key is refused. A new decision gets a new key and retains earlier decisions. Rejected files can be purged without removing their historical identifiers. Decision history orders by `reviewed_at`, then row ID.
+
+[`ProofReviewer`](../../app/services/applications/proof_reviewer.rb) and [`DisabilityCertificationReviewer`](../../app/services/applications/disability_certification_reviewer.rb) ask the same question when an error escapes a new review: did the decision commit? [`Applications::ReviewCommit`](../../app/services/applications/review_commit.rb) answers it from the exact keyed decision and application facts read before the writes, inside the transaction after them, and again after the error.
 
 - Matching the in-transaction facts means the decision saved. The reviewer keeps it, reports a warning, and attempts a `proof_review_follow_up_failed` event.
 - Matching the starting facts means it rolled back, and the original error propagates.
 - Anything else raises `ReviewCommit::Unconfirmed`, and the admin is told to check the application before deciding again. That includes a failed read and a review that changed nothing, because an unchanged row cannot prove a commit.
+
+An identical keyed replay is resolved before commit classification. It returns the recorded decision and does not automatically resend delivery; staff use the existing explicit request/resend actions when follow-up needs attention.
 
 Inside a transaction the caller holds, such as certification rejection during paper intake, `ReviewCommit` gives no verdict. The caller owns the commit and decides what its own outcome means.
 
@@ -79,6 +83,10 @@ A committed voucher with incomplete follow-up, or an issuance whose commit canno
 - `NotificationService.create_and_deliver!` owns notification creation and the optional `audited` row flag. Its private `EmailDelivery::NotificationDispatch` adapts catalog arguments and records delivery routing/outcomes. The operation returns a notification or `nil`; `deliver: false` records without dispatch, and some actions are permanently record-only. Business audit events remain with their workflow owners ([notifications](../features/notifications.md)).
 - `AuditEventService` writes events; [`EventDeduplicationService`](../../app/services/applications/event_deduplication_service.rb) only chooses what a timeline displays. Display deduplication does not make a write idempotent.
 - Secure requests record their logical recipient, delivery owner, and source at issuance, through the recipient resolver and [issuance integrity service](../../app/services/applications/secure_request_issuance_integrity.rb). Historical forms missing that ownership cannot have it reconstructed from today's contact data.
+
+Portal proof replacement uses `Application#proof_resubmittable_via_portal?` for both dashboard links and direct uploads. Submission-event counts do not impose another limit: the existing rejection policy warns at eight counted rejections and archives after the ninth, allowing a final correction at the warning threshold. Secure request forms retain their separate eligibility rule for missing as well as rejected proofs.
+
+The duplicate review index pages matching name/date-of-birth groups, then pages exact comparisons within the selected group before loading users and building forms. [`DuplicateReconciliation::Population`](../../app/services/duplicate_reconciliation/population.rb) owns both those bounded queries and complete report population. Existing pair-state classification and locked review actions remain authoritative; pagination does not truncate exports or grant permission to act on a stale pair.
 
 ### Evaluation report state
 
@@ -165,7 +173,7 @@ Deployment requires the additive migration before the new server code. All write
 | --- | --- |
 | `paper_context` | Paper intake relaxes selected profile validations, and `ProofAttachmentService` leaves reconciliation and delivery to the intake. It does not change whether a proof validation runs. Set and restored by the owning service or controller. |
 | `force_notifications` | Declared but unused by production delivery paths. |
-| `test_user_id` | Lets test authentication restore a session, which can bypass the sign-in flow a test means to exercise. |
+| `user` | Request-scoped audit actor resolved from the persisted signed-cookie session. Unit tests may supply an actor explicitly; it is not an authentication input. |
 
 Proof review markers are derived before the application saves: attached required proofs with `not_reviewed` status in an open application need review; reviewed proofs do not. A submission updates the marker and the final review clears it in the same save. The attachment service no longer needs a context flag to suppress a second timestamp save, and a completed evaluation does not clear proof work.
 

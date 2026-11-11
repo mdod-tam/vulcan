@@ -7,7 +7,7 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   around_action :with_public_request_locale, except: :setup
 
-  before_action :ensure_two_factor_initiated_unless_skipped, except: %i[setup resend_sms_verification]
+  before_action :ensure_two_factor_initiated, except: %i[setup resend_sms_verification]
   before_action :authenticate_user!, only: %i[setup]
   skip_before_action :authenticate_user!,
                      only: %i[verify verify_method process_verification verification_options setup select_sms_verification resend_sms_verification]
@@ -399,8 +399,8 @@ class TwoFactorAuthenticationsController < ApplicationController
     session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]].present?
   end
 
-  def ensure_two_factor_initiated_unless_skipped
-    return if session[:skip_2fa] || two_factor_authentication_initiated?
+  def ensure_two_factor_initiated
+    return if two_factor_authentication_initiated?
     return respond_with_authentication_required unless action_name == 'process_verification'
 
     @type = params[:type]

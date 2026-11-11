@@ -65,7 +65,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       description: 'Another product for integration testing'
     )
 
-    sign_in_for_integration_test(@vendor)
+    sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
 
     # Verify identity so that the session holds this voucher.
     post verify_dob_vendor_portal_voucher_path(@voucher.code), params: {
@@ -139,7 +139,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
   test 'voucher redemption handles validation errors appropriately' do
     # A new session has no verified vouchers.
     reset!
-    sign_in_for_integration_test(@vendor)
+    sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
 
     post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
       amount: 150.0,

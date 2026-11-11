@@ -15,27 +15,70 @@ class DisabilityCertificationAttachmentService
   # Errors are recorded and returned, not raised.
   #
   # @param application [Application] the application to update
-  # @param status [Symbol] :approved, :rejected, or :received
+  # @param status [Symbol] :approved or :received. Rejections use reject_certification.
   # @param admin [User] the admin who makes the change
   # @param submission_method [Symbol] the submission channel
   # @param metadata [Hash] additional operation metadata
+  # @param decision_key [String, nil] Stable decision identifier, required for approval
+  # @param reviewed_blob_id [Integer, nil] Reviewed document identifier, required for approval
   # @return [Hash] :success, :error, :duration_ms, and :status on success
-  def self.update_certification_status(application:, status:, admin:, submission_method: :admin_review, metadata: {})
+  # rubocop:disable-next Metrics/ParameterLists -- Approval identity and target are explicit beside the existing status inputs.
+  def self.update_certification_status(application:, status:, admin:, submission_method: :admin_review, metadata: {},
+                                       decision_key: nil, reviewed_blob_id: nil)
     on_error = ->(error) { record_failure(application, error, admin, submission_method, metadata) }
 
-    AttachmentOperation.measure("Disability certification #{status}", on_error: on_error) do |result|
-      raise 'Cannot update certification status: No certification is attached' unless application.disability_certification.attached?
+    result = AttachmentOperation.measure("Disability certification #{status}", on_error: on_error) do |outcome|
+      raise ArgumentError, 'Use reject_certification to record a rejection' if status.to_s == 'rejected'
 
-      DocumentScan.require_clean!(application.disability_certification.blob) if status.to_s == 'approved'
+      if status.to_s == 'approved'
+        outcome.merge!(approve_existing_certification(application, admin, decision_key, reviewed_blob_id, submission_method, metadata))
+      else
+        application.with_lock do
+          require_certification!(application)
+          update_certification_status_only(application, status, admin, submission_method, metadata)
+        end
+      end
 
-      Rails.logger.info "Updating disability certification status to #{status} for application #{application.id}"
-
-      update_certification_status_only(application, status, admin, submission_method, metadata)
-
-      result[:success] = true
-      result[:status] = status.to_s
+      outcome[:success] = true
+      outcome[:status] = status.to_s
     end
+    result[:commit_state] = :unknown if result[:error].is_a?(Applications::ReviewCommit::Unconfirmed)
+    result
   end
+
+  def self.approve_existing_certification(application, admin, decision_key, reviewed_blob_id, submission_method, metadata)
+    review = nil
+    commit = Applications::ReviewCommit.new(application: application, subject: 'certification approval', again: 'approving it again') do
+      {
+        review: application.proof_reviews.find_by(decision_key: decision_key)&.attributes_for_database,
+        application: Application.where(id: application.id).pick(:status, :disability_certification_status,
+                                                                :disability_certification_verified_at, :disability_certification_verified_by_id),
+        history: ApplicationStatusChange.where(application_id: application.id).count
+      }
+    end
+    recorded = false
+    commit.run(on_committed: ->(error) { review&.log_follow_up_failure(error) }) do
+      commit.transaction do
+        decision = ProofReview.record_decision!(application: application, admin: admin, decision_key: decision_key,
+                                                reviewed_blob_id: reviewed_blob_id, proof_type: :disability_certification, status: :approved) do |new_review|
+          DocumentScan.require_clean!(require_certification!(application).blob)
+          new_review.record!(submission_method: ProofReview.submission_methods.key?(submission_method.to_s) ? submission_method : nil)
+          update_certification_status_only(application, :approved, admin, submission_method, metadata.merge(proof_review_id: new_review.id))
+        end
+        review = decision.review
+        recorded = decision.recorded
+      end
+    end
+    { proof_review: review, recorded: recorded, warning: commit.warning }.compact
+  end
+
+  def self.require_certification!(application)
+    attachment = application.disability_certification
+    raise 'Cannot update certification status: No certification is attached' unless attachment.attached?
+
+    attachment
+  end
+  private_class_method :approve_existing_certification, :require_certification!
 
   # Staff and provider submissions take the same application lock.
   # Staff uploads refuse a received or approved certification before file intake.
@@ -105,12 +148,14 @@ class DisabilityCertificationAttachmentService
   end
 
   # Rejects the certification. An attached file is not necessary.
-  def self.reject_certification(application:, admin:, reason:, notes: nil, # rubocop:disable Metrics/ParameterLists
+  def self.reject_certification(application:, admin:, reason:, decision_key:, reviewed_blob_id:, notes: nil, # rubocop:disable Metrics/ParameterLists
                                 reason_code: nil, submission_method: :admin_review, metadata: {})
     rejection_params = {
       application: application,
       admin: admin,
       reason: reason,
+      decision_key: decision_key,
+      reviewed_blob_id: reviewed_blob_id,
       notes: notes,
       reason_code: reason_code,
       submission_method: submission_method,
@@ -124,14 +169,15 @@ class DisabilityCertificationAttachmentService
 
   # Writes the status, status history, audit event, and notification. The attachment does not change.
   def self.update_certification_status_only(application, status, admin, submission_method, metadata)
+    raise ArgumentError, 'Use reject_certification to record a rejection' if status.to_s == 'rejected'
+
     ActiveRecord::Base.transaction do
       Rails.logger.info "Updating disability certification status to #{status} for application #{application.id}"
 
-      record_verified_status!(application, status, admin, submission_method: submission_method.to_s)
+      record_verified_status!(application, status, admin, submission_method: submission_method.to_s, metadata: metadata)
 
       action_mapping = {
         approved: 'disability_certification_approved',
-        rejected: 'disability_certification_rejected',
         received: 'disability_certification_received'
       }
 
@@ -213,27 +259,29 @@ class DisabilityCertificationAttachmentService
   end
 
   def self.process_rejection(params)
-    ActiveRecord::Base.transaction do
+    notification = nil
+    decision = ProofReview.record_decision!(
+      application: params[:application], decision_key: params[:decision_key], reviewed_blob_id: params[:reviewed_blob_id],
+      proof_type: :disability_certification, status: :rejected, admin: params[:admin],
+      rejection_reason: params[:reason], rejection_reason_code: params[:reason_code], notes: params[:notes]
+    ) do |review|
       params[:resolved_reason] = resolve_rejection_reason_text(params)
+      review.record!(
+        rejection_reason: params[:resolved_reason], rejection_reason_code: params[:reason_code].presence,
+        submission_method: ProofReview.submission_methods.key?(params[:submission_method].to_s) ? params[:submission_method] : nil
+      )
       record_verified_status!(
         params[:application], :rejected, params[:admin],
         submission_method: params[:submission_method],
         metadata: { rejection_reason: params[:resolved_reason] },
         notes: params[:notes]
       )
-      upsert_disability_certification_rejection_review(params)
+      params[:proof_review] = review
       notification = send_rejection_notification(params)
-      { notification_id: notification&.id }
     end
-  end
-
-  def self.upsert_disability_certification_rejection_review(params)
-    ProofReview.for_decision(params[:application], proof_type: :disability_certification, status: :rejected).record!(
-      admin: params[:admin],
-      rejection_reason: params[:resolved_reason],
-      rejection_reason_code: params[:reason_code].presence,
-      notes: params[:notes]
-    )
+    notification ||= Notification.where(action: 'disability_certification_rejected', notifiable: params[:application])
+                                 .find_by("metadata->>'proof_review_id' = ?", decision.review.id.to_s)
+    { notification_id: notification&.id, proof_review: decision.review, recorded: decision.recorded }
   end
 
   def self.send_rejection_notification(params)
@@ -243,6 +291,7 @@ class DisabilityCertificationAttachmentService
       actor: params[:admin],
       notifiable: params[:application],
       metadata: {
+        'proof_review_id' => params[:proof_review].id,
         'rejection_reason' => params[:resolved_reason],
         'notes' => params[:notes]
       },

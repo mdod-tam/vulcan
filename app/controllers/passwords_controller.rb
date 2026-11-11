@@ -288,13 +288,14 @@ class PasswordsController < ApplicationController
       next unless eligible
 
       @user = locked_user
-      update_succeeded = @user.update(
+      @user.assign_attributes(
         password: params[:password],
         password_confirmation: params[:password_confirmation],
         force_password_change: false,
         failed_attempts: 0,
         locked_at: nil
       )
+      update_succeeded = @user.save(context: %i[update password_change])
     end
 
     return redirect_to_new_password(t('passwords.invalid_reset_link')) unless eligible

@@ -22,8 +22,7 @@ export default class extends Controller {
 
   connect() {
     this.selectedValue = !!(this.hasConstituentIdFieldTarget && this.constituentIdFieldTarget.value)
-    this._adultApplicationContext = null
-    this._onFileData = {}
+    this._invalidateAdultContext()
     // On a failed submission, preserve staff edits instead of replacing them with database values.
     this._restoredFromSubmission = this.element.dataset.adultPickerRestoredValue === "true"
     this.togglePanes()
@@ -33,7 +32,12 @@ export default class extends Controller {
     }
   }
 
+  disconnect() {
+    this._invalidateAdultContext()
+  }
+
   selectAdult(id, displayHTML, _userData) {
+    this.clearSelection({ dispatch: false })
     if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = id
 
     const box = this.selectedPaneTarget.querySelector(".adult-details-container")
@@ -76,8 +80,7 @@ export default class extends Controller {
 
     // Clear the retry guard so a replacement adult can populate the fields.
     this._restoredFromSubmission = false
-    this._onFileData = {}
-    this._adultApplicationContext = null
+    this._invalidateAdultContext()
     this.selectedValue = false
     this.togglePanes()
     this._clearPrefillFields()
@@ -121,6 +124,9 @@ export default class extends Controller {
   }
 
   async fetchAdultContext(userId) {
+    this._invalidateAdultContext()
+    const generation = this._contextGeneration
+
     try {
       const response = await fetch(`/admin/users/${userId}/adult_application_context`, {
         headers: { 'Accept': 'application/json' },
@@ -129,12 +135,21 @@ export default class extends Controller {
       if (!response.ok) return
 
       const data = await response.json()
+      if (generation !== this._contextGeneration || !this.selectedValue ||
+          !this.hasConstituentIdFieldTarget || this.constituentIdFieldTarget.value !== String(userId)) return
       if (!data.success) return
 
       this._applyAdultContext(data)
     } catch (e) {
-      console.warn('fetchAdultContext failed', e)
+      if (generation === this._contextGeneration) console.warn('fetchAdultContext failed', e)
     }
+  }
+
+  _invalidateAdultContext() {
+    this._contextGeneration = (this._contextGeneration || 0) + 1
+    this._adultApplicationContext = null
+    this._onFileData = {}
+    this._hideOnFileSummary()
   }
 
   /**

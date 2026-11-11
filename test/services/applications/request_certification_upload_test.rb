@@ -4,6 +4,7 @@ require 'test_helper'
 
 module Applications
   class RequestCertificationUploadTest < ActiveSupport::TestCase
+    include ProofResubmissionTestHelper
     include ActiveSupport::Testing::TimeHelpers
     include ActiveJob::TestHelper
 
@@ -45,6 +46,20 @@ module Applications
 
       assert_predicate result, :failure?
       assert_equal I18n.t('applications.certification_upload.messages.request_not_needed', locale: @actor.effective_locale), result.message
+    end
+
+    test 'a bound rejection repeats request eligibility under the application lock' do
+      decision = DisabilityCertificationAttachmentService.reject_certification(
+        application: @application, admin: @actor, reason: 'Missing signature',
+        **proof_decision_params(@application, :disability_certification)
+      )
+      @application.stubs(:certification_requestable_via_secure_form?).returns(true, false)
+
+      assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
+        result = RequestCertificationUpload.new(application: @application, actor: @actor, proof_review: decision[:proof_review]).call
+        assert result.failure?
+        assert result.data[:superseded_review]
+      end
     end
 
     test 'preparation records one initial transition and secure resends do not count provider requests' do

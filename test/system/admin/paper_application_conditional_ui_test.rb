@@ -8,7 +8,7 @@ module Admin
   class PaperApplicationConditionalUiTest < ApplicationSystemTestCase
     setup do
       @admin = create(:admin, email: "paper_app_ui_admin_#{Time.now.to_i}_#{rand(10_000)}@example.com")
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
       visit new_admin_paper_application_path
       wait_for_stimulus_controller('applicant-type')
     end

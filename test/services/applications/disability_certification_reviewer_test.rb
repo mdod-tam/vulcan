@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class DisabilityCertificationReviewerTest < ActiveSupport::TestCase
+    include ProofResubmissionTestHelper
+
     setup do
       ensure_system_audit_actor!
       @application = create(:application, :completed)
@@ -20,7 +22,7 @@ module Applications
 
     test 'successfully rejects a disability certification' do
       DisabilityCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true } }) do
-        result = @service.reject(rejection_reason: 'Invalid documentation')
+        result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
         assert(result.success?, 'Expected reviewer service to return success when attachment service succeeds')
       end
 
@@ -44,7 +46,7 @@ module Applications
       RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
 
       DisabilityCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
-        result = @service.reject(rejection_reason: 'Invalid documentation')
+        result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
         assert(result.success?, 'Expected reviewer service to pass through success when notifier succeeds')
         assert_equal :submitted, result.data[:provider_delivery][:outcome]
         assert_equal 1234, result.data[:notification_id]
@@ -65,13 +67,13 @@ module Applications
       RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
 
       DisabilityCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
-        result = @service.reject(rejection_reason: 'Invalid documentation')
+        result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
         assert(result.success?, 'Expected rejection to succeed even when secure cert form cannot be issued')
       end
     end
 
     test 'fails when rejection reason is missing' do
-      result = @service.reject(rejection_reason: '')
+      result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: '')
       assert_not(result.success?, 'Expected rejection to fail without a reason')
       assert_match(/Rejection reason is required/, result.message)
     end
@@ -90,7 +92,7 @@ module Applications
       RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
 
       DisabilityCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
-        result = @service.reject(rejection_reason: 'Invalid documentation')
+        result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
         assert result.success?
         assert_equal :unavailable, result.data[:provider_delivery][:outcome]
         assert_includes result.message, 'Provider email was not sent.'
@@ -100,7 +102,7 @@ module Applications
     test 'creates an application note when notes are provided' do
       DisabilityCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true } }) do
         assert_difference(-> { @application.application_notes.count }, 1, 'Expected ApplicationNote count to increase by 1') do
-          @service.reject(rejection_reason: 'Invalid documentation', notes: 'Follow up required')
+          @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation', notes: 'Follow up required')
         end
       end
 
@@ -115,7 +117,7 @@ module Applications
         assert_difference(lambda {
           ApplicationStatusChange.count
         }, 0, 'ApplicationStatusChange should be created by the attachment service, not reviewer') do
-          @service.reject(rejection_reason: 'Invalid documentation')
+          @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
         end
       end
     end
@@ -127,7 +129,7 @@ module Applications
         BaseService::Result.new(success: true, data: { secure_upload_url: nil })
       )
       assert_difference -> { ApplicationStatusChange.where(application: @application, to_status: 'rejected').count }, 1 do
-        result = @service.reject(rejection_reason: 'Invalid documentation')
+        result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
         assert result.success?
         assert_equal :failed, result.data[:provider_delivery][:outcome]
         assert_includes result.message, 'Provider email was not sent.'
@@ -142,7 +144,7 @@ module Applications
         success: true, outcome: :submitted, tracking_status: :failed, tracking_error: 'ActiveRecord::RecordInvalid'
       )
 
-      result = @service.reject(rejection_reason: 'Invalid documentation')
+      result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
 
       assert result.success?
       assert result.data[:provider_delivery][:success]
@@ -156,7 +158,7 @@ module Applications
       CertifyingProfessionalNotifier.any_instance.stubs(:send_certification_rejection_notice).returns(success: true, outcome: :queued)
       ApplicationNote.any_instance.expects(:save!).raises(StandardError, 'private note failure')
 
-      result = @service.reject(rejection_reason: 'Missing signature', notes: 'Review the signature')
+      result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Missing signature', notes: 'Review the signature')
 
       assert result.success?
       assert @application.reload.disability_certification_status_rejected?
@@ -167,7 +169,7 @@ module Applications
     test 'returns error when attachment service fails' do
       error_message = 'Simulated service failure'
       DisabilityCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: false, error: StandardError.new(error_message) } }) do
-        result = @service.reject(rejection_reason: 'Invalid documentation')
+        result = @service.reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Invalid documentation')
         assert_not(result.success?, 'Expected reviewer service to return failure when attachment service fails')
         assert_match(/#{error_message}/, result.message)
       end

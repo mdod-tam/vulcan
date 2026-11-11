@@ -16,7 +16,7 @@ class TestControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'auth_status should return authenticated when signed in' do
-    sign_in_for_integration_test @admin
+    sign_in_for_integration_test @admin, bypass_mfa_enrollment: true
     get test_auth_status_url, headers: { 'Accept' => 'application/json' }
     assert_response :success
     json_response = response.parsed_body

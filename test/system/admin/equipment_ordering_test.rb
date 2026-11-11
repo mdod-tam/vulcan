@@ -17,7 +17,7 @@ module Admin
       excluded = create(:equipment_need, application: first.application, product: create(:product, name: 'Excluded model'))
       existing = create(:purchase_order, vendor: vendor, number: 'SHARED-00042')
       context = { tab: 'needs_ordering', product_id: phone.id.to_s, vendor_id: vendor.id.to_s }
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_applications_path
       assert_selector "a[href='#{admin_equipment_index_path}']", text: 'Equipment'
       take_screenshot('equipment-ordering-applications-entry', html: true, full: true)
@@ -137,7 +137,7 @@ module Admin
       report = create(:evaluation, :completed, :with_single_product, application: application, evaluator: evaluator)
       product = report.recommended_products.sole
       need = create(:equipment_need, application: application, product: product, source_evaluation: report, remaining_quantity: 2)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_purchase_orders_path
       assert_text 'No purchase orders recorded.'
       take_screenshot('equipment-empty-po-index', html: true, full: true)
@@ -199,7 +199,7 @@ module Admin
       take_screenshot('equipment-application-shipped-badge', html: true, full: true)
 
       system_test_sign_out
-      system_test_sign_in(evaluator)
+      system_test_sign_in(evaluator, bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit evaluators_dashboard_path
       within find_by_id('recent-completed-heading').find(:xpath, '../..') do
@@ -218,7 +218,7 @@ module Admin
       need.product.vendors << vendor
       order = create(:purchase_order, vendor: vendor, number: 'STALE-REVIEW')
       context = { tab: 'needs_ordering', product_id: need.product_id.to_s, vendor_id: vendor.id.to_s }
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit new_admin_purchase_order_path(need_ids: [need.id], return_context: context)
       assert_text '1 physical unit across 1 application'
       fill_in "quantity_#{need.id}", with: 2
@@ -274,7 +274,7 @@ module Admin
       order = create(:purchase_order, vendor: vendor, number: "PO#{'P' * 98}")
       tracking_number = "1Z#{'9' * 126}"
       create(:equipment_item, product: product, purchase_order: order, shipped_at: Date.current, tracking_number: tracking_number, carrier: 'ups')
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       page.current_window.resize_to(390, 844)
       visit admin_equipment_index_path(tab: 'shipped', product_id: product.id, vendor_id: vendor.id)
       assert_text product.name
@@ -323,7 +323,7 @@ module Admin
       )
       application.transition_status!(:archived, actor: admin)
       context = { tab: 'ordered', product_id: need.product_id.to_s, vendor_id: vendor.id.to_s }
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
 
       within '#equipment' do

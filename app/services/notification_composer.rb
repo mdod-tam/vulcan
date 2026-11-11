@@ -240,11 +240,11 @@ class NotificationComposer
     if application.association(:proof_reviews).loaded?
       application.proof_reviews
                  .select { |review| review.proof_type == proof_type && review.status_rejected? }
-                 .max_by { |review| [review.updated_at || review.created_at, review.created_at] }
+                 .max_by { |review| [review.reviewed_at, review.id] }
     else
       application.proof_reviews
                  .where(proof_type: proof_type, status: :rejected)
-                 .order(updated_at: :desc, created_at: :desc)
+                 .recent
                  .first
     end
   end

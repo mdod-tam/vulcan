@@ -7,7 +7,7 @@ module Admin
     test 'admin enables and disables future DCF requests with an audit trail' do
       admin = create(:admin)
       flag = FeatureFlag.find_or_create_by!(name: 'dcf_auto_request_certification') { |row| row.enabled = false }
-      sign_in(admin)
+      sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_feature_flags_path
       within('[data-feature-flag="dcf_auto_request_certification"]') do
         assert_text 'Existing applications awaiting DCF are unchanged.'
@@ -28,7 +28,7 @@ module Admin
       admin = create(:admin)
       application = create(:application, :in_progress)
       application.transition_status!(:awaiting_dcf, actor: admin, metadata: { dcf_auto_request: true })
-      sign_in(admin)
+      sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_application_path(application)
       assert_text 'Auto-send not sent — request manually.'
       find_by_id('certification-title').scroll_to(:center)

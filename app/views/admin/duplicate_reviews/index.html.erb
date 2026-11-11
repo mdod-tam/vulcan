@@ -74,6 +74,7 @@
           <% end %>
         </ul>
       </div>
+      <%= render 'shared/pagination', pagy: @case_pagy, label: 'Reviews in progress' %>
     <% else %>
       <div class="card p-6 text-center text-gray-500">No duplicate reviews are in progress.</div>
     <% end %>
@@ -87,6 +88,24 @@
       Compare two records at a time; each decision applies only to that pair.
     </p>
 
+    <% if @match_groups.any? %>
+      <div class="card mb-4 p-4 sm:px-6" data-testid="match-group-picker">
+        <h3 class="text-base font-medium text-gray-900">Choose a name and date of birth match group</h3>
+        <ul class="mt-3 flex flex-wrap gap-3">
+          <% @match_groups.each do |representative| %>
+            <li>
+              <%= link_to "#{representative.full_name} (Constituent ID #{representative.id})",
+                          admin_duplicate_reviews_path(groups_page: @group_pagy.page, match_group_id: representative.id),
+                          class: 'text-primary-600 hover:text-primary-900 underline',
+                          aria: { current: ('true' if representative == @selected_match_group) },
+                          data: { testid: 'match-group-choice' } %>
+            </li>
+          <% end %>
+        </ul>
+      </div>
+      <%= render 'shared/pagination', pagy: @group_pagy, label: 'Potential duplicate groups' %>
+    <% end %>
+
     <% if @unreviewed_match_groups.any? %>
       <div class="space-y-4">
         <% @unreviewed_match_groups.each do |group| %>
@@ -97,8 +116,11 @@
             <header class="border-b border-gray-200 px-4 py-4 sm:px-6">
               <h3 id="<%= group_dom_id %>-heading" class="text-lg font-medium text-gray-900"><%= group.display_name %></h3>
               <p class="mt-1 text-sm text-gray-600" data-testid="match-group-summary">
-                <%= pluralize(group.members.size, 'record') %> · <%= pluralize(group.pairs.size, 'comparison') %> remaining
+                <%= pluralize(group.members.size, 'record') %><%= ' on this page' if @pair_pagy.pages > 1 %> · <%= pluralize(@pair_pagy.count, 'comparison') %> remaining
               </p>
+              <% if @pair_pagy.pages > 1 %>
+                <p class="mt-1 text-sm text-gray-600">Use the page controls below to review more pairings in this group.</p>
+              <% end %>
             </header>
 
             <ul class="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-px bg-gray-200"
@@ -145,6 +167,7 @@
                 </details>
               <% end %>
             </div>
+            <%= render 'shared/pagination', pagy: @pair_pagy, label: 'Unreviewed comparisons' %>
           </article>
         <% end %>
       </div>
@@ -182,6 +205,7 @@
           <% end %>
         </ul>
       </div>
+      <%= render 'shared/pagination', pagy: @legacy_pagy, label: 'Other flagged records' %>
     <% else %>
       <div class="card p-6 text-center text-gray-500">No other records are awaiting review.</div>
     <% end %>

@@ -26,7 +26,7 @@ module SystemTestAuthentication
     end
   end
 
-  def system_test_sign_in(user, verify_path: nil)
+  def system_test_sign_in(user, verify_path: nil, bypass_mfa_enrollment: false)
     debug_authentication_state('SIGN_IN_START', user)
 
     # Authentication indicators require page content instead of about:blank.
@@ -34,10 +34,10 @@ module SystemTestAuthentication
     assert_selector('body', wait: 10)
 
     begin
-      if page.has_text?('Sign Out', wait: 1)
-        debug_puts "Already signed in. Skipping sign-in for #{user.email}."
-        debug_authentication_state('SIGN_IN_SKIP', user)
-        return
+      if page.has_link?('Sign Out', wait: 1) || page.has_button?('Sign Out', wait: 1)
+        system_test_sign_out
+        visit sign_in_path
+        assert_selector('body', wait: 10)
       end
     rescue Ferrum::TimeoutError => e
       debug_authentication_corruption('SIGN_IN_CHECK_TIMEOUT', e, user)
@@ -60,7 +60,7 @@ module SystemTestAuthentication
     end
     wait_for_stimulus_controller('visibility')
 
-    set_system_test_mfa_bypass
+    set_system_test_mfa_bypass(bypass: bypass_mfa_enrollment)
 
     assert_selector('form[action="/sign_in"]', wait: 10)
 
@@ -77,7 +77,7 @@ module SystemTestAuthentication
     end
 
     expected_dashboard_path = user_dashboard_path(user)
-    restore_system_test_mfa_bypass(user) if verify_path.blank?
+    restore_system_test_mfa_bypass(user) if bypass_mfa_enrollment && verify_path.blank?
 
     using_wait_time(10) do
       if verify_path.present? && page.has_current_path?(verify_path, wait: 5)
@@ -136,6 +136,7 @@ module SystemTestAuthentication
     visit sign_in_path
     assert_selector('form[action="/sign_in"]', wait: 10)
     wait_for_stimulus_controller('visibility')
+    set_system_test_mfa_bypass(bypass: bypass_mfa_enrollment)
 
     within('form[action="/sign_in"]') do
       fill_in 'contact-input', with: user.email
@@ -145,6 +146,7 @@ module SystemTestAuthentication
 
     wait_for_page_stable(timeout: 15)
     wait_for_turbo(timeout: 10)
+    restore_system_test_mfa_bypass(user) if bypass_mfa_enrollment && verify_path.blank?
 
     if verify_path.present?
       assert_current_path(verify_path, wait: 10)
@@ -158,10 +160,6 @@ module SystemTestAuthentication
       wait_for_stimulus_controller('forms') if has_selector?('[data-controller*="forms"]', wait: 1)
       debug_puts "Successfully signed in as #{user.email} on retry"
     end
-  end
-
-  def skip_2fa_and_sign_in(user)
-    system_test_sign_in(user)
   end
 
   def system_test_sign_out
@@ -219,15 +217,15 @@ module SystemTestAuthentication
 
   private
 
-  def set_system_test_mfa_bypass
+  def set_system_test_mfa_bypass(bypass:)
     if page.driver.is_a?(Capybara::RackTest::Driver)
-      page.set_rack_session(skip_2fa: true)
+      page.set_rack_session(skip_2fa: bypass)
     else
       page.execute_script(<<~JS)
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/test/set_session', false);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.send('skip_2fa=true');
+        xhr.send('skip_2fa=#{bypass}');
         if (xhr.status !== 200) throw new Error('Test MFA setup failed');
       JS
     end
@@ -237,7 +235,7 @@ module SystemTestAuthentication
   def restore_system_test_mfa_bypass(user)
     return unless current_path == setup_two_factor_authentication_path
 
-    set_system_test_mfa_bypass
+    set_system_test_mfa_bypass(bypass: true)
     visit user_dashboard_path(user)
   end
 
@@ -282,10 +280,7 @@ module SystemTestAuthentication
         end
       end
 
-      if defined?(Current)
-        Current.user&.email || nil
-        Current.test_user_id || nil
-      end
+      Current.user&.email || nil if defined?(Current)
     rescue StandardError
       # Diagnostic errors must not interrupt sign-in.
     end

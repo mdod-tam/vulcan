@@ -168,8 +168,15 @@ module DuplicateReconciliation
 
     def assert_readers_agree(state, required_users:)
       ids = [@first.id, @second.id].sort
-      assert_equal state, Population.new.pair_for_ids(*ids).state
-      assert_equal state, Population.new.pairs.find { |pair| pair.ids == ids }.state
+      population = Population.new
+      assert_equal state, population.pair_for_ids(*ids).state
+      assert_equal state, population.pairs.find { |pair| pair.ids == ids }.state
+      queue_pair_ids = population.queue_pairs(population.unreviewed_pairs_for_group(@first.id).limit(20)).map(&:ids)
+      assert_equal state == :unreviewed, queue_pair_ids.include?(ids), 'SQL queue agrees with the canonical pair classification'
+      legacy_ids = population.legacy_flagged_users.pluck(:id)
+      @users.each do |user|
+        assert_equal required_users.exclude?(user), legacy_ids.include?(user.id), "SQL legacy flags for #{user.id}"
+      end
       projection = ReviewFlagProjection.new
       @users.each do |user|
         assert_equal required_users.include?(user), projection.required_for?(user), "flag projection for #{user.id}"

@@ -8,7 +8,7 @@ module ConstituentPortal
     attr_reader :source, :created_at, :activity_type, :proof_type, :description, :details
 
     def self.from_events(application)
-      proof_reviews = application.proof_reviews.to_a
+      proof_reviews = application.proof_reviews.chronological.to_a
 
       activities = proof_reviews.map do |review|
         from_proof_review(review)
@@ -23,7 +23,7 @@ module ConstituentPortal
         activities << from_submission_event(event, is_initial: is_initial)
       end
 
-      activities.sort_by(&:created_at)
+      activities.sort_by { |activity| [activity.created_at, activity.source.id] }
     end
 
     # Uses the canonical fingerprints and fixed one-minute buckets.
@@ -52,7 +52,7 @@ module ConstituentPortal
 
       new(
         source: review,
-        created_at: review.created_at,
+        created_at: review.reviewed_at,
         activity_type: activity_type,
         proof_type: review.proof_type.to_sym,
         description: I18n.t("constituent_portal.activity.reviews.#{review.proof_type}.#{review.status}",

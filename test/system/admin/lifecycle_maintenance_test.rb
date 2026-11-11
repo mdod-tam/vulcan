@@ -17,7 +17,7 @@ module Admin
       user = create(:constituent, :with_disabilities)
       application = create(:application, :in_progress, user: user)
       application.update_column(:updated_at, 2.days.ago)
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_user_path(user)
       assert_selector '#user-application-summary', text: "Last updated: #{application.updated_at.strftime('%b %d, %Y')}"
       find("#user-application-summary button[data-application-id='#{application.id}']").click
@@ -50,7 +50,7 @@ module Admin
     end
 
     test 'evaluator shortcuts keep the document and focus the fragment heading' do
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
       visit evaluators_dashboard_path
       page.execute_script('window.lifecycleDocumentIdentity = "same-document"')
       {

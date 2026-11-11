@@ -7,7 +7,7 @@ module Admin
     setup do
       @admin = create(:admin)
       @vendor = create(:vendor, :with_w9)
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'staff preview and approve the submitted document without authorizing the vendor' do

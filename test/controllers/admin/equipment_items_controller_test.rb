@@ -7,11 +7,11 @@ module Admin
     setup do
       @admin = create(:admin)
       @item = create(:equipment_item)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'item forms and writes require an administrator' do
-      sign_in_for_integration_test(create(:evaluator))
+      sign_in_for_integration_test(create(:evaluator), bypass_mfa_enrollment: true)
       get edit_admin_equipment_item_path(@item)
       assert_redirected_to root_path
       assert_no_difference 'Event.count' do
@@ -109,6 +109,7 @@ module Admin
       assert token.present?
 
       travel 31.minutes do
+        sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
         assert_no_difference ['Event.count', 'EquipmentItem.count', 'PurchaseOrder.count'] do
           patch admin_equipment_item_path(@item), headers: headers,
                                                   params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)

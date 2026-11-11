@@ -12,7 +12,7 @@ module Admin
       @admin = create(:admin)
       @vendor = create(:vendor, :approved, business_name: 'Ray Supply')
       @invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor, transaction_count: 2, amount_per_transaction: 40)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'approving and then recording a payment, each against the status the page showed' do
@@ -174,7 +174,7 @@ module Admin
     end
 
     test 'staff who are not admins cannot reach invoices' do
-      sign_in_for_integration_test(create(:trainer))
+      sign_in_for_integration_test(create(:trainer), bypass_mfa_enrollment: true)
 
       get admin_invoices_path
       assert_response :redirect

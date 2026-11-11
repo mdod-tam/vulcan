@@ -6,7 +6,7 @@ module Admin
   class VendorSecureRequestFormsTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @vendor = create(:vendor, :with_w9)
       @vendor.update!(w9_status: :rejected)
       Vendors::RequestW9Resubmission.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, message: 'ok', data: {}))
@@ -177,7 +177,7 @@ module Admin
     test 'vendor show page flags W9 details changed after submission' do
       vendor = create(:vendor, :with_w9)
       vendor.update_column(:w9_status, Users::Vendor.w9_statuses[:approved])
-      vendor.reload.update!(business_tax_id: '98-7654321')
+      Current.set(user: @admin) { vendor.reload.update!(business_tax_id: '98-7654321') }
 
       get admin_vendor_path(vendor)
 

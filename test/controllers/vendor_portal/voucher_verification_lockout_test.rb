@@ -12,7 +12,7 @@ module VendorPortal
       @voucher = create(:voucher, :active, application: create(:application, user: @constituent), vendor: @vendor)
       Policy.stubs(:get).with('voucher_verification_max_attempts').returns(3)
       Policy.stubs(:get).with('voucher_validity_period_months').returns(6)
-      sign_in_for_integration_test(@vendor)
+      sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
     end
 
     test 'reloading the form between failures does not reset the count' do
@@ -44,7 +44,7 @@ module VendorPortal
       3.times { post_dob('10/09/1980') }
 
       reset!
-      sign_in_for_integration_test(@vendor)
+      sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
       post_dob('09/10/1980')
 
       assert_redirected_to vendor_portal_vouchers_path

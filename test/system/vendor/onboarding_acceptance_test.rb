@@ -224,6 +224,6 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
   def sign_in_actor(actor)
     Capybara.reset_sessions!
     install_stimulus_error_reporting
-    system_test_sign_in(actor)
+    system_test_sign_in(actor, bypass_mfa_enrollment: true)
   end
 end

@@ -197,7 +197,7 @@ module VendorPortal
     private
 
     def sign_in_as_vendor
-      system_test_sign_in(@vendor)
+      system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
 
       visit vendor_portal_dashboard_path
       assert_text 'Vendor Dashboard'

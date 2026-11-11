@@ -6,7 +6,7 @@ module Admin
   class RejectionReasonsControllerTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_as @admin
+      sign_in_as @admin, bypass_mfa_enrollment: true
     end
 
     test 'index groups reasons by proof type and code' do

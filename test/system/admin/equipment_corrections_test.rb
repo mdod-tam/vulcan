@@ -7,7 +7,7 @@ module Admin
     test 'staff correct invalid shipment details and ship one of two identical devices' do
       item = create(:equipment_item)
       sibling = create(:equipment_item, application: item.application, product: item.product, purchase_order: item.purchase_order)
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit admin_application_path(item.application)
       within("#equipment-item-#{item.id}") { click_link 'Correct device / record shipment' }
@@ -101,7 +101,7 @@ module Admin
       item = create(:equipment_item, shipped_at: Date.current, tracking_number: 'OriginalPackage', carrier: 'usps')
       sibling = create(:equipment_item, application: item.application, product: item.product, purchase_order: item.purchase_order)
       replacement = create(:product, name: 'Corrected physical model')
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit edit_admin_purchase_order_correction_path(item.purchase_order)
       observe_correction_submissions
@@ -201,7 +201,7 @@ module Admin
     test 'detached devices reorder with the same identity and withdrawal retains history' do
       item = create(:equipment_item, tracking_number: 'RecordedPackage')
       replacement_order = create(:purchase_order)
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit edit_admin_equipment_item_path(item)
       select 'Detach an unshipped device for reorder', from: 'Correction action'
@@ -270,7 +270,7 @@ module Admin
       item = create(:equipment_item)
       target_order = create(:purchase_order)
       admin = create(:admin)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit edit_admin_equipment_item_path(item)
       find('summary', text: 'Move to a new purchase order').click
@@ -346,7 +346,7 @@ module Admin
       first_vendor = create(:vendor)
       final_vendor = create(:vendor)
       admin = create(:admin)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit edit_admin_purchase_order_correction_path(order)
       select first_vendor.business_name, from: 'Vendor'
@@ -444,7 +444,7 @@ module Admin
       original_order_id = item.purchase_order_id
       target_order = create(:purchase_order)
       other_admin = create(:admin)
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit edit_admin_equipment_item_path(item)
       fill_in 'Tracking number', with: 'Stale browser draft'
@@ -501,7 +501,7 @@ module Admin
           field: 'PO number', attribute: :number, value: 'RECOVERED-PO',
           confirmation: 'I confirm the impact on all linked equipment and applications.', save: 'Save purchase order correction', notice: 'Purchase order corrected.' }
       ]
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
 
       scenarios.each do |scenario|

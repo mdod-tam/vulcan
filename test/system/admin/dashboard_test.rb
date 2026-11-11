@@ -19,7 +19,7 @@ module Admin
       @app_with_disability_cert = create(:application, :in_progress)
       @app_with_disability_cert.update!(disability_certification_status: :received)
 
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'applications page loads the status chart frame' do

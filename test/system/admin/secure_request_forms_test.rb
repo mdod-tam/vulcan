@@ -20,8 +20,8 @@ module AdminTests
                                          certifying_professional_email: nil)
       application.user.update!(phone_type: 'text')
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#secure-request-forms-title', wait: 15
 
@@ -44,8 +44,8 @@ module AdminTests
                                          certifying_professional_name: nil, certifying_professional_phone: nil,
                                          certifying_professional_email: nil)
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#secure-request-forms-title', wait: 15
       assert_selector "input[name='recipient_ids[]'][value='#{user.id}'][disabled]", wait: 10
@@ -63,8 +63,8 @@ module AdminTests
                                          certifying_professional_name: nil, certifying_professional_phone: nil,
                                          certifying_professional_email: nil)
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#secure-request-forms-title', wait: 15
       checkbox_selector = "input[name='recipient_ids[]'][value='#{user.id}']"
@@ -110,8 +110,8 @@ module AdminTests
       create(:guardian_relationship, guardian_user: guardian, dependent_user: sms_only,
                                      relationship_type: 'Parent')
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#secure-request-forms-title', wait: 15
       dependent_select = "select[name='channel_overrides[#{sms_only.id}]']"
@@ -155,8 +155,8 @@ module AdminTests
                                          certifying_professional_email: nil,
                                          managing_guardian: default_guardian)
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       email_select = "#provider_info_channel_#{email_guardian.id}"
       letter_select = "#provider_info_channel_#{letter_guardian.id}"
@@ -197,8 +197,8 @@ module AdminTests
                                          certifying_professional_name: nil, certifying_professional_phone: nil,
                                          certifying_professional_email: nil)
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#secure-request-forms-title', wait: 15
       select_selector = "#provider_info_channel_#{user.id}"
@@ -226,8 +226,8 @@ module AdminTests
                                          managing_guardian: guardian)
       guardian.update!(status: :suspended)
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#secure-request-forms-title', wait: 15
       # The dependent is active, but every route belongs to the suspended guardian.
@@ -259,8 +259,8 @@ module AdminTests
                                          certifying_professional_email: nil,
                                          managing_guardian: guardian)
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#secure-request-forms-title', wait: 15
       dependent_hint = I18n.t('admin.applications.secure_request_forms.panel.destination_via',
@@ -322,7 +322,7 @@ module AdminTests
       application = create(:application, user: subject)
       create(:secure_request_form, application: application, recipient: subject)
 
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_duplicate_review_path(review_case)
       find('summary', text: 'Merge these two records').click
 
@@ -352,8 +352,8 @@ module AdminTests
                                          certifying_professional_name: nil, certifying_professional_phone: nil,
                                          certifying_professional_email: nil)
       application.user.update!(phone_type: 'text')
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
       take_full_page_screenshot('secure-request-final-entry')
       channel_id = "provider_info_channel_#{application.user_id}"
       %w[letter sms email].each do |channel|
@@ -371,10 +371,10 @@ module AdminTests
       proof_application = create(:application, :in_progress, :with_income_proof, user: sms_recipient)
       # Automatic rejection delivery has no explicit SMS selection.
       result = ProofReviewService.new(proof_application, @admin,
-                                      proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable document').call
+                                      **proof_decision_params(proof_application, :income), proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable document').call
       assert_predicate result, :success?
       assert_equal false, result.data[:resubmission_delivered]
-      visit_admin_application_with_retry(proof_application, user: @admin)
+      visit_admin_application_with_retry(proof_application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#proof_income_request_chooser'
       assert_equal '', find("#proof_income_channel_#{sms_recipient.id}").value
       take_screenshot('secure-request-final-proof-recovery-prompt', html: true)
@@ -408,7 +408,7 @@ module AdminTests
                                      delivery_source: 'managing_guardian')
       end
       guardian.update!(physical_address_1: '98 Changed Address Road')
-      visit_admin_application_with_retry(household, user: @admin)
+      visit_admin_application_with_retry(household, user: @admin, bypass_mfa_enrollment: true)
       assert_selector "label[for='provider_info_recipient_#{guardian.id}']", text: "ID: #{guardian.id}"
       assert_selector "label[for='provider_info_recipient_#{twin.id}']", text: "ID: #{twin.id}"
       within "[data-testid='id-proof-secure-request-forms-panel']" do
@@ -423,7 +423,7 @@ module AdminTests
                                              kind: :id_proof_resubmission, request_batch_id: active_proof.request_batch_id)
       create(:secure_request_form, :revoked, application: household, recipient: twin,
                                              kind: :id_proof_resubmission, request_batch_id: active_proof.request_batch_id)
-      visit_admin_application_with_retry(household, user: @admin)
+      visit_admin_application_with_retry(household, user: @admin, bypass_mfa_enrollment: true)
       within '#proof_id_request_chooser' do
         assert_selector "#proof_id_recipient_#{guardian.id}"
         assert_no_selector "#proof_id_recipient_#{dependent.id}"
@@ -444,7 +444,7 @@ module AdminTests
       take_screenshot('secure-request-final-partial-all-recovered', html: true)
       guardian.update!(status: :suspended)
       twin.update!(status: :suspended)
-      visit_admin_application_with_retry(household, user: @admin)
+      visit_admin_application_with_retry(household, user: @admin, bypass_mfa_enrollment: true)
       assert_selector "#provider_info_recipient_#{dependent.id}[disabled]"
       assert_text I18n.t('admin.applications.secure_request_forms.panel.owner_ineligible')
       take_screenshot('secure-request-final-ineligible', html: true)
@@ -455,12 +455,12 @@ module AdminTests
       postal_application = create(:application, user: address_only, status: :awaiting_proof,
                                                 certifying_professional_name: nil, certifying_professional_phone: nil,
                                                 certifying_professional_email: nil)
-      visit_admin_application_with_retry(postal_application, user: @admin)
+      visit_admin_application_with_retry(postal_application, user: @admin, bypass_mfa_enrollment: true)
       assert_equal 'letter', find("#provider_info_channel_#{address_only.id}").value
       take_screenshot('secure-request-final-address-only', html: true)
       # Direct updates model an incomplete legacy address.
       address_only.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
-      visit_admin_application_with_retry(postal_application, user: @admin)
+      visit_admin_application_with_retry(postal_application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector "#provider_info_recipient_#{address_only.id}[disabled]"
       assert_text I18n.t('admin.applications.secure_request_forms.panel.no_route')
       take_screenshot('secure-request-final-no-route', html: true)
@@ -479,8 +479,8 @@ module AdminTests
                                                  delivery_context: anything)
                 .once.returns(true)
 
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
       take_full_page_screenshot('proof-turbo-recovery-entry')
       click_review_proof_and_wait('income')
       within '#incomeProofReviewModal' do

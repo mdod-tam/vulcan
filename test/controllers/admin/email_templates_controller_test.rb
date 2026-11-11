@@ -6,7 +6,7 @@ module Admin
   class EmailTemplatesControllerTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'update saves EN only and flags ES as needing sync' do
@@ -317,7 +317,7 @@ module Admin
       assert_redirected_to root_path
       assert_includes response.headers.fetch('Cache-Control'), 'no-store'
 
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       get preview_document_admin_email_template_path(create(:email_template, :text))
       assert_response :not_found
       assert_private_preview_policy
@@ -902,6 +902,8 @@ module Admin
       get admin_email_templates_path, headers: default_headers
 
       assert_response :success
+      assert_select '#email-delivery p', text: /All controls email, printed letters and SMS\./
+      assert_not_includes response.body, 'historical fax callbacks'
       assert_select '#email-delivery [data-email-control=?]', EmailDelivery::GLOBAL_CONTROL
       assert_select '#email-delivery [data-email-control]', EmailDelivery::CONTROL_NAMES.size
       assert_select '#templates-proof-heading', text: 'Proof'

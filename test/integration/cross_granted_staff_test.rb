@@ -12,7 +12,7 @@ class CrossGrantedStaffTest < ActionDispatch::IntegrationTest
   end
 
   test 'an evaluator granted training reaches the trainer portal and sees its link' do
-    sign_in_for_integration_test(@granted_trainer)
+    sign_in_for_integration_test(@granted_trainer, bypass_mfa_enrollment: true)
 
     get trainers_dashboard_path
     assert_response :success
@@ -23,7 +23,7 @@ class CrossGrantedStaffTest < ActionDispatch::IntegrationTest
 
   test 'a trainer granted evaluation reaches the evaluator portal and sees its link' do
     create(:evaluation, evaluator: @granted_evaluator, status: :requested)
-    sign_in_for_integration_test(@granted_evaluator)
+    sign_in_for_integration_test(@granted_evaluator, bypass_mfa_enrollment: true)
 
     get evaluators_dashboard_path
     assert_response :success
@@ -39,19 +39,19 @@ class CrossGrantedStaffTest < ActionDispatch::IntegrationTest
       'a constituent for trainers' => [create(:constituent), trainers_dashboard_path],
       'a constituent for evaluators' => [create(:constituent), evaluators_dashboard_path]
     }.each do |name, (user, path)|
-      sign_in_for_integration_test(user)
+      sign_in_for_integration_test(user, bypass_mfa_enrollment: true)
       get path
       assert_redirected_to root_path, name
     end
 
     @granted_trainer.update!(status: :inactive)
-    sign_in_for_integration_test(@granted_trainer)
+    sign_in_for_integration_test(@granted_trainer, bypass_mfa_enrollment: true)
     get trainers_dashboard_path
     assert_response :redirect
   end
 
   test 'administrators keep both portals and no secondary navigation links' do
-    sign_in_for_integration_test(create(:admin))
+    sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
 
     get trainers_dashboard_path
     assert_response :success

@@ -6,9 +6,49 @@ require 'test_helper'
 # needs the exclusive lock. Two rejections that each hold the shared lock wait on each other for the
 # exclusive one, so record! locks the application before it inserts the review.
 class ProofReviewConcurrencyTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
+
   self.use_transactional_tests = false
 
   include ConcurrencyTestHelper
+
+  test 'concurrent requests with one decision key insert and count only once' do
+    admin = create(:admin)
+    application = create(:application, :with_income_proof)
+    identity = proof_decision_params(application, :income)
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    contender_pid = Queue.new
+    outcomes = Queue.new
+    holder_thread = on_own_connection do
+      decision = ProofReview.record_decision!(application: Application.find(application.id), admin: admin,
+                                              proof_type: :income, status: :rejected, rejection_reason: 'Unreadable', **identity) do |review|
+        review.record!
+        holder_ready << backend_pid
+        release_holder.pop
+      end
+      outcomes << [decision.review.id, decision.recorded]
+    end
+    holder_pid = wait_for_signal(holder_ready, thread: holder_thread)
+    contender_thread = on_own_connection do
+      contender_pid << backend_pid
+      decision = ProofReview.record_decision!(application: Application.find(application.id), admin: admin,
+                                              proof_type: :income, status: :rejected, rejection_reason: 'Unreadable', **identity) do
+        raise 'A replay must not enter the decision writer'
+      end
+      outcomes << [decision.review.id, decision.recorded]
+    end
+    confirm_blocked_then_release(wait_for_signal(contender_pid, thread: contender_thread), holder_pid: holder_pid,
+                                                                                           release_queue: release_holder, holder_thread: holder_thread, contender_thread: contender_thread)
+
+    actual = 2.times.map { outcomes.pop }
+    assert_equal 1, actual.map(&:first).uniq.size
+    assert_equal [false, true], actual.map(&:last).sort_by(&:to_s)
+    assert_equal 1, application.reload.total_rejections
+    assert_equal 1, application.proof_reviews.count
+  ensure
+    cleanup_duplicate_review_test_data!(admin, application&.user)
+  end
 
   test 'a rejection takes the application lock before inserting its review, so concurrent rejections cannot deadlock' do
     admin = create(:admin)
@@ -34,8 +74,7 @@ class ProofReviewConcurrencyTest < ActiveSupport::TestCase
     contender_pid_queue = Queue.new
     contender_thread = on_own_connection do
       contender_pid_queue << backend_pid
-      review = ProofReview.for_decision(Application.find(application.id), proof_type: :income, status: :rejected)
-      review.record!(admin: admin, rejection_reason: 'Unreadable')
+      record_proof_review(application: Application.find(application.id), proof_type: :income, status: :rejected, admin: admin, rejection_reason: 'Unreadable')
     end
 
     # The contender waits for the lock before it inserts anything. Once the holder is released, neither waits on the other.
@@ -53,8 +92,7 @@ class ProofReviewConcurrencyTest < ActiveSupport::TestCase
   test 'concurrent follow-ups of one archived decision create and queue one constituent notice' do
     admin = create(:admin)
     application = create(:application, :with_income_proof, total_rejections: ProofReview::MAX_REJECTIONS)
-    review = ProofReview.for_decision(application, proof_type: :income, status: :rejected)
-                        .record!(admin: admin, rejection_reason: 'Unreadable')
+    review = record_proof_review(application: application, proof_type: :income, status: :rejected, admin: admin, rejection_reason: 'Unreadable')
     holder_ready = Queue.new
     release_holder = Queue.new
     holder_thread = on_own_connection do
@@ -127,6 +165,7 @@ class ProofReviewConcurrencyTest < ActiveSupport::TestCase
     ProofReview.insert!({
                           application_id: application.id, admin_id: admin.id, proof_type: ProofReview.proof_types.fetch(proof_type),
                           status: ProofReview.statuses.fetch(:rejected), rejection_reason: 'Unreadable',
+                          decision_key: SecureRandom.uuid, decision_fingerprint: SecureRandom.hex(32),
                           reviewed_at: now, created_at: now, updated_at: now
                         })
   end

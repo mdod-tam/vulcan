@@ -7,7 +7,7 @@ class PaperApplicationScannedUploadTest < ActionDispatch::IntegrationTest
 
   setup do
     @admin = create(:admin)
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
 
     setup_fpl_policies
   end

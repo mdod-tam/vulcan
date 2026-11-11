@@ -24,7 +24,7 @@ module Admin
                                        certifying_professional_name: 'Previous Professional')
       create(:application, :completed, user: current_guardian, annual_income: 22_000,
                                        certifying_professional_name: 'Current Professional')
-      system_test_sign_in(create(:admin, verified: true))
+      system_test_sign_in(create(:admin, verified: true), bypass_mfa_enrollment: true)
       visit new_admin_paper_application_path
       choose 'applicant_is_minor'
 
@@ -82,7 +82,7 @@ module Admin
         relationship_type: 'Parent'
       )
       admin = create(:admin, verified: true)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit new_admin_paper_application_path
 
       choose 'applicant_is_minor'
@@ -116,6 +116,37 @@ module Admin
       take_evidence_screenshot('paper-a2-existing-dependent-contact-refusal', full: true, html: true)
     end
 
+    test 'saved dependent address remains text in document delivery feedback' do
+      address = '<em data-contact-injection="saved">Saved Street & Avenue</em>'
+      guardian = create(:constituent, first_name: 'Address', last_name: 'Guardian')
+      dependent = create(:constituent, first_name: 'Address', last_name: 'Dependent',
+                                       dependent_email: 'address.dependent@example.com',
+                                       physical_address_1: address, communication_preference: 'letter')
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      system_test_sign_in(create(:admin, verified: true), bypass_mfa_enrollment: true)
+      visit new_admin_paper_application_path
+      choose 'applicant_is_minor'
+      select_guardian_for_context_test(guardian)
+
+      within '#guardian_dependents' do
+        within 'li', text: dependent.full_name, wait: 10 do
+          click_button 'Select'
+        end
+      end
+      assert_selector '#existing-dependent-summary', text: dependent.full_name, wait: 10
+      assert_field 'dependent_constituent_physical_address_1', with: address
+      assert_selector '#dependent-info-section[data-controller~="contact-feedback"] #dependent_constituent_communication_preference_letter'
+      choose 'dependent_constituent_communication_preference_email'
+      assert_selector '#dependent_document_delivery_feedback', text: dependent.dependent_email
+      choose 'dependent_constituent_communication_preference_letter'
+
+      assert_selector '#dependent_document_delivery_feedback', text: address
+      assert_no_selector '#dependent_document_delivery_feedback em, #dependent_document_delivery_feedback [data-contact-injection]'
+      assert_selector '#dependent_document_delivery_feedback strong br', visible: :all
+      assert_equal address, dependent.reload.physical_address_1
+      take_evidence_screenshot('saved-contact-address-as-text', full: true, html: true)
+    end
+
     private
 
     def select_guardian_for_context_test(guardian)
@@ -130,7 +161,7 @@ module Admin
 
     def perform_complete_guardian_creation_workflow
       admin = create(:admin, verified: true)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit new_admin_paper_application_path
 
       # Guardian validation
@@ -195,7 +226,7 @@ module Admin
                                  email: 'existing.guardian@example.com')
 
       admin = create(:admin, verified: true)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit new_admin_paper_application_path
 
       choose 'applicant_is_minor'

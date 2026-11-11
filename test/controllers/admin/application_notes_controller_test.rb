@@ -7,7 +7,7 @@ module Admin
     setup do
       @admin = create(:admin)
       @application = create(:application, user: create(:constituent, email: "constituent#{@admin.email}"))
-      sign_in_as(@admin)
+      sign_in_as(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'should create internal note' do

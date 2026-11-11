@@ -13,7 +13,7 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
                          alternate_contact_email: 'support-person@example.com',
                          alternate_contact_phone: '2025550123',
                          annual_income: 24_000)
-    sign_in_for_controller_test(@evaluator)
+    sign_in_for_controller_test(@evaluator, bypass_mfa_enrollment: true)
   end
 
   test 'assigned evaluator sees assessment context without financial or administrative details' do
@@ -47,7 +47,7 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
 
   test 'admins who evaluate retain full admin access and assignment-scoped mutation controls' do
     @evaluation.update!(evaluator: @admin)
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluation_path(@evaluation)
     assert_response :success
@@ -82,7 +82,7 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
     holder = create(:trainer)
     create(:role_capability, user: holder, capability: 'can_evaluate')
     evaluation = create(:evaluation, :completed, evaluator: holder)
-    sign_in_for_controller_test(holder)
+    sign_in_for_controller_test(holder, bypass_mfa_enrollment: true)
     constructor = Evaluations::SupplementalNotesService.method(:new)
     revoke_before_service = lambda do |*arguments|
       revoked = Users::CapabilityWriter.call(actor: @admin, user: holder, intent: Users::CapabilityWriter::Intent.revoke('can_evaluate'),

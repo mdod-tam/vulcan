@@ -10,7 +10,7 @@ module Admin
 
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @evaluator = create(:evaluator)
     end
 
@@ -181,13 +181,13 @@ module Admin
     test 'access loss is observed on the very next request' do
       create(:role_capability, user: @evaluator, capability: 'can_train')
       delete sign_out_path
-      sign_in_for_integration_test(@evaluator)
+      sign_in_for_integration_test(@evaluator, bypass_mfa_enrollment: true)
       get trainers_dashboard_path
       assert_response :success
 
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       patch update_capabilities_admin_user_path(@evaluator), params: revoke('can_train'), headers: TURBO
-      sign_in_for_integration_test(@evaluator)
+      sign_in_for_integration_test(@evaluator, bypass_mfa_enrollment: true)
       get trainers_dashboard_path
 
       assert_redirected_to root_path

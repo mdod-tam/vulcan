@@ -18,7 +18,10 @@ module ConstituentPortal
       application.update_columns(income_proof_required: true, income_proof_status: Application.income_proof_statuses[:rejected],
                                  residency_proof_status: Application.residency_proof_statuses[:approved],
                                  id_proof_status: Application.id_proof_statuses[:not_reviewed])
-      review = create(:proof_review, :rejected, application: application, proof_type: 'income', notes: 'Scan was blurry')
+      review = create(:proof_review, :rejected, application: application, proof_type: 'income', notes: 'Scan was blurry',
+                                                created_at: 5.days.ago, reviewed_at: 1.day.ago)
+      create(:proof_review, :rejected, application: application, proof_type: 'income', notes: 'Earlier decision',
+                                       created_at: 2.days.ago, reviewed_at: 3.days.ago)
 
       get constituent_portal_dashboard_path
 
@@ -26,7 +29,8 @@ module ConstituentPortal
       assert_select 'h4', text: 'Income Proof'
       assert_select '.badge-danger', text: /Rejected/
       assert_select 'span', text: /Reason: Scan was blurry/
-      assert_select 'div', text: /Rejected on: #{Regexp.escape(review.created_at.strftime('%B %d, %Y'))}/
+      assert_select 'div', text: /Rejected on: #{Regexp.escape(review.reviewed_at.strftime('%B %d, %Y'))}/
+      assert_select 'span', text: /Earlier decision/, count: 0
       assert_select 'a[href=?]', constituent_portal_application_new_proof_path(application, proof_type: 'income'), text: 'Upload New Income Proof'
       assert_select 'h4', text: 'Residency Proof'
       assert_select '.badge-success', text: /Approved/
@@ -44,6 +48,42 @@ module ConstituentPortal
       assert_select 'h4', text: 'Income Proof', count: 0
       assert_select 'h4', text: 'Residency Proof'
       assert_select 'h4', text: 'ID Proof'
+    end
+
+    test 'dashboard and direct upload allow the final correction regardless of submission event metadata' do
+      application = create(:application, :in_progress, user: @user, total_rejections: ProofReview::MAX_REJECTIONS,
+                                                       residency_proof_status: :rejected)
+      3.times do |attempt|
+        Event.create!(action: 'proof_submitted', user: @user, auditable: application,
+                      metadata: { proof_type: 'residency', submission_method: 'web', attempt: attempt })
+      end
+
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select 'a[href=?]', constituent_portal_application_new_proof_path(application, proof_type: 'residency')
+
+      get constituent_portal_application_new_proof_path(application, proof_type: 'residency')
+
+      assert_response :success
+      assert_select 'form[action=?]', constituent_portal_application_proofs_resubmit_path(application)
+    end
+
+    test 'closed applications offer no replacement link and direct uploads are refused' do
+      archived = create(:application, :in_progress, user: @user, residency_proof_status: :rejected)
+      archived.transition_status!(:archived, actor: create(:admin))
+      approved = create(:application, :completed, :with_all_proofs, user: @user)
+
+      [archived, approved].each do |application|
+        get constituent_portal_dashboard_path
+
+        assert_response :success
+        assert_select 'a[href=?]', constituent_portal_application_new_proof_path(application, proof_type: 'residency'), count: 0
+
+        get constituent_portal_application_new_proof_path(application, proof_type: 'residency')
+
+        assert_redirected_to constituent_portal_application_path(application)
+      end
     end
 
     test 'a managed application gets the same cards' do

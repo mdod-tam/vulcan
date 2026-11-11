@@ -9,8 +9,11 @@ describe("RejectionFormController", () => {
 
   beforeEach(() => {
     document.body.innerHTML = `
-      <dialog data-controller="rejection-form">
+      <dialog data-controller="rejection-form"
+        data-rejection-form-decisions-value='{"income":{"decision_key":"income-decision","reviewed_blob_id":17},"residency":{"decision_key":"residency-decision","reviewed_blob_id":29},"disability_certification":{"decision_key":"certification-decision","reviewed_blob_id":null}}'>
         <input type="hidden" id="rejection-proof-type" value="" data-rejection-form-target="proofType">
+        <input type="hidden" data-rejection-form-target="decisionKey">
+        <input type="hidden" data-rejection-form-target="reviewedBlobId">
         <input type="hidden" data-rejection-form-target="reasonCode">
         <textarea data-rejection-form-target="reasonField"></textarea>
         <p data-rejection-form-target="codeStatus"></p>
@@ -55,6 +58,37 @@ describe("RejectionFormController", () => {
   afterEach(() => {
     application.stop()
     document.body.innerHTML = ""
+  })
+
+  test("switching proofs submits that proof's stable decision and exact target", () => {
+    const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
+    const change = proofType => element.dispatchEvent(new CustomEvent("proof-type-changed", { detail: { proofType } }))
+    change("income")
+    expect(controller.decisionKeyTarget.value).toBe("income-decision")
+    expect(controller.reviewedBlobIdTarget.value).toBe("17")
+    change("residency")
+    expect(controller.decisionKeyTarget.value).toBe("residency-decision")
+    expect(controller.reviewedBlobIdTarget.value).toBe("29")
+    change("income")
+    expect(controller.decisionKeyTarget.value).toBe("income-decision")
+    expect(controller.reviewedBlobIdTarget.value).toBe("17")
+    change("disability_certification")
+    expect(controller.reviewedBlobIdTarget.value).toBe("")
+  })
+
+  test("reconnecting and reopening the same proof preserves a failed custom draft", () => {
+    const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
+    controller.disconnect()
+    controller.proofTypeTarget.value = "income"
+    controller.reasonCodeTarget.value = "other"
+    controller.reasonFieldTarget.value = "Please replace the signature page."
+    controller.connect()
+    element.dispatchEvent(new CustomEvent("proof-type-changed", { detail: { proofType: "income" } }))
+    expect(controller.reasonFieldTarget.value).toBe("Please replace the signature page.")
+    expect(controller.reasonCodeTarget.value).toBe("other")
+    expect(controller.reasonFieldTarget.readOnly).toBe(false)
+    expect(controller.decisionKeyTarget.value).toBe("income-decision")
+    expect(controller.reviewedBlobIdTarget.value).toBe("17")
   })
 
   test("announces a selected predefined reason to screen readers", () => {

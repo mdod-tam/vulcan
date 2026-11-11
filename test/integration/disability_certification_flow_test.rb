@@ -18,7 +18,7 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
                           certifying_professional_email: "drsmith_#{timestamp}@example.com",
                           certifying_professional_phone: '555-555-5555')
 
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
   end
 
   def test_full_certification_request_flow
@@ -32,7 +32,7 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
     assert_redirected_to admin_application_path(@application)
     assert_equal 'Certification request sent successfully.', flash[:notice]
     # follow_redirect! does not use default_headers, so pass the test user header.
-    follow_redirect!(headers: { 'X-Test-User-Id' => @admin.id.to_s })
+    follow_redirect!
 
     @application.reload
     assert_equal 'requested', @application.disability_certification_status
@@ -67,7 +67,7 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
     sign_in_for_integration_test(@constituent)
 
     # The admin sends the request before the constituent views it.
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     post resend_disability_certification_admin_application_path(@application)
     sign_out
 

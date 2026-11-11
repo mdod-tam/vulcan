@@ -21,7 +21,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
       FeatureFlag.find_or_create_by!(name: name) { |flag| flag.enabled = true }
       EmailDelivery::ControlWriter.set(name: name, enabled: true, actor: @admin, operation_id: SecureRandom.uuid)
     end
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
 
     # Webhook audit events require a system actor.
     @system_user = create(:admin, email: 'system@example.com')

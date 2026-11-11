@@ -13,7 +13,7 @@ module Trainers
       @other_product = create(:product, name: 'Alternative practice device')
       create(:product_resource, product: @product, title: 'Captions practice guide')
       create(:product_resource, product: @product, title: 'Guía para practicar subtítulos', locale: 'es')
-      system_test_sign_in(@trainer)
+      system_test_sign_in(@trainer, bypass_mfa_enrollment: true)
     end
 
     teardown do
@@ -393,7 +393,7 @@ module Trainers
       page.current_window.resize_to(1200, 900)
       system_test_sign_out
       install_stimulus_error_reporting
-      system_test_sign_in(user)
+      system_test_sign_in(user, bypass_mfa_enrollment: true)
     end
 
     def assert_action_error(action, heading: 'Please correct the following errors')

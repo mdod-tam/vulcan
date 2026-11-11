@@ -21,7 +21,7 @@ module Admin
         email: "cand-#{SecureRandom.hex(3)}@example.com"
       )
       @review_case = open_case(@subject, @candidate)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'index lists open cases and legacy flags' do
@@ -73,7 +73,7 @@ module Admin
       open_case(second, first)
       open_case(first, second)
 
-      get admin_duplicate_reviews_path
+      get admin_duplicate_reviews_path, params: { match_group_id: unrelated.first.id }
 
       pair_ids = assigns(:unreviewed_pairs).map(&:ids)
       assert_not_includes pair_ids, [first.id, second.id].sort
@@ -112,7 +112,7 @@ module Admin
         needs_duplicate_review: false
       )
 
-      get admin_duplicate_reviews_path
+      get admin_duplicate_reviews_path, params: { match_group_id: first.id }
 
       assert_response :success
       assert_select '#unreviewed-groups-heading', text: 'Potential duplicate groups'
@@ -132,6 +132,50 @@ module Admin
       assert_not_includes response.body, 'imported-pair-second@example.com'
       assert_not_includes response.body, '410-555-0101'
       assert_not_includes response.body, '1980-02-03'
+    end
+
+    test 'index paginates pair queries before projecting members or rendering forms' do
+      members = create_queue_group('LargeQueue', count: 8)
+      expected_pairs = members.map(&:id).sort.combination(2).to_a
+
+      get admin_duplicate_reviews_path, params: { match_group_id: members.first.id }
+
+      assert_response :success
+      assert_equal expected_pairs.first(20), assigns(:unreviewed_pairs).map(&:ids)
+      assert_equal 28, assigns(:pair_pagy).count
+      assert_select '[data-testid="unreviewed-pair-action"]', count: 20
+      assert_select 'nav[aria-label="Unreviewed comparisons"]'
+      assert_select '[data-testid="match-group-summary"]', text: '8 records on this page · 28 comparisons remaining'
+      first_page_members = assigns(:unreviewed_pairs).flat_map { |pair| [pair.first, pair.second] }
+      assert_equal members.size, first_page_members.map(&:object_id).uniq.size
+
+      get admin_duplicate_reviews_path, params: { match_group_id: members.first.id, comparisons_page: 2 }
+
+      assert_equal expected_pairs.drop(20), assigns(:unreviewed_pairs).map(&:ids)
+      assert_select '[data-testid="unreviewed-pair-action"]', count: 8
+      assert_select 'nav[aria-label="Unreviewed comparisons"] [aria-current="page"]', text: '2'
+
+      get admin_duplicate_reviews_path, params: { match_group_id: members.first.id, comparisons_page: 'invalid' }
+      assert_equal expected_pairs.first(20), assigns(:unreviewed_pairs).map(&:ids)
+    end
+
+    test 'index paginates groups before selecting their pairs' do
+      groups = Array.new(21) { |index| create_queue_group("QueueGroup#{index}", count: 2) }
+
+      get admin_duplicate_reviews_path
+
+      assert_equal 20, assigns(:match_groups).size
+      assert_select '[data-testid="match-group-choice"]', count: 20
+      assert_select '[data-testid="unreviewed-match-group"]', count: 1
+      first_page_group_ids = assigns(:match_groups).map(&:id)
+
+      get admin_duplicate_reviews_path, params: { groups_page: 2, match_group_id: groups.last.first.id }
+
+      assert_includes assigns(:match_groups).map(&:id), groups.last.first.id
+      assert_operator assigns(:match_groups).size, :<=, 20
+      assert_empty first_page_group_ids & assigns(:match_groups).map(&:id)
+      assert_equal [groups.last.map(&:id).sort], assigns(:unreviewed_pairs).map(&:ids)
+      assert_select 'nav[aria-label="Potential duplicate groups"] [aria-current="page"]', text: '2'
     end
 
     test 'review_pair creates a case and redirects to its detail' do
@@ -280,8 +324,10 @@ module Admin
 
     test 'show collapses every equal merge fact and submits locked agreement markers' do
       date_of_birth = Date.new(1985, 4, 12)
-      @subject.update!(date_of_birth:, phone: nil, phone_type: nil)
-      @candidate.update!(date_of_birth:, phone: nil, phone_type: nil)
+      Current.set(user: @admin) do
+        @subject.update!(date_of_birth:, phone: nil, phone_type: nil)
+        @candidate.update!(date_of_birth:, phone: nil, phone_type: nil)
+      end
 
       get admin_duplicate_review_path(@review_case)
 
@@ -296,8 +342,10 @@ module Admin
     end
 
     test 'merge accepts current agreement markers from collapsed rows' do
-      @subject.update!(phone: nil, phone_type: nil)
-      @candidate.update!(phone: nil, phone_type: nil)
+      Current.set(user: @admin) do
+        @subject.update!(phone: nil, phone_type: nil)
+        @candidate.update!(phone: nil, phone_type: nil)
+      end
 
       post merge_admin_duplicate_review_path(@review_case), params: {
         pair_ids: [@subject.id, @candidate.id],
@@ -377,7 +425,7 @@ module Admin
     end
 
     test 'show disables a non-email canonical choice when the other record owns the email-backed login' do
-      @subject.update!(email: nil, communication_preference: :letter)
+      Current.set(user: @admin) { @subject.update!(email: nil, communication_preference: :letter) }
 
       get admin_duplicate_review_path(@review_case)
 
@@ -600,6 +648,13 @@ module Admin
     end
 
     private
+
+    def create_queue_group(first_name, count:)
+      Array.new(count) do
+        create(:constituent, first_name: first_name, last_name: 'BoundedQueue', date_of_birth: Date.new(1982, 3, 4),
+                             needs_duplicate_review: false)
+      end
+    end
 
     def create_review_pair
       date_of_birth = Date.new(1986, 6, 17)

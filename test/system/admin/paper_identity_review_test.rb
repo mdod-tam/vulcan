@@ -14,7 +14,7 @@ module Admin
     setup do
       @admin = create(:admin)
       setup_fpl_policies
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'consolidated paper decisions preserve uploads and resolve cases for every role' do

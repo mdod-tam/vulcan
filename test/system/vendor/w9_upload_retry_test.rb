@@ -6,7 +6,7 @@ require 'application_system_test_case'
 class W9UploadRetryTest < ApplicationSystemTestCase
   setup do
     @vendor = create(:vendor, :with_w9, terms_accepted_at: 1.day.ago)
-    system_test_sign_in(@vendor)
+    system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
   end
 
   test 'a refused replacement keeps the earlier usable W-9 for the retry' do

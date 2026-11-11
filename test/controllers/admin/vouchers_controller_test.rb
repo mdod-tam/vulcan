@@ -6,7 +6,7 @@ module Admin
   # Cancellation is the admin's only way to change a voucher; redemption and expiry own every other status.
   class VouchersControllerTest < ActionDispatch::IntegrationTest
     setup do
-      sign_in_for_integration_test(create(:admin))
+      sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
     end
 
     test 'no generic update route exists, so a request cannot change a voucher\'s status' do

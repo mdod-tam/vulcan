@@ -13,7 +13,7 @@ module Applications
     def build_audit_logs
       return [] unless application
 
-      events = ([build_creation_event] + combined_events).sort_by(&:created_at).reverse
+      events = ([build_creation_event] + combined_events).sort_by { |event| [EventDeduplicationService.event_time(event), event.id || 0] }.reverse
       preload_display_dependencies(events)
       events
     rescue StandardError => e
@@ -106,7 +106,7 @@ module Applications
       ProofReview
         .select('id, application_id, admin_id, proof_type, status, created_at, reviewed_at, rejection_reason, rejection_reason_code, notes')
         .where(application_id: application.id)
-        .order(created_at: :desc)
+        .recent
         .to_a
     end
 

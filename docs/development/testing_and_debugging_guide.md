@@ -39,7 +39,7 @@ Choosing by directory rather than by base class is the usual cause of a session 
 | Model or service needing an actor | `sign_in_for_unit_test(user)` |
 | `ApplicationSystemTestCase` | `system_test_sign_in(user)` |
 
-The [request helpers](../../test/support/authentication_test_helper.rb) arrange cookies, headers, and `Current.user` — setting `Current.user` alone does not create a browser session — and the [browser helper](../../test/support/system_test_authentication.rb) manages its own. All of them bypass MFA enrollment by default; `bypass_mfa_enrollment: false` turns that off for the controller and integration helpers. Tests of sign-in, recovery, or MFA itself have to drive the real flow, since the helpers skip the thing under test.
+The [request helpers](../../test/support/authentication_test_helper.rb) create a persisted `Session` and install its signed cookie. Requests use the production cookie lookup, expiration, and activity checks; headers, environment variables, and `Current.user` do not sign in an HTTP request. The [browser helper](../../test/support/system_test_authentication.rb) fills the real sign-in form. MFA enrollment stays enforced by default. A business scenario that intentionally excludes enrollment can pass `bypass_mfa_enrollment: true` to either helper; that exception does not bypass an MFA challenge. Tests of sign-in, recovery, or MFA itself drive the real flow with the default enforcement.
 
 ## Browser tests
 

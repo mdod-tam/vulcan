@@ -112,7 +112,7 @@ module Admin
     def update_certification_status
       status = @application.normalize_certification_status(params[:status])
       # This status action does not accept a new certification file.
-      if @application.rejection_requested?(status, params)
+      if status == :rejected
         process_certification_rejection
       else
         update_existing_certification_status(status)
@@ -291,17 +291,10 @@ module Admin
       rejection_reason = params[:disability_certification_rejection_reason].presence ||
                          params[:rejection_reason]
 
-      if rejection_reason.blank? && rejection_reason_code.present?
-        rejection_reason = RejectionReason.resolve_text(
-          code: rejection_reason_code,
-          proof_type: 'disability_certification',
-          fallback: nil,
-          application: @application
-        )
-      end
-
       reviewer = Applications::DisabilityCertificationReviewer.new(@application, current_user)
       result = reviewer.reject(
+        decision_key: params[:decision_key],
+        reviewed_blob_id: params.fetch(:reviewed_blob_id, 'missing'),
         rejection_reason: rejection_reason,
         rejection_reason_code: rejection_reason_code
       )
@@ -325,13 +318,17 @@ module Admin
       result = DisabilityCertificationAttachmentService.update_certification_status(
         application: @application,
         status: status,
+        decision_key: params[:decision_key],
+        reviewed_blob_id: params.fetch(:reviewed_blob_id, 'missing'),
         admin: current_user,
         submission_method: 'admin_review',
         metadata: { via_ui: true }
       )
 
       if result[:success]
-        handle_successful_status_update(status)
+        handle_successful_status_update(status, warning: result[:warning], replayed: result[:recorded] == false)
+      elsif result[:commit_state] == :unknown
+        redirect_to admin_application_path(@application), alert: result[:error].message, status: :see_other
       else
         handle_error_response(
           error_message: "Failed to update certification status: #{result[:error]&.message}",
@@ -340,13 +337,16 @@ module Admin
       end
     end
 
-    def handle_successful_status_update(_status)
+    def handle_successful_status_update(_status, warning: nil, replayed: false)
       @application.reload
-      message = if @application.status_approved?
+      message = if replayed
+                  'This disability certification approval was already recorded.'
+                elsif @application.status_approved?
                   'Disability certification status updated and application auto-approved.'
                 else
                   'Disability certification status updated.'
                 end
+      message = [message, warning].compact.join(' ')
       handle_successful_certification_update(message)
     end
 

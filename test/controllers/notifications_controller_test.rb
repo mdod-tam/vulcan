@@ -114,7 +114,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
   test 'admin retains delivery details and can refresh a recipients tracked notification' do
     create_tracked_attempt
-    sign_in_for_integration_test(create(:admin))
+    sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
 
     get notifications_path
 
@@ -128,7 +128,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
   test 'admin Turbo refresh updates only the flash region, so repeated clicks add nothing to the notification' do
     create_tracked_attempt
-    sign_in_for_integration_test(create(:admin))
+    sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
 
     assert_enqueued_with(job: UpdateEmailStatusJob, args: [@notification.id]) do
       post check_email_status_notification_path(@notification), headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
@@ -143,7 +143,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin Turbo refresh of an untracked or unknown notification shows an alert in the flash region' do
-    sign_in_for_integration_test(create(:admin))
+    sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
     turbo = { 'Accept' => 'text/vnd.turbo-stream.html' }
 
     { @notification.id => 'Cannot check status for this notification.', 0 => 'Notification not found.' }.each do |id, message|
@@ -157,7 +157,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
   test 'admin can act on any notification' do
     admin = create(:admin)
-    sign_in_for_integration_test(admin)
+    sign_in_for_integration_test(admin, bypass_mfa_enrollment: true)
 
     post mark_as_read_notification_path(@other_notification)
 

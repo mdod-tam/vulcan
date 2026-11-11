@@ -6,7 +6,7 @@ module Admin
   class FeatureFlagsControllerTest < ActionController::TestCase
     setup do
       @admin = create(:admin)
-      sign_in_as @admin
+      sign_in_as @admin, bypass_mfa_enrollment: true
       @feature_flag = create(:feature_flag, name: 'test_feature', enabled: true)
     end
 

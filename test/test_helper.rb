@@ -82,17 +82,12 @@ require_relative 'controllers/webhooks/test_base_controller'
 require_relative 'lib/generators/test_case_config'
 TestCaseConfig.configure_generator_test_case(Rails::Generators::TestCase)
 
-# Integration requests use default headers and restore Current.user afterward.
+# Integration requests share browser metadata and route normalization.
 module DefaultHeadersRequestPatch
   %i[get post put patch delete].each do |method|
     define_method(method) do |path, **args|
       normalized_path = normalize_request_path(path, args)
-      result = super(normalized_path, **merge_default_headers(args))
-
-      # Authentication assertions use Current.user after the request.
-      restore_current_user_after_request
-
-      result
+      super(normalized_path, **merge_default_headers(args))
     end
   end
 
@@ -130,33 +125,6 @@ module DefaultHeadersRequestPatch
     test_class_name.sub(/Test\z/, '').underscore
                    .sub(%r{\A/}, '')
                    .sub('_controller', '')
-  end
-
-  def restore_current_user_after_request
-    # An explicit helper user takes precedence over other sources.
-    if defined?(@authenticated_user) && @authenticated_user.present?
-      Current.user = @authenticated_user if defined?(Current)
-      return
-    end
-
-    if defined?(Current.test_user_id) && Current.test_user_id.present?
-      test_user = User.find_by(id: Current.test_user_id)
-      Current.user = test_user if test_user && defined?(Current)
-      return
-    end
-
-    # The fallback uses a recent Session instead of cookie decryption.
-    return unless defined?(Session) && defined?(User)
-
-    recent_session = Session.includes(:user)
-                            .where('created_at > ?', 5.seconds.ago)
-                            .order(created_at: :desc)
-                            .first
-
-    return if recent_session&.user.blank?
-
-    @authenticated_user = recent_session.user
-    Current.user = @authenticated_user if defined?(Current)
   end
 end
 
@@ -215,15 +183,10 @@ module ActiveSupport
     # Remove authentication and paper context between tests.
     teardown do
       Current.reset if defined?(Current)
-      Current.test_user_id = nil if defined?(Current)
 
       Thread.current[:paper_application_context] = nil
 
-      @authenticated_user = nil
-      @test_user_id = nil
-      @session_token = nil
-
-      ENV['TEST_USER_ID'] = nil if ENV['TEST_USER_ID'].present?
+      @issued_test_session = nil
     end
 
     # Misc. helper assertions / utilities
@@ -245,16 +208,10 @@ module ActiveSupport
     end
 
     def default_headers
-      base = {
+      {
         'HTTP_USER_AGENT' => 'Rails Testing',
         'REMOTE_ADDR' => '127.0.0.1'
       }
-      # Do not set a raw Cookie header here.
-      # It replaces the cookie jar and removes the Rails session cookie, including skip_2fa.
-      # X-Test-User-Id restores test authentication. Sign-in helpers set session_token in the cookie jar.
-      base['X-Test-User-Id'] = @test_user_id.to_s if defined?(@test_user_id) && @test_user_id.present?
-
-      base
     end
 
     if ENV['VERBOSE_TESTS']

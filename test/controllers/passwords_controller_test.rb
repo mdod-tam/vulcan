@@ -371,6 +371,43 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_empty @user.sessions
   end
 
+  test 'blank password resets preserve account authority and allow a valid retry' do
+    @user.update!(force_password_change: true, failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
+    token = @user.generate_token_for(:password_reset)
+    original_security_version = @user.security_version
+    original_locked_at = @user.locked_at
+    sign_out
+    @user.sessions.create!(ip_address: '127.0.0.1', user_agent: 'Outstanding reset-test session')
+    original_session_ids = @user.sessions.ids
+
+    blank_password_submissions.each do |password_params|
+      patch password_path, params: { token: token, locale: 'es' }.merge(password_params)
+
+      assert_response :unprocessable_content
+      assert_select 'html[lang=es]'
+      assert_select '[data-testid="flash-alert"]', text: /no puede estar en blanco/
+      @user.reload
+      assert_equal @original_password_digest, @user.password_digest
+      assert_predicate @user, :force_password_change?
+      assert_equal original_security_version, @user.security_version
+      assert_equal original_session_ids, @user.sessions.ids
+      assert_equal original_locked_at, @user.locked_at
+      assert_equal UserAuthentication::MAX_LOGIN_ATTEMPTS, @user.failed_attempts
+      assert_equal @user.id, User.find_by_token_for(:password_reset, token)&.id
+    end
+
+    patch password_path, params: { token: token, password: 'TokenReset*Password123', password_confirmation: 'TokenReset*Password123' }
+
+    assert_redirected_to sign_in_path
+    assert @user.reload.authenticate('TokenReset*Password123')
+    assert_not_predicate @user, :force_password_change?
+    assert_equal original_security_version + 1, @user.security_version
+    assert_empty @user.sessions
+    assert_nil @user.locked_at
+    assert_equal 0, @user.failed_attempts
+    assert_nil User.find_by_token_for(:password_reset, token)
+  end
+
   def test_password_reset_token_cannot_be_reused_after_successful_update
     token = @user.generate_token_for(:password_reset)
     sign_out if respond_to?(:sign_out)
@@ -448,6 +485,41 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_not_equal @original_password_digest, @user.password_digest
   end
 
+  [false, true].each do |rotation_required|
+    test "blank password changes preserve account authority when rotation is #{rotation_required}" do
+      @user.update!(force_password_change: rotation_required)
+      original_security_version = @user.security_version
+      original_session_ids = @user.sessions.ids
+
+      blank_password_submissions.each do |password_params|
+        patch password_path, params: { password_challenge: 'password1234' }.merge(password_params)
+
+        assert_response :unprocessable_content
+        assert_select '[data-testid="flash-alert"]', text: /can't be blank/
+        @user.reload
+        assert_equal @original_password_digest, @user.password_digest
+        assert_equal rotation_required, @user.force_password_change?
+        assert_equal original_security_version, @user.security_version
+        assert_equal original_session_ids, @user.sessions.ids
+      end
+
+      if rotation_required
+        get constituent_portal_dashboard_path
+        assert_redirected_to edit_password_path
+      end
+
+      patch password_path, params: {
+        password_challenge: 'password1234', password: 'NewValid*Password123', password_confirmation: 'NewValid*Password123'
+      }
+
+      assert_redirected_to(rotation_required ? welcome_path : constituent_portal_dashboard_path)
+      assert @user.reload.authenticate('NewValid*Password123')
+      assert_not_predicate @user, :force_password_change?
+      assert_equal original_security_version + 1, @user.security_version
+      assert_empty original_session_ids & @user.sessions.ids
+    end
+  end
+
   def test_password_update_for_a_locked_account_ends_at_sign_in_without_a_new_session
     @user.update_columns(failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
 
@@ -520,7 +592,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   def test_should_redirect_required_role_without_mfa_to_setup_after_password_update
     sign_out
     admin = create(:admin, password: 'password1234', password_confirmation: 'password1234')
-    sign_in_for_integration_test(admin)
+    sign_in_for_integration_test(admin, bypass_mfa_enrollment: true)
 
     patch password_path, params: {
       password_challenge: 'password1234',
@@ -801,6 +873,12 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def blank_password_submissions
+    ['', ' ' * UserAuthentication::PASSWORD_MIN_LENGTH].map do |password|
+      { password: password, password_confirmation: password }
+    end << {}
+  end
 
   def create_basic_email_templates
     unless EmailTemplate.exists?(name: 'email_header_text', format: :text)

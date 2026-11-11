@@ -5,7 +5,7 @@ require 'application_system_test_case'
 module Admin
   class RejectionReasonsManagementTest < ApplicationSystemTestCase
     test 'admin adds a rejection reason in both languages and lands on its edit page' do
-      sign_in(create(:admin))
+      sign_in(create(:admin), bypass_mfa_enrollment: true)
       visit admin_rejection_reasons_path
       click_link 'New Rejection Reason'
       assert_selector 'h1', text: 'New Rejection Reason'

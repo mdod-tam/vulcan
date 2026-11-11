@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class EmailDeliveryCaptureTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveJob::TestHelper
 
   teardown { ENV['POSTMARK_SERVER_ID'] = @previous_server_id }
@@ -70,8 +71,7 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
       load_seeded_email_templates('application_notifications_max_rejections_reached')
       EmailTemplate.where(name: 'application_notifications_max_rejections_reached', format: :text).destroy_all if failure == :missing_template
       application = create(:application, :with_income_proof, user: @user, total_rejections: ProofReview::MAX_REJECTIONS)
-      review = ProofReview.for_decision(application, proof_type: :income, status: :rejected)
-                          .record!(admin: @admin, rejection_reason: 'Unreadable')
+      review = record_proof_review(application: application, proof_type: :income, status: :rejected, admin: @admin, rejection_reason: 'Unreadable')
       Applications::ProofDecisionFollowUp.new(review).call
       notice = Notification.find_by!(action: 'max_rejections_reached', notifiable: application)
       queued = enqueued_jobs.find { |job| job.dig('email_delivery_context', 'notification_id') == notice.id }

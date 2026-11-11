@@ -6,7 +6,7 @@ module Admin
   class DashboardControllerTest < ActionDispatch::IntegrationTest
     def setup
       @admin = create(:admin)
-      sign_in_as(@admin)
+      sign_in_as(@admin, bypass_mfa_enrollment: true)
       Rails.cache.clear
 
       @draft_app = create(:application, :draft, user: create(:constituent, email: "draft#{@admin.email}"))

@@ -55,6 +55,21 @@ module DuplicateReconciliation
       end
     end
 
+    test 'CSV keeps every pair when the matching group exceeds a queue page' do
+      users = Array.new(8) do |index|
+        create_match(date_of_birth: Date.new(1988, 2, 14), email: "complete-csv-#{index}@example.com", phone: nil)
+      end
+      expected_keys = users.map(&:id).sort.combination(2).map { |ids| ids.join('-') }
+
+      Tempfile.create(['duplicate-report', '.csv']) do |file|
+        result = Report.new.call(output: StringIO.new, csv_path: file.path)
+        csv_keys = CSV.read(file.path, headers: true).map { |row| row['pair_key'] }
+
+        assert_empty expected_keys - result.pairs.map { |pair| pair.ids.join('-') }
+        assert_empty expected_keys - csv_keys
+      end
+    end
+
     test 'neutralizes formula-like constituent names in CSV output' do
       date_of_birth = Date.new(1988, 2, 14)
       first = create(

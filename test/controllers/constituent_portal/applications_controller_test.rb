@@ -1412,7 +1412,7 @@ module ConstituentPortal
 
     def cleared_proof(upload, slot)
       @cleared_proofs ||= {}
-      @cleared_proofs[[@authenticated_user.id, slot]] ||= scanned_upload(upload, user: @authenticated_user, purpose: :proof, slot: slot)
+      @cleared_proofs[[@issued_test_session.user_id, slot]] ||= scanned_upload(upload, user: @issued_test_session.user, purpose: :proof, slot: slot)
     end
 
     def pending_review_message

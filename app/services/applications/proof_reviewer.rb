@@ -2,7 +2,7 @@
 
 module Applications
   class ProofReviewer
-    attr_reader :proof_review
+    attr_reader :proof_review, :recorded
 
     def initialize(application, admin)
       @application = application
@@ -12,12 +12,15 @@ module Applications
     # Set when the review committed but a later step failed.
     def warning = @commit&.warning
 
-    def review(proof_type:, status:, rejection_reason: nil, rejection_reason_code: nil, notes: nil)
+    # rubocop:disable-next Metrics/ParameterLists -- Decision identity and target remain explicit inputs.
+    def review(proof_type:, status:, decision_key:, reviewed_blob_id:, rejection_reason: nil, rejection_reason_code: nil, notes: nil)
       Rails.logger.debug { "Starting review with proof_type: #{proof_type.inspect}, status: #{status.inspect}" }
 
       @proof_type_key = proof_type.to_s
       @status_key = status.to_s
+      @decision_key = decision_key
       @proof_review = nil
+      @recorded = false
       @lifecycle_history_ids = []
       @lifecycle_audit_ids = []
       @commit = ReviewCommit.new(application: @application, subject: 'proof review', again: 'reviewing it again') { durable_state }
@@ -26,13 +29,23 @@ module Applications
 
       @commit.run(on_committed: ->(error) { @proof_review.log_follow_up_failure(error) }) do
         @commit.transaction do
-          create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
-          update_application_status
-          purge_if_rejected
-          reconcile_if_approved
+          decision = ProofReview.record_decision!(
+            application: @application, decision_key: decision_key, reviewed_blob_id: reviewed_blob_id,
+            proof_type: @proof_type_key, status: @status_key, admin: @admin,
+            rejection_reason: rejection_reason, rejection_reason_code: rejection_reason_code, notes: notes
+          ) do |review|
+            @proof_review = review
+            validate_reviewability!
+            record_proof_review(rejection_reason, rejection_reason_code, notes)
+            update_application_status
+            purge_if_rejected
+            reconcile_if_approved
+          end
+          @proof_review = decision.review
+          @recorded = decision.recorded
         end
 
-        follow_up_on_decision
+        follow_up_on_decision if @recorded
       end
 
       true
@@ -46,7 +59,7 @@ module Applications
       review = if @proof_review&.id
                  ProofReview.find_by(id: @proof_review.id)
                else
-                 @application.proof_reviews.find_by(proof_type: @proof_type_key, status: @status_key)
+                 @application.proof_reviews.find_by(decision_key: @decision_key)
                end
       {
         review: review&.attributes_for_database,
@@ -69,17 +82,22 @@ module Applications
       @lifecycle_audit_ids = @application.events.where(action: 'application_status_changed').where('id > ?', audit_id).ids
     end
 
-    def create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
-      Rails.logger.debug 'Finding or initializing proof review record'
+    def validate_reviewability!
+      if @proof_type_key == 'income' && !@application.income_proof_required?
+        raise ProofReview::DecisionConflict, 'Income proof review is not applicable for this application'
+      end
+      return if @application.proof_type_reviewable?(@proof_type_key)
 
+      raise ProofReview::DecisionConflict, 'Proof is not reviewable for this application'
+    end
+
+    def record_proof_review(rejection_reason, rejection_reason_code, notes)
       rejection_reason_text = RejectionReason.resolve_text(
         code: rejection_reason_code,
         proof_type: @proof_type_key,
         fallback: rejection_reason,
         application: @application
       )
-      @proof_review = ProofReview.for_decision(@application, proof_type: @proof_type_key, status: @status_key)
-
       assign = {
         admin: @admin,
         notes: notes
@@ -102,10 +120,10 @@ module Applications
       end
     end
 
-    # A new decision and a repeat rejection alike follow up once the transaction that recorded them, and any
-    # transaction around it, has committed.
+    # Replays never enter this path. Each new decision follows up after its transaction commits.
     def follow_up_on_decision
-      ActiveRecord.after_all_transactions_commit { ProofDecisionFollowUp.new(@proof_review).call }
+      review = @proof_review
+      ActiveRecord.after_all_transactions_commit { ProofDecisionFollowUp.new(review).call }
     end
 
     def apply_submission_method_from_latest_submission_event

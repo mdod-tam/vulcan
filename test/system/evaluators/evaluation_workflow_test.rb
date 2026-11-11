@@ -12,7 +12,7 @@ module Evaluators
       @product = create(:product, name: 'Retry Device')
       @replacement_product = create(:product, name: 'Replacement Device')
       @evaluation = create(:evaluation, evaluator: @evaluator, status: :scheduled, evaluation_date: 2.days.from_now)
-      system_test_sign_in(@evaluator)
+      system_test_sign_in(@evaluator, bypass_mfa_enrollment: true)
     end
 
     test 'report rejection preserves inputs through unchanged retry and corrected submission' do
@@ -215,7 +215,7 @@ module Evaluators
       assigned = create(:evaluation, evaluator: admin, status: :scheduled)
       assigned.constituent.update!(first_name: 'Admin', last_name: 'Applicant')
       click_button 'Sign Out'
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit evaluators_dashboard_path
       link = find("a[href='#my-upcoming-evaluations-table-heading']")
@@ -365,7 +365,7 @@ module Evaluators
       original_date = evaluation.evaluation_date
       original_notes = evaluation.notes
       click_button 'Sign Out'
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       browser = page.driver.browser
       browser.disable_javascript
       visit admin_application_path(application)
@@ -431,7 +431,7 @@ module Evaluators
       take_screenshot('admin-evaluator-reassigned', html: true, full: true)
 
       click_button 'Sign Out'
-      system_test_sign_in(@evaluator)
+      system_test_sign_in(@evaluator, bypass_mfa_enrollment: true)
       visit application_details_evaluators_evaluation_path(evaluation)
       assert_text 'Evaluation not found.'
       assert_no_text application.user.email
@@ -439,7 +439,7 @@ module Evaluators
       take_screenshot('former-evaluator-assessment-denied', html: true, full: true)
 
       click_button 'Sign Out'
-      system_test_sign_in(replacement)
+      system_test_sign_in(replacement, bypass_mfa_enrollment: true)
       visit application_details_evaluators_evaluation_path(evaluation)
       assert_selector 'h1', text: I18n.t('application_contact.title')
       assert_text application.user.full_name

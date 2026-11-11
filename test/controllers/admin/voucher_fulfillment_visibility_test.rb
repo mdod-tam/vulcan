@@ -15,7 +15,7 @@ module Admin
       service.correct_shipment!(shipment_id: shipment.id, attributes: { 'tracking_number' => 'AAA112' },
                                 expected_lock_version: shipment.lock_version)
 
-      sign_in_for_integration_test(admin)
+      sign_in_for_integration_test(admin, bypass_mfa_enrollment: true)
       get admin_voucher_path(voucher)
 
       assert_response :success

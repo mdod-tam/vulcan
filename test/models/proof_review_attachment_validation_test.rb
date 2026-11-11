@@ -75,6 +75,7 @@ class ProofReviewAttachmentValidationTest < ActiveSupport::TestCase
 
   def build_review(proof_type, status: :approved, submission_method: nil)
     ProofReview.new(
+      decision_key: SecureRandom.uuid, decision_fingerprint: SecureRandom.hex(32),
       application: @application, admin: @admin, proof_type: proof_type, status: status, reviewed_at: Time.current,
       rejection_reason: status == :rejected ? 'Unreadable' : nil, submission_method: submission_method
     )

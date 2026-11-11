@@ -6,9 +6,7 @@ module Admin
   class AdultSearchFeaturesTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin, email: generate(:email))
-      ENV['TEST_USER_ID'] = @admin.id.to_s
-      sign_in_for_integration_test(@admin)
-      assert_authenticated(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       setup_paper_application_context
     end
 

@@ -12,7 +12,7 @@ module VendorPortal
         'REMOTE_ADDR' => '127.0.0.1'
       }
 
-      sign_in_for_integration_test(@vendor)
+      sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
     end
 
     def test_get_show

@@ -300,6 +300,23 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert_not_includes message, 'Old blurry document'
   end
 
+  test 'proof rejection fallback agrees for loaded and queried decisions using decision chronology' do
+    create(:proof_review, :rejected, application: @application, proof_type: :id,
+                                     rejection_reason: 'Earlier decision', created_at: 1.day.ago, reviewed_at: 3.days.ago)
+    create(:proof_review, :rejected, application: @application, proof_type: :id,
+                                     rejection_reason: 'Latest decision', created_at: 4.days.ago, reviewed_at: 1.hour.ago)
+
+    [false, true].each do |preload|
+      @application.association(:proof_reviews).reset
+      @application.proof_reviews.load if preload
+      message = NotificationComposer.generate('proof_resubmission_requested', @application, @admin,
+                                              { 'proof_type' => 'id', 'proof_request_display_mode' => 'rejected' })
+
+      assert_includes message, 'Latest decision'
+      assert_not_includes message, 'Earlier decision'
+    end
+  end
+
   test 'proof_resubmission_requested falls back when no rejected review exists' do
     message = NotificationComposer.generate(
       'proof_resubmission_requested',

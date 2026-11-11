@@ -41,6 +41,7 @@ module UserAuthentication
     has_many :totp_credentials, dependent: :destroy
     has_many :sms_credentials, dependent: :destroy
 
+    validates :password, presence: true, on: :password_change
     validates :password, length: { minimum: PASSWORD_MIN_LENGTH }, if: -> { password.present? }
     validates :reset_password_token, uniqueness: true, allow_nil: true
   end

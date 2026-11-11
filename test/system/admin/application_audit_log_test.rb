@@ -14,7 +14,7 @@ module Admin
       @application = create(:application, :draft)
 
       setup_active_storage_test
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     teardown do
@@ -50,7 +50,7 @@ module Admin
       assert result[:success], "Failed to attach proof: #{result[:error]&.message}"
       @application.reload
 
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       click_review_proof_and_wait('income', timeout: 15)
 

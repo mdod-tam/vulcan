@@ -10,7 +10,7 @@ class ProofApprovalConfirmationTest < ApplicationSystemTestCase
       attach_cleared_proof(application, attachment, filename: "#{attachment}.png")
     end
     application.update!(disability_certification_status: :received)
-    system_test_sign_in(create(:admin))
+    system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
     visit admin_application_path(application)
 
     [

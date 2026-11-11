@@ -32,6 +32,28 @@ module DuplicateReconciliation
       assert_equal actual, repeated
     end
 
+    test 'shares each member projection across a complete population larger than one queue page' do
+      users = Array.new(8) { create_match }
+      user_ids = users.map(&:id)
+
+      pairs = Population.new.pairs.select { |pair| (pair.ids - user_ids).empty? }
+      members = pairs.flat_map { |pair| [pair.first, pair.second] }
+
+      assert_equal 28, pairs.size
+      assert_equal 8, members.map(&:object_id).uniq.size
+    end
+
+    test 'queue projects only the selected group and pair page' do
+      users = Array.new(8) { create_match }
+      Array.new(3) { create_match(first_name: 'AnotherGroup') }
+      population = Population.new
+      rows = population.unreviewed_pairs_for_group(users.first.id).offset(20).limit(3)
+      pairs = population.queue_pairs(rows)
+
+      assert_equal users.map(&:id).sort.combination(2).to_a.drop(20).first(3), pairs.map(&:ids)
+      assert_operator pairs.flat_map(&:ids).uniq.size, :<=, 6
+    end
+
     test 'finds unflagged records whose writes bypassed callbacks' do
       first = create_match
       second = create_match
@@ -57,6 +79,7 @@ module DuplicateReconciliation
 
       assert_not_includes pair_ids, demo_ids.sort
       assert_nil Population.new.pair_for_ids(*demo_ids)
+      assert_empty Population.new.queue_pairs(Population.new.unreviewed_pairs_for_group(first.id).limit(20))
     end
 
     test 'summarizes applications with one bounded status query instead of eager loading records' do

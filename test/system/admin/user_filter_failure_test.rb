@@ -8,7 +8,7 @@ module Admin
   class UserFilterFailureTest < ApplicationSystemTestCase
     test 'a failed filter warns inside the results frame, and the next filter clears the warning' do
       warning = I18n.t('alerts.unfiltered_error')
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       visit admin_users_path
       assert_selector 'turbo-frame#users_list'
       assert_no_selector "[role='alert']", text: warning

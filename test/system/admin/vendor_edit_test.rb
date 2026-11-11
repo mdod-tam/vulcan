@@ -8,7 +8,7 @@ module Admin
       ensure_system_audit_actor!
       @admin = create(:admin)
       @vendor = create(:vendor, :approved, business_name: 'Ray Supply')
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'staff suspend a vendor; sign-in email and phone are read-only' do

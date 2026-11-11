@@ -12,7 +12,7 @@ module Admin
     end
 
     test 'an admin turns a category, a template pair, and all email off and sees what stops' do
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
 
       assert_text 'Outgoing communications'
@@ -76,7 +76,7 @@ module Admin
       notification = Notification.create!(recipient: @admin, actor: @admin, action: 'disability_certification_requested',
                                           notifiable: create(:application), metadata: {})
       notification.mark_delivery_suppressed!('global_disabled')
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit notifications_path
 
       assert_text I18n.t('delivery_visibility.statuses.suppressed', locale: :en)
@@ -97,7 +97,7 @@ module Admin
 
     test 'an untracked notification shows its message without a delivery panel' do
       create(:notification, recipient: @admin, actor: @admin, action: 'disability_certification_requested', notifiable: create(:application), delivery_status: nil)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit notifications_path
       assert_text 'Disability certification requested'
       assert_no_selector '[data-delivery-status]'
@@ -109,7 +109,7 @@ module Admin
       before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == template.id }
       EmailTemplate.set_callback(:update, :after, callback)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
 
       accept_confirm { click_button 'Turn off all templates' }
@@ -135,7 +135,7 @@ module Admin
       application.update_columns(disability_certification_status: Application.disability_certification_statuses[:not_requested])
       EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: false, actor: @admin, operation_id: 'op-1')
       ::Docuseal.expects(:create_submission).never
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_application_path(application)
 
       accept_confirm { click_button('Send DocuSeal Request (Default)') }
@@ -148,7 +148,7 @@ module Admin
 
     test 'turning a control back on keeps canceled email canceled and says so' do
       EmailDelivery::ControlWriter.set(name: 'email.category.proof', enabled: false, actor: @admin, operation_id: 'op-1')
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
 
       within('[data-email-control="email.category.proof"]') do
@@ -163,7 +163,7 @@ module Admin
     test 'a test email with missing settings explains the operational error' do
       FeatureFlag.find_by!(name: 'email.category.proof').destroy!
       template = EmailTemplate.find_by!(name: 'application_notifications_proof_approved', locale: 'en')
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit new_test_email_admin_email_template_path(template)
       fill_in 'Recipient Email Address', with: 'tester@example.com'
       click_button 'Send Test Email'
@@ -174,7 +174,7 @@ module Admin
     end
 
     test 'keyboard navigation and controls that disappear after page load remain usable' do
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
 
       30.times do

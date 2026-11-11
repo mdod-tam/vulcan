@@ -6,6 +6,7 @@ require 'test_helper'
 # transaction as the decision. The notices come from ProofDecisionFollowUp, which the writers run once their
 # transaction has committed.
 class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveJob::TestHelper
 
   setup do
@@ -21,20 +22,20 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
     end
   end
 
-  test 'a repeat rejection of the same proof updates its row and counts again' do
-    reject(:income)
+  test 'a new rejection of the same proof preserves its earlier decision and counts again' do
+    first = reject(:income)
 
-    assert_no_difference -> { ProofReview.count } do
+    assert_difference -> { ProofReview.count }, 1 do
       assert_difference -> { @application.reload.total_rejections }, 1 do
         reject(:income, reason: 'Still unreadable')
       end
     end
+    assert_equal 'Unreadable', first.reload.rejection_reason
   end
 
   test 'approvals and disability certification rejections do not count' do
-    ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
-    ProofReview.for_decision(@application, proof_type: :disability_certification, status: :rejected)
-               .record!(admin: @admin, rejection_reason: 'Illegible')
+    record_proof_review(application: @application, proof_type: :income, status: :approved, admin: @admin)
+    record_proof_review(application: @application, proof_type: :disability_certification, status: :rejected, admin: @admin, rejection_reason: 'Illegible')
 
     assert_equal 0, @application.reload.total_rejections
   end
@@ -157,8 +158,7 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
 
   # Records the rejection and follows up on it, as the writers do once their transaction commits.
   def reject(proof_type, reason: 'Unreadable')
-    review = ProofReview.for_decision(@application, proof_type: proof_type, status: :rejected)
-                        .record!(admin: @admin, rejection_reason: reason)
+    review = record_proof_review(application: @application, proof_type: proof_type, status: :rejected, admin: @admin, rejection_reason: reason)
     Applications::ProofDecisionFollowUp.new(review).call
     review
   end

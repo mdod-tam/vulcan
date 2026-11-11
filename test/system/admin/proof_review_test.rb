@@ -23,7 +23,7 @@ module AdminTests
       attach_cleared_proof(@application, :income_proof)
       attach_cleared_proof(@application, :residency_proof)
 
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
       wait_for_turbo
 
       visit admin_applications_path
@@ -36,7 +36,7 @@ module AdminTests
       ActionMailer::Base.delivery_method = :test
 
       begin
-        visit_admin_application_with_retry(@application, user: @admin)
+        visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
         assert_text(/Application Details|Application #/i, wait: 15)
 
@@ -67,10 +67,14 @@ module AdminTests
     end
 
     test 'a rejected save keeps the explanation and an enabled retry inside the open dialog' do
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       click_review_proof_and_wait('income', timeout: 15)
       within('#incomeProofReviewModal') { click_button 'Reject' }
       wait_for_modal_open('proofRejectionModal', timeout: 15)
+      decision_key = find('#proofRejectionModal input[name="decision_key"]', visible: :all).value
+      target_id = @application.income_proof.blob.id
+      assert decision_key.present?
+      assert_equal target_id.to_s, find('#proofRejectionModal input[name="reviewed_blob_id"]', visible: :all).value
       failure = BaseService::Result.new(success: false, message: 'The review could not be saved. Try again.', data: {})
       ProofReviewService.any_instance.stubs(:call).returns(failure)
 
@@ -81,6 +85,8 @@ module AdminTests
         assert_field 'Reason for Rejection', with: 'The document needs a legible signature.', disabled: false
         assert_selector 'input[name="rejection_reason_code"][value="other"]', visible: :all
         assert_button 'Submit', disabled: false
+        assert_selector "input[name='decision_key'][value='#{decision_key}']", visible: :all
+        assert_selector "input[name='reviewed_blob_id'][value='#{target_id}']", visible: :all
       end
       assert_equal 'not_reviewed', @application.reload.income_proof_status
       take_screenshot('proof-rejection-failed-draft', full: true, html: true)
@@ -100,6 +106,8 @@ module AdminTests
       assert_no_selector '#proofRejectionModal[open]', wait: 15
       assert_equal 'rejected', @application.reload.income_proof_status
       assert_equal 'The replacement needs a legible date.', @application.proof_reviews.order(:id).last.rejection_reason
+      assert_equal decision_key, @application.proof_reviews.recent.first.decision_key
+      assert_equal target_id, @application.proof_reviews.recent.first.reviewed_blob_id
       take_screenshot('proof-rejection-retry-saved', full: true, html: true)
     ensure
       ProofReviewService.any_instance.unstub(:call)
@@ -111,7 +119,7 @@ module AdminTests
       ActionMailer::Base.delivery_method = :test
 
       begin
-        visit_admin_application_with_retry(@application, user: @admin)
+        visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
         begin
           assert_text(/Application Details|Application #/i, wait: 15)
@@ -123,8 +131,8 @@ module AdminTests
             Capybara.reset_sessions!
           end
           # A browser restart discards the session, so sign in again.
-          system_test_sign_in(@admin)
-          visit_admin_application_with_retry(@application, user: @admin)
+          system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+          visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
           assert_text(/Application Details|Application #/i, wait: 15)
         end
 
@@ -156,7 +164,7 @@ module AdminTests
     end
 
     test 'modal preserves scroll state across multiple proof reviews' do
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#attachments-section', wait: 30
 
@@ -180,7 +188,7 @@ module AdminTests
     end
 
     test 'admin can approve income proof via modal' do
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       # Use a concrete selector to avoid stale nodes from text lookups.
       assert_selector '#attachments-section', wait: 10
@@ -199,7 +207,7 @@ module AdminTests
     end
 
     test 'clicking review proof button opens modal via Stimulus controller' do
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#attachments-section', wait: 10
 
@@ -228,7 +236,7 @@ module AdminTests
 
     test 'can open second proof modal after approving first proof via Turbo Stream' do
       # A previous Turbo update removed other proof modals without replacement.
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#attachments-section', wait: 10
 
@@ -258,7 +266,7 @@ module AdminTests
       @application.update!(disability_certification_status: 'received')
       attach_cleared_proof(@application, :disability_certification)
 
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#disability-certification-section', wait: 10
 

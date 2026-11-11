@@ -42,7 +42,7 @@ module EmailDelivery
 
       @server_id = EmailDelivery.postmark_server_id!
 
-      notification = Notification.find_by(id: @context['notification_id'] || @context['provider_notification_id'])
+      notification = Notification.find_by(id: @context['notification_id'])
       origin = request_origin(notification) || @subject || notification&.notifiable
       identity = delivery_identity(origin, notification)
       EmailDeliveryAttempt.transaction do

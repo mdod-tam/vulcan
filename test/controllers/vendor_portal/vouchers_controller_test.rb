@@ -15,7 +15,7 @@ module VendorPortal
         'REMOTE_ADDR' => '127.0.0.1'
       }
 
-      sign_in_for_integration_test(@vendor)
+      sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
 
       Policy.stubs(:voucher_minimum_redemption_amount).returns(10.0)
       Policy.stubs(:get).with('voucher_verification_max_attempts').returns(3)

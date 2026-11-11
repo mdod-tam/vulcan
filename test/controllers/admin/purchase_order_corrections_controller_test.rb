@@ -9,7 +9,7 @@ module Admin
       @item = create(:equipment_item)
       @order = @item.purchase_order
       @sibling = create(:equipment_item, application: @item.application, purchase_order: @order)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'expired shared header review retains its draft until a fresh read-only review is confirmed' do
@@ -56,6 +56,7 @@ module Admin
       assert token.present?
 
       travel 31.minutes do
+        sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
         assert_no_difference ['Event.count', 'EquipmentItem.count', 'PurchaseOrder.count'] do
           patch admin_purchase_order_correction_path(@order), headers: headers,
                                                               params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)

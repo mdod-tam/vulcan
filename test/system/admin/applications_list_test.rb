@@ -14,7 +14,7 @@ module Admin
       older = review_application('ZuluSorting', days: 31, created_at: 60.days.ago)
       newer = review_application('AlphaSorting', days: 4, created_at: 40.days.ago, with_proof: true)
       old_query_only = review_application('SortOnly', days: 2, created_at: 10.days.ago)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_applications_path
 
       find_field('q').click
@@ -107,7 +107,7 @@ module Admin
 
     test 'a delayed search response keeps newer text after focus moves to another field' do
       application = review_application('DelayedSorting', days: 3, created_at: 4.days.ago)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_applications_path
 
       browser = page.driver.browser
@@ -158,7 +158,7 @@ module Admin
                         status: :awaiting_dcf,
                         disability_certification_status: :requested,
                         user: create(:constituent, last_name: 'QueueChange'), created_at: 2.days.ago)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       find('#common-tasks a[href*="filter=disability_certs_to_review"]').click
       assert_selector "#application_#{received.id}"
       assert_no_selector "#application_#{awaiting.id}"
@@ -191,7 +191,7 @@ module Admin
       create(:voucher, application: voucher_application, issued_at: Policy.voucher_validity_period.ago - 8.days, remaining_value: 180)
       tracking_only = approved_application('Tracking saved', days: 5)
       create(:equipment_item, application: tracking_only, tracking_number: 'SAVED-BEFORE-SHIPPING', shipped_at: nil)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
 
       within('#dashboard-content') { click_link 'Open approved pipeline' }
       assert_selector 'nav[aria-label="Application views"] a[aria-current="page"]', text: 'Approved pipeline'

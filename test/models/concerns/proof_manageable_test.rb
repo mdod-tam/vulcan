@@ -21,6 +21,19 @@ class ProofManageableTest < ActiveSupport::TestCase
     assert @application.income_proof.attached?
   end
 
+  test 'portal replacement requires a rejected proof and an open application even at the warning threshold' do
+    @application.assign_attributes(total_rejections: ProofReview::MAX_REJECTIONS, income_proof_status: :rejected)
+    assert @application.proof_resubmittable_via_portal?('income')
+
+    %i[approved archived].each do |status|
+      @application.status = status
+      assert_not @application.proof_resubmittable_via_portal?('income')
+    end
+
+    @application.assign_attributes(status: :in_progress, income_proof_status: :not_reviewed)
+    assert_not @application.proof_resubmittable_via_portal?('income')
+  end
+
   test 'creates audit trail on proof submission' do
     # SKIP: This test is too sensitive to callback timing in test environment
     skip('Audit trail creation is tested in integration tests')

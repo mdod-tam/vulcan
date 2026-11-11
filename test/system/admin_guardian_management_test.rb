@@ -21,7 +21,7 @@ class AdminGuardianManagementTest < ApplicationSystemTestCase
                                         annual_income: 30_000,
                                         self_certify_disability: true)
 
-    system_test_sign_in(@admin)
+    system_test_sign_in(@admin, bypass_mfa_enrollment: true)
 
     visit admin_applications_path
     wait_for_turbo

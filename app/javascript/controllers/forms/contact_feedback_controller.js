@@ -409,7 +409,7 @@ export default class ContactFeedbackController extends Controller {
     const feedback = this._buildContactFeedback(selectedMethod)
     
     if (feedback) {
-      this.feedbackTarget.innerHTML = feedback.html
+      this.feedbackTarget.replaceChildren(feedback.content)
       this.feedbackTarget.className = feedback.className
       setVisible(this.feedbackTarget, true)
       // The markup owns the live-region attributes.
@@ -431,7 +431,7 @@ export default class ContactFeedbackController extends Controller {
     const feedback = this._buildDeliveryFeedback(selectedDelivery)
     
     if (feedback) {
-      deliveryFeedback.innerHTML = feedback.html
+      deliveryFeedback.replaceChildren(feedback.content)
       deliveryFeedback.className = feedback.className
       setVisible(deliveryFeedback, true)
       // The markup owns the live-region attributes.
@@ -488,7 +488,7 @@ export default class ContactFeedbackController extends Controller {
 
   /**
    * @param {string} method The preferred contact method (voice, text, videophone, email, letter)
-   * @returns {Object|null} Object with html and className, or null if no feedback
+   * @returns {Object|null} DOM content and className, or null if no feedback
    */
   _buildContactFeedback(method) {
     const phoneInput = this._phoneInput()
@@ -500,100 +500,36 @@ export default class ContactFeedbackController extends Controller {
     const successClassName = `${baseClassName} bg-teal-50 text-teal-800 border border-teal-200`
     const warningClassName = `${baseClassName} bg-warning-50 text-warning-800 border border-warning-200`
     
-    const checkIcon = `<svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-    </svg>`
-    const guardianPhoneFeedback = () => {
-      if (!this._usesGuardianPhonePath()) return null
-
-      return {
-        html: `${checkIcon}<span>We will use the guardian phone path.</span>`,
-        className: successClassName
-      }
-    }
-    const guardianPhoneFallback = guardianPhoneFeedback()
+    const success = (message, value = null) => this._buildFeedback(message, successClassName, { icon: 'check', value })
+    const warning = message => this._buildFeedback(message, warningClassName)
     
     switch (method) {
       case 'voice':
-        if (this._noPhoneChecked()) {
-          return {
-            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
-            className: successClassName
-          }
-        }
-        if (phone) {
-          return {
-            html: `${checkIcon}<span>${this.callMessageValue} <strong>${phone}</strong></span>`,
-            className: successClassName
-          }
-        }
-        if (guardianPhoneFallback) return guardianPhoneFallback
-        return {
-          html: `<span>Please enter a phone number above</span>`,
-          className: warningClassName
-        }
-        
       case 'text':
-        if (this._noPhoneChecked()) {
-          return {
-            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
-            className: successClassName
-          }
-        }
-        if (phone) {
-          return {
-            html: `${checkIcon}<span>${this.textMessageValue} <strong>${phone}</strong></span>`,
-            className: successClassName
-          }
-        }
-        if (guardianPhoneFallback) return guardianPhoneFallback
-        return {
-          html: `<span>Please enter a phone number above</span>`,
-          className: warningClassName
-        }
-        
       case 'videophone':
         if (this._noPhoneChecked()) {
-          return {
-            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
-            className: successClassName
-          }
+          return success(this.mailMessageValue)
         }
         if (phone) {
-          return {
-            html: `${checkIcon}<span>${this.videophoneMessageValue} <strong>${phone}</strong></span>`,
-            className: successClassName
-          }
+          const message = { voice: this.callMessageValue, text: this.textMessageValue, videophone: this.videophoneMessageValue }[method]
+          return success(message, phone)
         }
-        if (guardianPhoneFallback) return guardianPhoneFallback
-        return {
-          html: `<span>Please enter your videophone number above</span>`,
-          className: warningClassName
+        if (this._usesGuardianPhonePath()) {
+          return success('We will use the guardian phone path.')
         }
+        return warning(method === 'videophone' ? 'Please enter your videophone number above' : 'Please enter a phone number above')
         
       case 'email':
         if (this._noEmailChecked()) {
-          return {
-            html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
-            className: successClassName
-          }
+          return success(this.mailMessageValue)
         }
         if (email) {
-          return {
-            html: `${checkIcon}<span>${this.emailMessageValue} <strong>${email}</strong></span>`,
-            className: successClassName
-          }
+          return success(this.emailMessageValue, email)
         }
-        return {
-          html: `<span>Please enter an email address above</span>`,
-          className: warningClassName
-        }
+        return warning('Please enter an email address above')
         
       case 'letter':
-        return {
-          html: `${checkIcon}<span>${this.mailMessageValue}</span>`,
-          className: successClassName
-        }
+        return success(this.mailMessageValue)
 
       default:
         return null
@@ -606,65 +542,93 @@ export default class ContactFeedbackController extends Controller {
 
   /**
    * @param {string} method The delivery method (email or letter/mail)
-   * @returns {Object|null} Object with html and className, or null if no feedback
+   * @returns {Object|null} DOM content and className, or null if no feedback
    */
   _buildDeliveryFeedback(method) {
     const emailInput = this._emailInput()
     const email = emailInput ? emailInput.value : null
-    const address = this._buildFullAddress()
+    const addressLines = this._buildAddressLines()
     
     const baseClassName = "mt-2 p-3 rounded-md text-sm font-medium flex items-start gap-2"
     const successClassName = `${baseClassName} bg-primary-50 text-primary-800 border border-primary-200`
     const warningClassName = `${baseClassName} bg-warning-50 text-warning-800 border border-warning-200`
     
-    const mailIcon = `<svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
-      <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
-    </svg>`
+    const mailFeedback = () => this._buildFeedback(this.deliveryMailMessageValue, successClassName, { icon: 'mail', addressLines })
+    const warning = message => this._buildFeedback(message, warningClassName)
     
     switch (method) {
       case 'email':
-        if (this._noEmailChecked()) {
-          if (address) {
-            return {
-              html: `${mailIcon}<div><div class="mb-1">${this.deliveryMailMessageValue}:</div><strong class="block">${address}</strong></div>`,
-              className: successClassName
-            }
-          }
-        }
+        if (this._noEmailChecked() && addressLines) return mailFeedback()
         if (email) {
-          return {
-            html: `${mailIcon}<span>${this.deliveryEmailMessageValue} <strong>${email}</strong></span>`,
-            className: successClassName
-          }
+          return this._buildFeedback(this.deliveryEmailMessageValue, successClassName, { icon: 'mail', value: email })
         }
-        return {
-          html: `<span>Please enter an email address to receive official documents</span>`,
-          className: warningClassName
-        }
+        return warning('Please enter an email address to receive official documents')
         
       case 'letter':
       case 'mail':
-        if (address) {
-          return {
-            html: `${mailIcon}<div><div class="mb-1">${this.deliveryMailMessageValue}:</div><strong class="block">${address}</strong></div>`,
-            className: successClassName
-          }
-        }
-        return {
-          html: `<span>Please enter your address above to receive official documents by mail</span>`,
-          className: warningClassName
-        }
+        if (addressLines) return mailFeedback()
+        return warning('Please enter your address above to receive official documents by mail')
         
       default:
         return null
     }
   }
 
+  _buildFeedback(message, className, { icon = null, value = null, addressLines = null } = {}) {
+    const content = document.createDocumentFragment()
+    if (icon) content.appendChild(this._feedbackIcon(icon))
+
+    const body = document.createElement(addressLines ? 'div' : 'span')
+    if (addressLines) {
+      const heading = document.createElement('div')
+      heading.className = 'mb-1'
+      heading.textContent = `${message}:`
+      const address = document.createElement('strong')
+      address.className = 'block'
+      addressLines.forEach((line, index) => {
+        if (index) address.appendChild(document.createElement('br'))
+        address.appendChild(document.createTextNode(line))
+      })
+      body.append(heading, address)
+    } else {
+      body.textContent = message
+      if (value) {
+        const detail = document.createElement('strong')
+        detail.textContent = value
+        body.append(' ', detail)
+      }
+    }
+    content.appendChild(body)
+    return { content, className }
+  }
+
+  _feedbackIcon(kind) {
+    const namespace = 'http://www.w3.org/2000/svg'
+    const icon = document.createElementNS(namespace, 'svg')
+    icon.setAttribute('class', `w-5 h-5 flex-shrink-0${kind === 'mail' ? ' mt-0.5' : ''}`)
+    icon.setAttribute('fill', 'currentColor')
+    icon.setAttribute('viewBox', '0 0 20 20')
+    icon.setAttribute('aria-hidden', 'true')
+    const paths = kind === 'mail' ? [
+      'M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z',
+      'M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z'
+    ] : ['M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z']
+    paths.forEach(data => {
+      const path = document.createElementNS(namespace, 'path')
+      path.setAttribute('d', data)
+      if (kind === 'check') {
+        path.setAttribute('fill-rule', 'evenodd')
+        path.setAttribute('clip-rule', 'evenodd')
+      }
+      icon.appendChild(path)
+    })
+    return icon
+  }
+
   /**
-   * @returns {string|null} Address HTML with <br> separators, or null if required fields are empty
+   * @returns {string[]|null} Address lines, or null if required fields are empty
    */
-  _buildFullAddress() {
+  _buildAddressLines() {
     const address1 = this.hasAddress1Target ? this.address1Target.value.trim() : ''
     const address2 = this.hasAddress2Target ? this.address2Target.value.trim() : ''
     const city = this.hasCityTarget ? this.cityTarget.value.trim() : ''
@@ -683,7 +647,7 @@ export default class ContactFeedbackController extends Controller {
     }
     lines.push(`${city}, ${state} ${zipCode}`)
     
-    return lines.join('<br>')
+    return lines
   }
 
   /**

@@ -65,7 +65,7 @@ class NotificationDeliveryVisibilityTest < ApplicationSystemTestCase
   end
 
   test 'admin status refresh shows its message once and keeps the flash region for the next update' do
-    sign_in(create(:admin))
+    sign_in(create(:admin), bypass_mfa_enrollment: true)
     visit notifications_path(scope: 'all')
 
     2.times do

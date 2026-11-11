@@ -6,7 +6,7 @@ module Admin
   class PaperIdentityIntakeTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       setup_fpl_policies
       @candidate = create(:constituent, first_name: 'Robin', last_name: 'Paper', date_of_birth: Date.new(1980, 2, 3))
       @params = {

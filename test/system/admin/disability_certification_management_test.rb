@@ -12,7 +12,7 @@ module Admin
                             certifying_professional_name: 'Dr. Test Provider',
                             certifying_professional_email: 'provider@example.com')
 
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     # Certification UI states

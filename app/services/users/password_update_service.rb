@@ -52,7 +52,8 @@ module Users
 
       return fail_with_error(I18n.t('passwords.mismatch')) unless @new_password == @new_password_confirmation
 
-      if @user.update(password: @new_password, force_password_change: false)
+      @user.assign_attributes(password: @new_password, force_password_change: false)
+      if @user.save(context: %i[update password_change])
         success_result(message: I18n.t('passwords.updated'))
       else
         fail_with_error(self.class.failure_message(@user))

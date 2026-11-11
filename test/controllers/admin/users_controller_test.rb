@@ -6,7 +6,7 @@ module Admin
   class UsersControllerTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test @admin
+      sign_in_for_integration_test @admin, bypass_mfa_enrollment: true
     end
 
     test 'the summary frame reuses ordered application and audit date loading' do
@@ -398,20 +398,22 @@ module Admin
     end
 
     test 'admin quick create soft duplicate records selection and keep-separate in resolved cases' do
-      existing_user = Users::Constituent.create!(
-        first_name: 'Test',
-        last_name: 'Duplicate',
-        email: "first.user.#{Time.now.to_i}@example.com",
-        phone: '555-111-1111',
-        date_of_birth: Date.parse('1995-06-11'),
-        physical_address_1: '456 First St',
-        city: 'Baltimore',
-        state: 'MD',
-        zip_code: '21201',
-        communication_preference: 'email',
-        password: SecureRandom.hex(8),
-        verified: true
-      )
+      existing_user = Current.set(user: @admin) do
+        Users::Constituent.create!(
+          first_name: 'Test',
+          last_name: 'Duplicate',
+          email: "first.user.#{Time.now.to_i}@example.com",
+          phone: '555-111-1111',
+          date_of_birth: Date.parse('1995-06-11'),
+          physical_address_1: '456 First St',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          communication_preference: 'email',
+          password: SecureRandom.hex(8),
+          verified: true
+        )
+      end
 
       create_params = {
         first_name: 'Test',
@@ -639,8 +641,7 @@ module Admin
     test 'admin can update address-only user profile without email' do
       user = nil
       internal_password = SecureRandom.hex(32)
-      Current.paper_context = true
-      begin
+      Current.set(user: @admin, paper_context: true) do
         user = Users::Constituent.create!(
           first_name: 'Letter', last_name: 'Only',
           communication_preference: :letter,
@@ -649,8 +650,6 @@ module Admin
           password: internal_password, password_confirmation: internal_password,
           hearing_disability: true
         )
-      ensure
-        Current.reset
       end
 
       patch admin_user_path(user), params: {
@@ -869,8 +868,7 @@ module Admin
       sign_in_with_fresh_staff_authentication
       user = nil
       internal_password = SecureRandom.hex(32)
-      Current.paper_context = true
-      begin
+      Current.set(user: @admin, paper_context: true) do
         user = Users::Constituent.create!(
           first_name: 'Letter', last_name: 'Only',
           communication_preference: :letter,
@@ -879,8 +877,6 @@ module Admin
           password: internal_password, password_confirmation: internal_password,
           hearing_disability: true
         )
-      ensure
-        Current.reset
       end
 
       patch admin_user_path(user), params: {
@@ -916,8 +912,7 @@ module Admin
     test 'constituents list shows no email on file for address-only users' do
       internal_password = SecureRandom.hex(32)
       user = nil
-      Current.paper_context = true
-      begin
+      Current.set(user: @admin, paper_context: true) do
         user = Users::Constituent.create!(
           first_name: 'Inactive', last_name: 'LetterOnly',
           status: :inactive,
@@ -927,8 +922,6 @@ module Admin
           password: internal_password, password_confirmation: internal_password,
           hearing_disability: true
         )
-      ensure
-        Current.reset
       end
 
       create(:application, :archived, user: user)
@@ -942,8 +935,7 @@ module Admin
     test 'history shows display helpers for address-only users' do
       user = nil
       internal_password = SecureRandom.hex(32)
-      Current.paper_context = true
-      begin
+      Current.set(user: @admin, paper_context: true) do
         user = Users::Constituent.create!(
           first_name: 'History', last_name: 'LetterOnly',
           status: :inactive,
@@ -953,8 +945,6 @@ module Admin
           password: internal_password, password_confirmation: internal_password,
           hearing_disability: true
         )
-      ensure
-        Current.reset
       end
 
       get history_admin_user_path(user)

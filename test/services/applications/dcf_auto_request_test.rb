@@ -4,6 +4,7 @@ require 'test_helper'
 
 module Applications
   class DcfAutoRequestTest < ActiveSupport::TestCase
+    include ProofResubmissionTestHelper
     include ActiveJob::TestHelper
     include ConcurrencyTestHelper
 
@@ -126,7 +127,7 @@ module Applications
 
     def escalate_by_approving_proof
       @application.update_columns(residency_proof_status: Application.residency_proof_statuses[:not_reviewed])
-      ProofReviewer.new(@application, @admin).review(proof_type: :residency, status: :approved)
+      ProofReviewer.new(@application, @admin).review(**proof_decision_params(@application, :residency), proof_type: :residency, status: :approved)
     end
   end
 end

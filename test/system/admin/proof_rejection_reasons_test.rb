@@ -62,13 +62,13 @@ module Admin
 
     test 'admin can see all rejection reasons when rejecting income proof' do
       # Page and authentication diagnostics.
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
 
       puts '=== AUTHENTICATION DEBUG AFTER SIGN IN ==='
       puts "Current.user after sign in: #{Current.user&.id}"
       puts "Current path after sign in: #{current_path}"
 
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', wait: 20
 
       puts '=== AUTHENTICATION DEBUG AFTER NAVIGATION ==='
@@ -79,19 +79,6 @@ module Admin
       if current_path == sign_in_path
         puts 'REDIRECTED TO SIGN-IN PAGE - AUTHENTICATION LOST'
         flunk 'Authentication was lost after navigation - redirected to sign-in page'
-      end
-
-      # This diagnostic restores Current.user if navigation leaves it unset.
-      if Current.user.nil?
-        puts 'Current.user is nil after navigation, attempting to restore from session'
-        session = Session.joins(:user).where(users: { id: @admin.id }).order(created_at: :desc).first
-        if session
-          Current.user = session.user
-          puts "Restored Current.user from session: #{Current.user.id}"
-        else
-          puts 'No session found for admin user'
-          flunk 'No session found for admin user'
-        end
       end
 
       @application.reload
@@ -222,9 +209,9 @@ module Admin
     end
 
     test 'admin can see appropriate rejection reasons when rejecting residency proof' do
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
 
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', wait: 30
 
       wait_for_turbo if respond_to?(:wait_for_turbo)
@@ -260,8 +247,8 @@ module Admin
     end
 
     test 'clicking a rejection reason button populates the reason field' do
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(@application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', wait: 30
 
       wait_for_turbo if respond_to?(:wait_for_turbo)
@@ -301,8 +288,8 @@ module Admin
     end
 
     test 'selecting Other in the proof rejection modal unlocks custom reason entry' do
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(@application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', wait: 30
 
       click_review_proof_and_wait('income', timeout: 15)
@@ -324,8 +311,8 @@ module Admin
     end
 
     test 'a predefined rejection reason cannot be edited; Other is the way to write one' do
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(@application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', wait: 20
 
       click_review_proof_and_wait('income', timeout: 15)

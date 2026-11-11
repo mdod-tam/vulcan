@@ -11,7 +11,7 @@ module Evaluators
       product = create(:product, name: 'Consultation Device')
       replacement = create(:product, name: 'Corrected Consultation Device')
       evaluation = create(:evaluation, evaluator: admin, status: :requested, evaluation_date: nil, location: nil)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit evaluators_evaluation_path(evaluation)
       assert_selector '#schedule-evaluation-form'
       assert_selector '#complete-evaluation-form'
@@ -89,7 +89,7 @@ module Evaluators
       admin = create(:admin)
       product = create(:product, name: 'Source Switch Device')
       evaluation = create(:evaluation, evaluator: admin, status: :scheduled)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit evaluators_evaluation_path(evaluation)
 
       within '#complete-evaluation-form' do

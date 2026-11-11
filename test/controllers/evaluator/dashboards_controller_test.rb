@@ -13,7 +13,7 @@ module Evaluators
       @evaluation = create(:evaluation, evaluator: @evaluator, constituent: @constituent, status: :scheduled)
       @other_evaluation = create(:evaluation, evaluator: @other_evaluator, constituent: @other_constituent, status: :scheduled)
 
-      sign_in_for_integration_test(@evaluator)
+      sign_in_for_integration_test(@evaluator, bypass_mfa_enrollment: true)
     end
 
     def test_should_get_show
@@ -45,7 +45,7 @@ module Evaluators
     end
 
     test 'admin sees broader recent evaluation activity' do
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       own_event = create_evaluation_event(@evaluation, 'Evaluator activity')
       other_event = create_evaluation_event(@other_evaluation, 'Other evaluator activity')
 
@@ -57,7 +57,7 @@ module Evaluators
     end
 
     test 'dashboard pairs every displayed evaluation with its preloaded evaluator' do
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       requested = create(:evaluation, evaluator: @other_evaluator, status: :requested, evaluation_date: nil)
       followup = create(:evaluation, evaluator: @evaluator, status: :cancelled)
       completed = create(:evaluation, :completed, evaluator: @other_evaluator)

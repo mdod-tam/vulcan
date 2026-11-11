@@ -109,7 +109,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
   test 'admin certification review produces the expected certification state' do
     application = create(:application, disability_certification_status: :requested)
 
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
 
     patch upload_disability_certification_admin_application_path(application),
           params: {

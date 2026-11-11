@@ -3,9 +3,11 @@
 require 'test_helper'
 
 class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
+  include ProofResubmissionTestHelper
+
   setup do
     @admin = create(:admin)
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
 
     Policy.find_or_create_by!(key: 'fpl_2_person') { |policy| policy.value = '21150' }
     Policy.find_or_create_by!(key: 'fpl_modifier_percentage') { |policy| policy.value = '400' }
@@ -87,6 +89,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     # Review updates use the regular application endpoint after paper creation.
 
     patch update_proof_status_admin_application_path(application), params: {
+      **proof_decision_params(application, :income),
       proof_type: 'income',
       status: 'rejected',
       rejection_reason: 'expired',
@@ -100,6 +103,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     application.reload
 
     patch update_proof_status_admin_application_path(application), params: {
+      **proof_decision_params(application, :residency),
       proof_type: 'residency',
       status: 'approved'
     }

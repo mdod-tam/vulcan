@@ -10,7 +10,7 @@ module Admin
       @application = create(:application, :approved, :with_all_proofs)
       @evaluation = create(:evaluation, :completed, application: @application)
       EquipmentNeeds::Writer.initialize_from!(@evaluation, actor: @admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'needs editor shows original recommendations and current quantities' do

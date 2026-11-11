@@ -65,7 +65,7 @@ module ProofManageable
 
   # The constituent portal accepts only a replacement for a rejected proof.
   def proof_resubmittable_via_portal?(proof_type)
-    public_send("#{proof_type}_proof_status_rejected?")
+    can_submit_proof? && public_send("#{proof_type}_proof_status_rejected?")
   end
 
   # Records rejection status without a file. The service owns rejection orchestration.

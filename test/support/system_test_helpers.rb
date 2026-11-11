@@ -507,7 +507,7 @@ module SystemTestHelpers
   end
 
   # Retries navigation after session reset and can sign in again.
-  def visit_admin_application_with_retry(application, max_retries: 3, user: nil)
+  def visit_admin_application_with_retry(application, max_retries: 3, user: nil, bypass_mfa_enrollment: false)
     retries = 0
     target_path = admin_application_path(application)
 
@@ -560,7 +560,7 @@ module SystemTestHelpers
         wait_for_browser_ready
 
         if user && respond_to?(:system_test_sign_in)
-          system_test_sign_in(user)
+          system_test_sign_in(user, bypass_mfa_enrollment: bypass_mfa_enrollment)
           wait_for_turbo(timeout: 3) rescue nil # rubocop:disable Style/RescueModifier
         end
       end

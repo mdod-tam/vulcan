@@ -116,7 +116,7 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
   test 'an admin test send reports unavailable settings rather than an off switch' do
     template = EmailTemplate.find_by!(name: 'user_mailer_password_reset', format: :text, locale: 'en')
     FeatureFlag.find_by!(name: EmailDelivery.category_control('account_security')).destroy!
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
 
     post send_test_admin_email_template_path(template), headers: default_headers,
                                                         params: { admin_test_email_form: { email: @admin.email, template_id: template.id } }

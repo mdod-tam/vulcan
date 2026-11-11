@@ -12,13 +12,12 @@ module ConstituentPortal
     before_action :authenticate_user!
     before_action :require_constituent!
     before_action :load_applications, only: [:show]
-    helper_method :get_latest_rejection_reason, :get_latest_rejection_date, :can_resubmit_proof?
+    helper_method :get_latest_rejection_reason, :get_latest_rejection_date
 
     def show
       set_active_and_draft_applications
       load_voucher_information
       load_training_sessions_information
-      load_proof_status_information
       load_relationship_and_proof_summaries
       load_recent_activities
       @recent_purchases = VoucherTransaction.purchases_visible_to(current_user).limit(5)
@@ -32,19 +31,11 @@ module ConstituentPortal
     end
 
     def get_latest_rejection_date(application, proof_type)
-      latest_rejected_review(application, proof_type)&.created_at
+      latest_rejected_review(application, proof_type)&.reviewed_at
     end
 
     def latest_rejected_review(application, proof_type)
       @latest_rejected_reviews[[application.id, proof_type.to_s]]
-    end
-
-    def can_resubmit_proof?(application, proof_type, max_submissions)
-      status_method = "#{proof_type}_proof_status_rejected?"
-      return false unless application.send(status_method)
-
-      submission_count = count_proof_submissions(application, proof_type)
-      submission_count < max_submissions
     end
 
     private
@@ -106,10 +97,6 @@ module ConstituentPortal
       @remaining_training_sessions = @active_application.remaining_training_sessions
     end
 
-    def load_proof_status_information
-      @max_proof_submissions = Policy.get('max_proof_submissions') || 3
-    end
-
     def load_recent_activities
       @recent_activities = get_recent_activities(@active_application) if @active_application
     end
@@ -129,17 +116,11 @@ module ConstituentPortal
       @drafts_by_applicant = @managed_drafts.to_a.group_by(&:user_id).transform_values(&:first)
       ids = [@active_application&.id, *@managed_applications.map(&:id)].compact.uniq
       @latest_rejected_reviews = ProofReview.where(application_id: ids, status: :rejected)
-                                            .order(:created_at, :id).index_by { |review| [review.application_id, review.proof_type] }
-      @proof_submission_counts = Event.where(auditable_type: 'Application', auditable_id: ids, action: 'proof_submitted')
-                                      .group(:auditable_id, :metadata).count
-    end
-
-    def count_proof_submissions(application, proof_type)
-      @proof_submission_counts.fetch([application.id, { 'proof_type' => proof_type.to_s }], 0)
+                                            .chronological.index_by { |review| [review.application_id, review.proof_type] }
     end
 
     def get_recent_activities(application)
-      ConstituentPortal::Activity.from_events(application).first(10)
+      ConstituentPortal::Activity.from_events(application).last(10)
     end
 
     def calculate_remaining_service_months

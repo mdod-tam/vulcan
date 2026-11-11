@@ -38,22 +38,20 @@ module DuplicateReconciliation
     def pairs(include_historical: false)
       current_keys = current_pair_keys
       cases_by_pair = reconciliation_cases_by_pair
-      users_by_id = load_users(current_keys.flatten)
-      application_summaries = load_application_summaries(users_by_id.keys)
+      historical_keys = include_historical ? cases_by_pair.keys - current_keys : []
+      users_by_id = load_users((current_keys + historical_keys).flatten, eligible_only: !include_historical)
+      members_by_id = load_members(users_by_id)
       current_pairs = current_keys.filter_map do |ids|
-        build_current_pair(ids, users_by_id:, application_summaries:, cases: cases_by_pair.fetch(ids, []))
+        build_current_pair(ids, users_by_id:, members_by_id:, cases: cases_by_pair.fetch(ids, []))
       end
 
       return current_pairs unless include_historical
 
-      historical_keys = cases_by_pair.keys - current_keys
-      historical_users = load_users(historical_keys.flatten, eligible_only: false)
-      historical_application_summaries = load_application_summaries(historical_users.keys)
       historical_pairs = historical_keys.filter_map do |ids|
         build_historical_pair(
           ids,
-          users_by_id: historical_users,
-          application_summaries: historical_application_summaries,
+          users_by_id:,
+          members_by_id:,
           cases: cases_by_pair.fetch(ids)
         )
       end
@@ -70,12 +68,66 @@ module DuplicateReconciliation
 
       users = ids.map { |id| users_by_id.fetch(id) }
       cases = cases_for_pair(ids)
-      application_summaries = load_application_summaries(ids)
+      members_by_id = load_members(users_by_id)
       if current_match?(*users)
-        build_current_pair(ids, users_by_id:, application_summaries:, cases: cases)
+        build_current_pair(ids, users_by_id:, members_by_id:, cases: cases)
       elsif cases.any?
-        build_historical_pair(ids, users_by_id:, application_summaries:, cases: cases)
+        build_historical_pair(ids, users_by_id:, members_by_id:, cases: cases)
       end
+    end
+
+    # Select a page of name/DOB clusters before loading their members or expanding pairs.
+    # A cluster is only a browsing aid; review authority remains one exact pair.
+    def unreviewed_groups
+      representatives = eligible_scope
+                        .group(Arel.sql('LOWER(users.first_name)'), Arel.sql('LOWER(users.last_name)'), :date_of_birth)
+                        .having('COUNT(*) > 1')
+                        .select(Arel.sql('MIN(users.id)'))
+      remaining_pairs = unreviewed_pair_scope
+                        .where(same_match_key(Arel::Table.new(:pair_first), User.arel_table))
+                        .reselect('1')
+
+      eligible_scope.where(id: representatives)
+                    .where(remaining_pairs.arel.exists)
+                    .order(:id)
+    end
+
+    # The returned relation is paginated by the caller before any Pair/Member allocation.
+    def unreviewed_pairs_for_group(group_id)
+      selected_group = User.unscoped.where(id: group_id)
+                           .where(same_match_key(Arel::Table.new(:pair_first), User.arel_table)).select('1')
+      unreviewed_pair_scope
+        .where(selected_group.arel.exists)
+        .select('pair_first.id AS id', 'pair_second.id AS second_user_id')
+        .order(Arel.sql('pair_first.id, pair_second.id'))
+    end
+
+    def queue_pairs(rows)
+      keys = rows.map { |row| [row.id, row.second_user_id] }
+      users_by_id = load_users(keys.flatten)
+      members_by_id = load_members(users_by_id)
+      cases_by_pair = index_cases(cases_for_keys(keys))
+
+      keys.filter_map do |ids|
+        pair = build_current_pair(ids, users_by_id:, members_by_id:, cases: cases_by_pair.fetch(ids, []))
+        pair if pair&.state == :unreviewed
+      end
+    end
+
+    def legacy_flagged_users
+      open_subject_ids = DuplicateReviewCase.open.where.not(subject_user_id: nil).select(:subject_user_id)
+      open_candidate_ids = DuplicateReviewCaseCandidate.where(duplicate_review_case_id: DuplicateReviewCase.open.select(:id))
+                                                       .where.not(candidate_user_id: nil).select(:candidate_user_id)
+      unresolved_matches = current_pair_scope
+                           .where(pair_cases.arel.exists.not.or(pair_cases(open_only: true).arel.exists))
+                           .where('(pair_first.id = users.id OR pair_second.id = users.id)')
+                           .select('1')
+
+      User.where(needs_duplicate_review: true)
+          .where.not(id: open_subject_ids)
+          .where.not(id: open_candidate_ids)
+          .where(unresolved_matches.arel.exists.not)
+          .order(:last_name, :first_name, :id)
     end
 
     def unresolved_for_user?(user)
@@ -97,6 +149,47 @@ module DuplicateReconciliation
     end
 
     private
+
+    def current_pair_scope
+      eligible_users = eligible_scope.select(:id, :first_name, :last_name, :date_of_birth)
+      first = eligible_users.arel.as('pair_first')
+      second = eligible_users.arel.as('pair_second')
+      condition = first[:id].lt(second[:id]).and(same_match_key(first, second))
+      join = Arel::Nodes::InnerJoin.new(second, Arel::Nodes::On.new(condition))
+      User.unscoped.from(first).joins(join)
+    end
+
+    def unreviewed_pair_scope
+      open_cases = DuplicateReviewCase.open.joins(:duplicate_review_case_candidates)
+                                      .where(pair_case_sql).select('1')
+      current_pair_scope.where(pair_cases.arel.exists.not)
+                        .where(open_cases.arel.exists.not)
+    end
+
+    def same_match_key(first, second)
+      first_name = Arel::Nodes::NamedFunction.new('LOWER', [first[:first_name]]).eq(
+        Arel::Nodes::NamedFunction.new('LOWER', [second[:first_name]])
+      )
+      last_name = Arel::Nodes::NamedFunction.new('LOWER', [first[:last_name]]).eq(
+        Arel::Nodes::NamedFunction.new('LOWER', [second[:last_name]])
+      )
+      first_name.and(last_name).and(first[:date_of_birth].eq(second[:date_of_birth]))
+    end
+
+    def pair_case_sql
+      <<~SQL.squish
+        ((duplicate_review_cases.subject_user_id = pair_first.id AND
+         duplicate_review_case_candidates.candidate_user_id = pair_second.id) OR
+        (duplicate_review_cases.subject_user_id = pair_second.id AND
+         duplicate_review_case_candidates.candidate_user_id = pair_first.id))
+      SQL
+    end
+
+    def pair_cases(open_only: false)
+      scope = DuplicateReviewCase.reconciliation_pairs
+      scope = scope.open if open_only
+      scope.where(pair_case_sql).select('1')
+    end
 
     def eligible_scope
       Users::Constituent.where(merged_into_user_id: nil)
@@ -133,18 +226,34 @@ module DuplicateReconciliation
     end
 
     def reconciliation_cases_by_pair
-      reconciliation_cases.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |review_case, indexed|
+      index_cases(reconciliation_cases)
+    end
+
+    def index_cases(cases)
+      cases.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |review_case, indexed|
         ids = [review_case.subject_user_id, review_case.duplicate_review_case_candidates.sole.candidate_user_id].sort
         indexed[ids] << review_case
       end
     end
 
     def cases_for_pair(ids)
-      DuplicateReviewCase.reconciliation_pairs
-                         .where(subject_user_id: ids, duplicate_review_case_candidates: { candidate_user_id: ids })
-                         .includes(:duplicate_review_case_candidates)
-                         .order(:id)
-                         .to_a
+      cases_for_keys([ids])
+    end
+
+    def cases_for_keys(keys)
+      return [] if keys.empty?
+
+      pair_conditions = keys.map do |first_id, second_id|
+        DuplicateReviewCase.sanitize_sql_array(
+          [
+            '(duplicate_review_cases.subject_user_id = :first AND duplicate_review_case_candidates.candidate_user_id = :second) OR ' \
+            '(duplicate_review_cases.subject_user_id = :second AND duplicate_review_case_candidates.candidate_user_id = :first)',
+            { first: first_id, second: second_id }
+          ]
+        )
+      end
+      DuplicateReviewCase.reconciliation_pairs.where(pair_conditions.map { |condition| "(#{condition})" }.join(' OR '))
+                         .includes(:duplicate_review_case_candidates).order(:id).to_a
     end
 
     def reconciliation_cases
@@ -175,20 +284,27 @@ module DuplicateReconciliation
       end
     end
 
-    def build_current_pair(ids, users_by_id:, application_summaries:, cases:)
+    def load_members(users_by_id)
+      summaries = load_application_summaries(users_by_id.keys)
+      users_by_id.transform_values do |user|
+        Member.from_user(user, application_summary: summaries.fetch(user.id, 'none'))
+      end
+    end
+
+    def build_current_pair(ids, users_by_id:, members_by_id:, cases:)
       users = users_for(ids, users_by_id)
       return unless users&.all? { |user| eligible_user?(user) }
 
       state, review_case = current_state(cases)
-      build_pair(users, application_summaries:, state:, review_case:)
+      build_pair(users, members_by_id:, state:, review_case:)
     end
 
-    def build_historical_pair(ids, users_by_id:, application_summaries:, cases:)
+    def build_historical_pair(ids, users_by_id:, members_by_id:, cases:)
       users = users_for(ids, users_by_id)
       return unless users
 
       state, review_case = historical_state(users, cases)
-      build_pair(users, application_summaries:, state:, review_case:)
+      build_pair(users, members_by_id:, state:, review_case:)
     end
 
     def users_for(ids, users_by_id)
@@ -196,16 +312,10 @@ module DuplicateReconciliation
       users if users.all?
     end
 
-    def build_pair(users, application_summaries:, state:, review_case:)
+    def build_pair(users, members_by_id:, state:, review_case:)
       Pair.new(
-        first: Member.from_user(
-          users.first,
-          application_summary: application_summaries.fetch(users.first.id, 'none')
-        ),
-        second: Member.from_user(
-          users.second,
-          application_summary: application_summaries.fetch(users.second.id, 'none')
-        ),
+        first: members_by_id.fetch(users.first.id),
+        second: members_by_id.fetch(users.second.id),
         state: state,
         review_case_id: review_case&.id
       )

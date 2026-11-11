@@ -8,7 +8,7 @@ module Admin
 
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'training_requests queue renders the queue-oriented table with applicant, app id, requested date, status, and view action' do

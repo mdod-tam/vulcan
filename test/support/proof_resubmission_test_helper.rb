@@ -1,6 +1,16 @@
 # frozen_string_literal: true
 
 module ProofResubmissionTestHelper
+  def proof_decision_params(application, proof_type)
+    { decision_key: SecureRandom.uuid, reviewed_blob_id: DocumentType::BY_KEY.key?(proof_type.to_s) ? application.document_attachment_for(proof_type).blob&.id : nil }
+  end
+
+  def record_proof_review(application:, admin:, proof_type:, status:, **attributes)
+    identity = proof_decision_params(application, proof_type).merge(attributes.extract!(:decision_key, :reviewed_blob_id))
+    ProofReview.record_decision!(application: application, admin: admin, proof_type: proof_type, status: status,
+                                 **identity, **attributes, &:record!).review
+  end
+
   # Suppresses ProofReview after_commit resubmission delivery for the duration of the block.
   # Use when tests need a rejected review as setup state without issuing a real secure request.
   def without_auto_resubmission

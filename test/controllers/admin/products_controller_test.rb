@@ -8,7 +8,7 @@ module Admin
       @admin = create(:admin)
       @product = create(:product, name: 'iPad Air', device_types: ['Tablet'])
 
-      sign_in_as(@admin)
+      sign_in_as(@admin, bypass_mfa_enrollment: true)
     end
 
     def test_should_get_index

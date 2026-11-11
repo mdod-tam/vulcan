@@ -11,7 +11,7 @@ module Evaluators
       @product = create(:product, name: 'Outcome Trial Device')
       @evaluation = create(:evaluation, evaluator: @evaluator, status: :scheduled, evaluation_date: 2.days.from_now)
       @evaluation.update!(products_tried: [], recommended_product_ids: [])
-      system_test_sign_in(@evaluator)
+      system_test_sign_in(@evaluator, bypass_mfa_enrollment: true)
     end
 
     test 'an empty recommendation is rejected and can become an explicit no suitable product decision' do

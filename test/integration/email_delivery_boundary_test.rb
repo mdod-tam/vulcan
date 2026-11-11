@@ -201,7 +201,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
   test 'an admin test send refused at queueing reports suppression' do
     template = EmailTemplate.find_by!(name: 'user_mailer_password_reset', format: :text, locale: 'en')
-    sign_in_for_integration_test(@admin)
+    sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
                          .then.returns(EmailDelivery::Decision.suppressed(:global_disabled))
 

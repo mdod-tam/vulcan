@@ -7,7 +7,7 @@ module VendorPortal
     setup do
       @vendor = create(:vendor_user)
       @purchase = create(:voucher_transaction, vendor: @vendor)
-      system_test_sign_in(@vendor)
+      system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
     end
 

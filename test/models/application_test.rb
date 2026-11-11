@@ -30,7 +30,7 @@ class ApplicationTest < ActiveSupport::TestCase
     history_writers = [
       ->(application) { AuditEventService.log(actor: @admin, action: 'retained_history', auditable: application) },
       ->(application) { application.status_changes.create!(user: @admin, from_status: 'draft', to_status: 'in_progress') },
-      ->(application) { application.proof_reviews.create!(admin: @admin, proof_type: :disability_certification, status: :rejected, rejection_reason: 'Missing signature') },
+      ->(application) { create(:proof_review, :rejected, application: application, admin: @admin, proof_type: :disability_certification, rejection_reason: 'Missing signature') },
       ->(application) { application.notifications.create!(recipient: application.user, actor: @admin, action: 'retained_notice') }
     ]
 
@@ -45,6 +45,24 @@ class ApplicationTest < ActiveSupport::TestCase
       assert history.class.exists?(history.id)
       assert Application.exists?(application.id)
     end
+  end
+
+  test 'proof reviewability compares submissions with decision time and selects the latest decision' do
+    older = create(:proof_review, application: @application, admin: @admin, proof_type: :income,
+                                  created_at: 1.day.ago, reviewed_at: 3.days.ago)
+    latest = create(:proof_review, application: @application, admin: @admin, proof_type: :income,
+                                   created_at: 4.days.ago, reviewed_at: 1.hour.ago)
+    Event.create!(action: 'income_proof_attached', user: @application.user, auditable: @application,
+                  metadata: { proof_type: 'income', submission_method: 'web' }, created_at: 2.hours.ago)
+
+    assert_equal latest, @application.latest_review_and_audit('income').first
+    assert_not @application.needs_proof_type_review?('income')
+    assert_operator latest.reviewed_at, :>, older.reviewed_at
+
+    Event.create!(action: 'income_proof_attached', user: @application.user, auditable: @application,
+                  metadata: { proof_type: 'income', submission_method: 'web' })
+
+    assert @application.needs_proof_type_review?('income')
   end
 
   test 'submitted application requires provider info before DCF routing or approval' do

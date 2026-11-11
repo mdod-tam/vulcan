@@ -6,7 +6,7 @@ module Admin
   class VendorsControllerTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'index only links to W9 review when pending review vendor has an attached W9' do

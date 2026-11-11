@@ -5,7 +5,7 @@ module Applications
   # notices, then either the rejection audit with a secure resubmission request or the approval record.
   #
   # The writers that record a decision schedule this after their transaction commits, for every decision they record:
-  # a new one, a repeat rejection, and a repeat approval, such as a proof approved again after a replacement.
+  # a new one, including a later rejection or an approval after a replacement. Request replays do not follow up.
   # A disability certification rejection has its own follow-up in DisabilityCertificationReviewer, so a certification
   # review must never be scheduled here.
   class ProofDecisionFollowUp
@@ -94,7 +94,8 @@ module Applications
       result = RequestProofResubmission.new(
         application: application,
         actor: admin,
-        proof_type: review.proof_type.to_sym
+        proof_type: review.proof_type.to_sym,
+        proof_review: review
       ).call
       return unless result.failure?
 
@@ -121,10 +122,9 @@ module Applications
     end
 
     # Each decision has its own operation id. Without one, the audit dedup window keeps only the first event of an
-    # action for an application, so two proofs decided within it would lose the second event, such as rejecting two
-    # proofs in one intake. A repeat decision stamps a new reviewed_at, so it keeps its own event too.
+    # action for an application, so two proofs decided within it would lose the second event.
     def operation_id(outcome)
-      "proof-review-#{review.id}-#{outcome}-#{review.reviewed_at.utc.iso8601(6)}"
+      "proof-review-#{review.id}-#{outcome}"
     end
 
     def log_rejection_audit_event
@@ -134,6 +134,7 @@ module Applications
         auditable: application,
         metadata: {
           proof_type: review.proof_type,
+          proof_review_id: review.id,
           rejection_reason: review.rejection_reason,
           submission_method: review.submission_method,
           rejection_reason_code: review.rejection_reason_code,
@@ -149,7 +150,7 @@ module Applications
         action: 'proof_approved',
         actor: admin,
         auditable: application,
-        metadata: { proof_type: review.proof_type, operation_id: operation_id('approved') }
+        metadata: { proof_type: review.proof_type, proof_review_id: review.id, operation_id: operation_id('approved') }
       )
 
       # Queries filter on notifiable_type: 'Application', so the notifiable must be the application.
@@ -158,7 +159,7 @@ module Applications
         recipient: approval_recipient,
         actor: admin,
         notifiable: application,
-        metadata: { proof_type: review.proof_type },
+        metadata: { proof_type: review.proof_type, proof_review_id: review.id },
         channel: :email,
         deliver: false
       )

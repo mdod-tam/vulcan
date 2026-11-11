@@ -214,7 +214,6 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       assert_includes response.headers.fetch('Cache-Control'), 'no-store'
       assert cookies[:session_token].blank?
       assert_not Session.exists?(session_record.id)
-      # The integration wrapper restores its helper identity after requests; inspect the responder itself.
       assert_nil controller.send(:current_user)
       assert_nil controller.send(:current_session)
 

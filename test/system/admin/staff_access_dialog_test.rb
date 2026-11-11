@@ -10,7 +10,7 @@ module Admin
       @session = create(:training_session, :scheduled, trainer: @evaluator)
       @checkbox = "capability_can_train_#{@evaluator.id}"
       @dialog = "#staff_access_dialog_#{@evaluator.id}"
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit admin_users_path(q: @evaluator.email)
     end

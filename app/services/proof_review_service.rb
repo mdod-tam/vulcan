@@ -5,7 +5,8 @@
 class ProofReviewService < BaseService
   attr_reader :application, :admin_user, :params, :proof_type, :status, :proof_review
 
-  # @param params [ActionController::Parameters] proof_type, status, rejection_reason, rejection_reason_code, notes
+  # @param params [ActionController::Parameters] proof_type, status, decision_key, reviewed_blob_id,
+  #   rejection_reason, rejection_reason_code, notes. A missing-document target is submitted as an empty value.
   def initialize(application, admin_user, params)
     super()
     @application = application
@@ -31,11 +32,8 @@ class ProofReviewService < BaseService
 
     return failure('Invalid proof type') unless ProofReview.reviewable_proof_type?(proof_type)
 
-    return failure('Income proof review is not applicable for this application') if proof_type == 'income' && !application.income_proof_required?
-
-    return failure('Proof is not reviewable for this application') unless application.proof_type_reviewable?(proof_type)
-
     return failure('Invalid status') unless %w[approved rejected].include?(status)
+    return failure('Reload this application before submitting a review.') if params[:decision_key].blank? || !params.key?(:reviewed_blob_id)
 
     success('Parameters validated successfully')
   end
@@ -50,6 +48,8 @@ class ProofReviewService < BaseService
     rescue Applications::ReviewCommit::Unconfirmed => e
       log_review_error(e)
       failure(e.message, { commit_state: :unknown })
+    rescue ProofReview::DecisionConflict => e
+      failure(e.message)
     rescue StandardError => e
       log_review_error(e)
       message = if e.is_a?(ActiveRecord::RecordInvalid) && e.record.is_a?(ProofReview) &&
@@ -66,6 +66,7 @@ class ProofReviewService < BaseService
     reviewer = Applications::ProofReviewer.new(application, admin_user)
     reviewer.review(**review_params)
     @proof_review = reviewer.proof_review
+    @review_replayed = !reviewer.recorded
     @review_warning = reviewer.warning
   end
 
@@ -73,6 +74,8 @@ class ProofReviewService < BaseService
     {
       proof_type: proof_type,
       status: status,
+      decision_key: params[:decision_key],
+      reviewed_blob_id: params[:reviewed_blob_id],
       rejection_reason: params[:rejection_reason],
       rejection_reason_code: params[:rejection_reason_code].presence,
       notes: params[:notes]
@@ -80,11 +83,14 @@ class ProofReviewService < BaseService
   end
 
   def success_message
+    return "The #{proof_type} proof decision was already recorded." if @review_replayed
+
     "#{proof_type.capitalize} proof #{status} successfully."
   end
 
   def review_result_data
     data = { proof_review: proof_review }
+    data[:replayed] = true if @review_replayed
     data[:warning] = @review_warning if @review_warning
     return data unless proof_review&.status_rejected?
 
@@ -111,6 +117,7 @@ class ProofReviewService < BaseService
     return true unless proof_review&.persisted? && proof_review.created_at.present?
     # An archived application is sent the archive notice, so no upload link is owed.
     return true if application.status_archived?
+    return true if @review_replayed && !proof_review.current_rejection?(application: application)
 
     Applications::RequestProofResubmission.delivery_confirmed_for_review?(proof_review)
   end

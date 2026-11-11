@@ -36,20 +36,115 @@ describe("ContactFeedbackController", () => {
     document.body.innerHTML = ""
   })
 
+  describe("contact text rendering", () => {
+    const payload = '<em data-contact-injection="true">Contact & address</em>'
+
+    beforeEach(() => {
+      fixture.innerHTML = `
+        <input data-contact-feedback-target="phone" />
+        <input data-contact-feedback-target="email" />
+        <input data-contact-feedback-target="address1" value="123 Main Street" />
+        <input data-contact-feedback-target="address2" value="Apt 4" />
+        <input data-contact-feedback-target="city" value="Baltimore" />
+        <input data-contact-feedback-target="state" value="MD" />
+        <input data-contact-feedback-target="zipCode" value="21201" />
+        <input type="checkbox" name="no_email_address" />
+        <input type="radio" name="contact_method" value="email" checked />
+        <input type="radio" name="delivery_method" value="letter" checked />
+        <div data-contact-feedback-target="feedback" aria-live="polite"></div>
+        <div data-contact-feedback-target="deliveryFeedback" aria-live="polite"></div>
+      `
+      for (const name of ['phone', 'email', 'address1', 'address2', 'city', 'state', 'zipCode', 'feedback']) {
+        Object.defineProperty(controller, `${name}Target`, {
+          value: fixture.querySelector(`[data-contact-feedback-target="${name}"]`), configurable: true
+        })
+        Object.defineProperty(controller, `has${name[0].toUpperCase()}${name.slice(1)}Target`, {
+          value: true, configurable: true
+        })
+      }
+      for (const name of ['call', 'text', 'videophone', 'email', 'mail', 'deliveryEmail', 'deliveryMail']) {
+        Object.defineProperty(controller, `${name}MessageValue`, {
+          value: `${name} message`, configurable: true
+        })
+      }
+    })
+
+    function assertLiteralText(element, value) {
+      expect(element).toHaveTextContent(value)
+      expect(element.querySelector('[data-contact-injection], em, img, script')).toBeNull()
+      expect(element.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+      expect(element.getAttribute('aria-live')).toBe('polite')
+    }
+
+    it.each(['address1', 'address2', 'city', 'state', 'zipCode'])(
+      "renders %s as literal text while preserving address line breaks", name => {
+        controller[`${name}Target`].value = payload
+
+        controller.updateDeliveryFeedback()
+
+        const feedback = fixture.querySelector('[data-contact-feedback-target="deliveryFeedback"]')
+        assertLiteralText(feedback, payload)
+        expect(feedback.querySelectorAll('strong br')).toHaveLength(1)
+      }
+    )
+
+    it.each(['letter', 'mail', 'email'])("keeps address text literal for %s delivery", method => {
+      fixture.querySelector('[name="delivery_method"]').value = method
+      fixture.querySelector('[name="no_email_address"]').checked = method === 'email'
+      controller.address1Target.value = payload
+
+      controller.updateDeliveryFeedback()
+
+      assertLiteralText(fixture.querySelector('[data-contact-feedback-target="deliveryFeedback"]'), payload)
+    })
+
+    it.each(['voice', 'text', 'videophone'])("renders raw %s phone text literally", method => {
+      fixture.querySelector('[name="contact_method"]').value = method
+      controller.phoneTarget.value = payload
+
+      controller.updateFeedback()
+
+      assertLiteralText(controller.feedbackTarget, payload)
+    })
+
+    it("renders email text literally in both contact and delivery feedback", () => {
+      controller.emailTarget.value = payload
+      fixture.querySelector('[name="delivery_method"]').value = 'email'
+
+      controller.updateFeedback()
+      controller.updateDeliveryFeedback()
+
+      assertLiteralText(controller.feedbackTarget, payload)
+      assertLiteralText(fixture.querySelector('[data-contact-feedback-target="deliveryFeedback"]'), payload)
+    })
+
+    it("treats configured feedback messages as text", () => {
+      Object.defineProperty(controller, 'emailMessageValue', { value: payload, configurable: true })
+      Object.defineProperty(controller, 'deliveryMailMessageValue', { value: payload, configurable: true })
+      controller.emailTarget.value = 'person@example.com'
+
+      controller.updateFeedback()
+      controller.updateDeliveryFeedback()
+
+      assertLiteralText(controller.feedbackTarget, payload)
+      assertLiteralText(fixture.querySelector('[data-contact-feedback-target="deliveryFeedback"]'), payload)
+    })
+  })
+
   it("does not ask for dependent phone when guardian phone path is selected", () => {
     fixture.querySelector('#use_guardian_phone_checkbox').checked = true
 
     const feedback = controller._buildContactFeedback('text')
 
-    expect(feedback.html).toContain('guardian phone path')
-    expect(feedback.html).not.toContain('Please enter a phone number above')
+    expect(feedback.content.textContent).toContain('guardian phone path')
+    expect(feedback.content.textContent).not.toContain('Please enter a phone number above')
     expect(feedback.className).toContain('bg-teal-50')
   })
 
   it("asks for phone when no phone path is available", () => {
     const feedback = controller._buildContactFeedback('text')
 
-    expect(feedback.html).toContain('Please enter a phone number above')
+    expect(feedback.content.textContent).toContain('Please enter a phone number above')
     expect(feedback.className).toContain('bg-warning-50')
   })
 
@@ -87,7 +182,7 @@ describe("ContactFeedbackController", () => {
     Object.defineProperty(controller, 'element', { value: fixture, configurable: true })
 
     const feedback = controller._buildContactFeedback('voice')
-    expect(feedback.html).not.toContain('Please enter a phone number above')
+    expect(feedback.content.textContent).not.toContain('Please enter a phone number above')
     expect(feedback.className).toContain('bg-teal-50')
   })
 

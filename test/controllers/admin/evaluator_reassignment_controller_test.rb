@@ -9,7 +9,7 @@ class AdminEvaluatorReassignmentControllerTest < ActionDispatch::IntegrationTest
     @replacement = create(:evaluator)
     @application = create(:application, status: :approved, application_date: Date.current, fulfillment_type: :equipment)
     @evaluation = create(:evaluation, application: @application, constituent: @application.user, evaluator: @evaluator)
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
   end
 
   test 'admin can transfer through the application workflow without resetting the appointment' do
@@ -24,11 +24,11 @@ class AdminEvaluatorReassignmentControllerTest < ActionDispatch::IntegrationTest
     assert_equal date, @evaluation.evaluation_date
     assert @evaluation.status_scheduled?
 
-    sign_in_for_controller_test(@evaluator)
+    sign_in_for_controller_test(@evaluator, bypass_mfa_enrollment: true)
     get evaluators_evaluation_path(@evaluation)
     assert_redirected_to evaluators_evaluations_path
 
-    sign_in_for_controller_test(@replacement)
+    sign_in_for_controller_test(@replacement, bypass_mfa_enrollment: true)
     get evaluators_evaluation_path(@evaluation)
     assert_response :success
   end
@@ -68,7 +68,7 @@ class AdminEvaluatorReassignmentControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'non-admin evaluator cannot transfer an assignment' do
-    sign_in_for_controller_test(@evaluator)
+    sign_in_for_controller_test(@evaluator, bypass_mfa_enrollment: true)
     post reassign_evaluator_admin_application_path(@application), params: { evaluator_id: @replacement.id }
     assert_redirected_to root_path
     assert_equal @evaluator.id, @evaluation.reload.evaluator_id

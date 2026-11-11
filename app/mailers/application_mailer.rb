@@ -47,7 +47,6 @@ class ApplicationMailer < ActionMailer::Base
   # Last check before handoff, for queued and immediate deliveries alike.
   before_deliver :enforce_email_delivery_controls
   around_deliver :capture_delivery_attempt
-  after_deliver :record_provider_fallback_submission
 
   def process(action, *args, **kwargs)
     @delivery_subject = args.find { |argument| argument.is_a?(ApplicationRecord) && argument.respond_to?(:email_delivery_attempts) }
@@ -122,12 +121,6 @@ class ApplicationMailer < ActionMailer::Base
     end.first
     recipient = params[:user] || @user || params[:vendor] || @vendor
     EmailDelivery::Capture.new(message: message, context: @delivery_context, subject: subject, recipient: recipient, contacts: @delivery_contacts || {}).deliver(&handoff)
-  end
-
-  def record_provider_fallback_submission
-    return unless @delivery_context&.dig('provider_notification_id')
-
-    CertifyingProfessionalNotifier.record_fallback_outcome(@delivery_context, status: :submitted)
   end
 
   def mail_with_text_body(mail_options, text_body)

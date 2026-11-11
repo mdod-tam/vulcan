@@ -13,7 +13,7 @@ module Admin
       @two_phones = create(:equipment_need, product: @phone, remaining_quantity: 2)
       @context = { tab: 'needs_ordering', product_id: @phone.id.to_s, vendor_id: @vendor.id.to_s }
       @phone.vendors << @vendor
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'exact model group review carries all application quantities and record versions' do
@@ -162,7 +162,7 @@ module Admin
       end
       assert_response :unprocessable_entity
 
-      sign_in_for_integration_test(@vendor)
+      sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
       get new_admin_purchase_order_path(need_ids: [@other_need.id])
       assert_redirected_to root_path
       assert_no_difference(['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count']) do

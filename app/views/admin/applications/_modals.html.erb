@@ -139,19 +139,19 @@ end
 
           <div class="mt-4 flex space-x-4">
             <%= button_to cfg[:approve_path],
-                method: :patch,
-                params: cfg[:approve_params],
-                class: "btn btn-success",
-                data: {
-                  turbo: true,
-                  turbo_confirm: cfg[:confirm_message]
-                } do %>
+                          method: :patch,
+                          params: cfg[:approve_params].merge(proof_review_request_params(@application, cfg[:key], :approved)),
+                          class: 'btn btn-success',
+                          data: {
+                            turbo: true,
+                            turbo_confirm: cfg[:confirm_message]
+                          } do %>
               Approve
             <% end %>
             <% latest_rejected_review = if cfg[:key] == :disability_certification
                                           @application.latest_disability_certification_rejection_review
                                         else
-                                          @application.proof_reviews.where(proof_type: cfg[:key], status: 'rejected').order(created_at: :desc).first
+                                          @application.proof_reviews.where(proof_type: cfg[:key], status: 'rejected').recent.first
                                         end %>
             <% if cfg[:can_reject] %>
               <button type="button"
@@ -163,7 +163,7 @@ end
               </button>
             <% elsif latest_rejected_review.present? %>
               <span class="inline-flex items-center px-4 py-2 text-sm text-gray-500 italic">
-                Previously rejected on <%= latest_rejected_review.created_at.strftime('%B %d, %Y') %>
+                Previously rejected on <%= latest_rejected_review.reviewed_at.strftime('%B %d, %Y') %>
               </span>
             <% end %>
           </div>
@@ -180,6 +180,7 @@ end
   <% end %>
 
   <dialog id="proofRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-elevation-4 p-0" data-controller="modal rejection-form"
+       data-rejection-form-decisions-value="<%= proof_rejection_decisions(@application, proof_modal_configs.pluck(:key)).to_json %>"
        aria-labelledby="proofRejectionModal-heading">
     <div class="p-6">
         <h3 id="proofRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Rejection Reason</h3>
@@ -221,21 +222,26 @@ end
                           action: "submit->rejection-form#validateForm"
                         } do |f| %>
           <%= f.hidden_field :status, value: "rejected" %>
+          <%= f.hidden_field :decision_key, data: { rejection_form_target: 'decisionKey' } %>
+          <%= f.hidden_field :reviewed_blob_id, data: { rejection_form_target: 'reviewedBlobId' } %>
           <%= f.hidden_field :proof_type,
               id: "rejection-proof-type",
+              value: params[:proof_type],
               data: { rejection_form_target: "proofType" } %>
           <%= f.hidden_field :rejection_reason_code,
               id: "rejection-reason-code",
+              value: params[:rejection_reason_code],
               data: { rejection_form_target: "reasonCode" } %>
           <div>
             <%= f.label :rejection_reason, "Reason for Rejection", class: "form-label" %>
             <%= f.text_area :rejection_reason,
-                rows: 4,
-                id: "rejection_reason",
-                class: "form-input mt-1",
-                required: true,
-                placeholder: "Please provide a detailed explanation...",
-                data: { rejection_form_target: "reasonField" } %>
+                            value: params[:rejection_reason],
+                            rows: 4,
+                            id: 'rejection_reason',
+                            class: 'form-input mt-1',
+                            required: true,
+                            placeholder: 'Please provide a detailed explanation...',
+                            data: { rejection_form_target: 'reasonField' } %>
             <div class="hidden mt-2 rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900"
                  data-rejection-form-target="languageNotice">
               <%= proof_custom_language_notice %>
@@ -260,6 +266,7 @@ end
   </dialog>
 
   <dialog id="disabilityCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-elevation-4 p-0" data-controller="modal rejection-form"
+       data-rejection-form-decisions-value="<%= proof_rejection_decisions(@application, proof_modal_configs.pluck(:key)).to_json %>"
        aria-labelledby="disabilityCertificationRejectionModal-heading">
     <div class="p-6">
         <h3 id="disabilityCertificationRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Disability Certification Rejection Reason</h3>
@@ -300,6 +307,8 @@ end
                           action: "submit->rejection-form#validateForm"
                         } do |f| %>
           <%= f.hidden_field :status, value: "rejected" %>
+          <%= f.hidden_field :decision_key, data: { rejection_form_target: 'decisionKey' } %>
+          <%= f.hidden_field :reviewed_blob_id, data: { rejection_form_target: 'reviewedBlobId' } %>
           <%= f.hidden_field :proof_type,
               id: "disability-certification-rejection-proof-type",
               value: "disability_certification",
