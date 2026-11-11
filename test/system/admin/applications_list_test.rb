@@ -20,6 +20,7 @@ module Admin
       find_field('q').click
       assert_selector 'input#q:focus'
       fill_in 'q', with: 'Sort'
+      assert_selector '#applications_list input#q[value="Sort"]'
       assert_selector '#application-table tbody tr.application-row', count: 3
       take_screenshot('review-search-after-paused-typing', html: true, full: true)
       assert_selector 'input#q:focus'
@@ -85,6 +86,7 @@ module Admin
       assert_equal [older.id, newer.id], displayed_application_ids
 
       select 'Awaiting proof', from: 'status'
+      assert_selector '#applications_list select#status option[value="awaiting_proof"][selected]', visible: :all
       assert_selector 'th[aria-sort="ascending"] a', text: /Next action/i
       assert_equal [older.id, newer.id], displayed_application_ids
       within('nav[aria-label="Application views"]') { click_link 'All applications' }

@@ -364,7 +364,7 @@ module Admin
 
       visit admin_duplicate_reviews_path(match_group_id: first.id)
       match_group = find('[data-testid="unreviewed-match-group"]', text: first.full_name)
-      second.update!(last_name: 'Changed after queue render')
+      Current.set(user: @admin) { second.update!(last_name: 'Changed after queue render') }
 
       assert_no_difference ['DuplicateReviewCase.count', 'Event.count'] do
         within match_group do

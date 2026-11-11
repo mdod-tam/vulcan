@@ -97,7 +97,7 @@ module Admin
       assert_checked_field 'application[information_verified]'
       capture('self-review-with-uploads')
 
-      candidate.update!(city: 'Annapolis')
+      Current.set(user: @admin) { candidate.update!(city: 'Annapolis') }
       fill_in 'identity_rationale', with: 'Paper documents identify a different person.'
       click_button 'These are different people — create a new person'
       assert_text 'changed since you reviewed them'

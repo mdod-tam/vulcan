@@ -1001,14 +1001,16 @@ module ConstituentPortal
     end
 
     test 'should submit draft application' do
-      @application.update!(
-        status: :draft,
-        household_size: 3,
-        annual_income: 50_000,
-        certifying_professional_name: 'Dr. Smith',
-        certifying_professional_phone: '2025551234',
-        certifying_professional_email: 'drsmith@example.com'
-      )
+      Current.set(user: @user) do
+        @application.update!(
+          status: :draft,
+          household_size: 3,
+          annual_income: 50_000,
+          certifying_professional_name: 'Dr. Smith',
+          certifying_professional_phone: '2025551234',
+          certifying_professional_email: 'drsmith@example.com'
+        )
+      end
 
       patch constituent_portal_application_path(@application), params: {
         application: {
@@ -1128,10 +1130,12 @@ module ConstituentPortal
     end
 
     test 'should maintain user association during update' do
-      @application.update!(status: :draft,
-                           household_size: 3,
-                           annual_income: 50_000,
-                           certifying_professional_name: 'Good Health Clinic')
+      Current.set(user: @user) do
+        @application.update!(status: :draft,
+                             household_size: 3,
+                             annual_income: 50_000,
+                             certifying_professional_name: 'Good Health Clinic')
+      end
 
       patch constituent_portal_application_path(@application), params: {
         application: {
@@ -1221,13 +1225,15 @@ module ConstituentPortal
                            email: "address_creation_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
 
-      unique_user.update!(
-        physical_address_1: nil,
-        physical_address_2: nil,
-        city: nil,
-        state: nil,
-        zip_code: nil
-      )
+      Current.set(user: unique_user) do
+        unique_user.update!(
+          physical_address_1: nil,
+          physical_address_2: nil,
+          city: nil,
+          state: nil,
+          zip_code: nil
+        )
+      end
 
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {
@@ -1277,13 +1283,15 @@ module ConstituentPortal
                            email: "address_submission_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
 
-      unique_user.update!(
-        physical_address_1: nil,
-        physical_address_2: nil,
-        city: nil,
-        state: nil,
-        zip_code: nil
-      )
+      Current.set(user: unique_user) do
+        unique_user.update!(
+          physical_address_1: nil,
+          physical_address_2: nil,
+          city: nil,
+          state: nil,
+          zip_code: nil
+        )
+      end
 
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {

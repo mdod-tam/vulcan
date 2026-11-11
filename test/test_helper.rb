@@ -21,46 +21,11 @@ rescue LoadError
   warn "DatabaseCleaner not found. Add `gem 'database_cleaner-active_record', group: :test`."
 end
 
-# SEEDS_LOADED guards seed loading within this process.
+# Seed the parent once. Forked worker databases load the same baseline below.
 require_relative 'support/document_scan_helper'
 unless defined?(SEEDS_LOADED)
   Rails.application.load_seed
   SEEDS_LOADED = true
-end
-
-# Parallel workers restore shared text headers and footers after truncation.
-def load_critical_email_templates
-  EmailTemplate.find_or_create_by!(name: 'email_header_text', format: :text) do |template|
-    template.subject = 'Email Header Text'
-    template.description = 'Standard text header used in all email templates'
-    template.body = <<~TEXT
-      <%= title %>
-
-      <% if defined?(subtitle) && subtitle.present? %>
-      <%= subtitle %>
-      <% end %>
-    TEXT
-    template.version = 1
-  end
-
-  EmailTemplate.find_or_create_by!(name: 'email_footer_text', format: :text) do |template|
-    template.subject = 'Email Footer Text'
-    template.description = 'Standard text footer used in all email templates'
-    template.body = <<~TEXT
-      --
-      <%= organization_name %>
-      Email: <%= contact_email %>
-      Website: <%= website_url %>
-
-      <% if defined?(show_automated_message) && show_automated_message %>
-      This is an automated message. Please do not reply directly to this email.
-      <% end %>
-    TEXT
-    template.version = 1
-  end
-rescue StandardError => e
-  # Template creation failures produce a warning and do not abort the worker.
-  Rails.logger.warn "Failed to create critical email templates: #{e.message}"
 end
 
 # Core test libraries
@@ -155,7 +120,7 @@ module ActiveSupport
     if defined?(DatabaseCleaner)
       parallelize_setup do |_worker|
         DatabaseCleaner.clean_with(:truncation)
-        load_critical_email_templates
+        Rails.application.load_seed
       end
 
       setup do
