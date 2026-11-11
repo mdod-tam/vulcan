@@ -160,14 +160,24 @@ module Admin
     end
 
     test 'index paginates groups before selecting their pairs' do
+      existing_group_count = DuplicateReconciliation::Population.new.unreviewed_groups.count
+      malformed = create_queue_group('MalformedQueue', count: 8)
+      whitespace = create_queue_group('WhitespaceQueue', count: 2)
+      # Deliberately reproduce records that bypassed the normal identity validations.
+      Users::Constituent.where(id: malformed.map(&:id)).update_all(date_of_birth: Arel.sql("'not-a-logical-date'"))
+      Users::Constituent.where(id: whitespace.map(&:id)).update_all(first_name: " \t")
       groups = Array.new(21) { |index| create_queue_group("QueueGroup#{index}", count: 2) }
 
-      get admin_duplicate_reviews_path
+      get admin_duplicate_reviews_path, params: { match_group_id: groups.first.first.id }
 
+      assert_equal existing_group_count + groups.size, assigns(:group_pagy).count
       assert_equal 20, assigns(:match_groups).size
       assert_select '[data-testid="match-group-choice"]', count: 20
       assert_select '[data-testid="unreviewed-match-group"]', count: 1
+      assert_equal [groups.first.map(&:id).sort], assigns(:unreviewed_pairs).map(&:ids)
+      assert_equal 1, assigns(:pair_pagy).count
       first_page_group_ids = assigns(:match_groups).map(&:id)
+      assert_empty first_page_group_ids & (malformed + whitespace).map(&:id)
 
       get admin_duplicate_reviews_path, params: { groups_page: 2, match_group_id: groups.last.first.id }
 

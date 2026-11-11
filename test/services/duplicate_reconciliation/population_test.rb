@@ -44,14 +44,23 @@ module DuplicateReconciliation
     end
 
     test 'queue projects only the selected group and pair page' do
-      users = Array.new(8) { create_match }
+      users = Array.new(32) { create_match }
       Array.new(3) { create_match(first_name: 'AnotherGroup') }
       population = Population.new
-      rows = population.unreviewed_pairs_for_group(users.first.id).offset(20).limit(3)
-      pairs = population.queue_pairs(rows)
+      user_instantiations = 0
+      subscriber = lambda do |*, payload|
+        user_instantiations += payload[:record_count] if %w[User Users::Constituent].include?(payload[:class_name])
+      end
+      pairs = ActiveSupport::Notifications.subscribed(subscriber, 'instantiation.active_record') do
+        rows = population.unreviewed_pairs_for_group(users.first.id).offset(20).limit(3)
+        population.queue_pairs(rows)
+      end
 
       assert_equal users.map(&:id).sort.combination(2).to_a.drop(20).first(3), pairs.map(&:ids)
-      assert_operator pairs.flat_map(&:ids).uniq.size, :<=, 6
+      member_count = pairs.flat_map(&:ids).uniq.size
+      assert_operator member_count, :<=, 6
+      assert_operator user_instantiations, :>=, member_count
+      assert_operator user_instantiations, :<, users.size, 'qualification must not hydrate the whole match group'
     end
 
     test 'finds unflagged records whose writes bypassed callbacks' do
@@ -71,15 +80,20 @@ module DuplicateReconciliation
       first = create_match
       second = create_match
       demo_ids = [first.id, second.id]
-      Users::Constituent.where(id: demo_ids).update_all(
-        date_of_birth: Arel.sql("'not-a-logical-date'")
-      )
+      ['not-a-logical-date', '{"p":"invalid","h":{"iv":"invalid","at":"invalid"}}'].each do |stored_date|
+        # Deliberately reproduce malformed retained values without the normal encrypted writer.
+        Users::Constituent.where(id: demo_ids).update_all(
+          date_of_birth: Arel.sql(User.connection.quote(stored_date))
+        )
+        population = Population.new
 
-      pair_ids = Population.new.pairs.map(&:ids)
-
-      assert_not_includes pair_ids, demo_ids.sort
-      assert_nil Population.new.pair_for_ids(*demo_ids)
-      assert_empty Population.new.queue_pairs(Population.new.unreviewed_pairs_for_group(first.id).limit(20))
+        assert_not_includes population.pairs.map(&:ids), demo_ids.sort
+        assert_nil population.pair_for_ids(*demo_ids)
+        assert_empty population.unreviewed_groups.where(id: demo_ids).pluck(:id)
+        rows = population.unreviewed_pairs_for_group(first.id)
+        assert_equal 0, rows.count(:all)
+        assert_empty population.queue_pairs(rows.limit(20))
+      end
     end
 
     test 'summarizes applications with one bounded status query instead of eager loading records' do

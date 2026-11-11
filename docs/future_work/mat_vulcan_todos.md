@@ -152,7 +152,6 @@ Options:
 3. Reverse proxy. `maryland.gov/<path>` is routed to the application, so the URL stays on maryland.gov. This is a DoIT web server or CDN change, not Drupal configuration.
    - Needs no caching on our path, cookies and POSTs passed through, forwarded host and proto headers, and `trusted_proxies` (none is configured) so `request.remote_ip` (rate limits, session records) is not the proxy.
    - The application assumes it is mounted at `/`: `publicPath: '/assets'` in `esbuild.config.js`, `report_uri '/csp_reports'` in the CSP initializer, and root-relative `fetch` and `Turbo.visit` URLs in the admin Stimulus controllers.
-   - Twilio signature validation uses `request.original_url`, so webhooks should keep our own hostname.
 4. Header and footer from Drupal (extends option 1). Fetch them server-side with `Rails.cache` (Solid Cache in production) and a stale fallback so a Drupal outage does not break sign-in, or vendor a static copy. Markup and CSS only; no DoIT-supplied scripts on authenticated pages. The CSP allows only `'self'` for styles, fonts, and images (plus `data:` and `blob:` for images), so their stylesheet, logo, and fonts must be copied into our assets or their origin added to `style-src`, `font-src`, and `img-src`.
 
 Leaning toward 1 and 4 on a maryland.gov subdomain. The hostname has to be settled before launch: it sets the WebAuthn RP ID (`APPLICATION_HOST` / `WEBAUTHN_RP_ID`), mailer links, and webhook URLs, and changing it afterward orphans enrolled security keys.

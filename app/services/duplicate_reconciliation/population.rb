@@ -76,20 +76,17 @@ module DuplicateReconciliation
       end
     end
 
-    # Select a page of name/DOB clusters before loading their members or expanding pairs.
+    # Qualify name/DOB clusters before paging; project members only for the selected page.
     # A cluster is only a browsing aid; review authority remains one exact pair.
     def unreviewed_groups
-      representatives = eligible_scope
-                        .group(Arel.sql('LOWER(users.first_name)'), Arel.sql('LOWER(users.last_name)'), :date_of_birth)
-                        .having('COUNT(*) > 1')
-                        .select(Arel.sql('MIN(users.id)'))
+      representatives = grouped_matches(queue_match_scope).select(Arel.sql('MIN(users.id)'))
       remaining_pairs = unreviewed_pair_scope
                         .where(same_match_key(Arel::Table.new(:pair_first), User.arel_table))
                         .reselect('1')
 
-      eligible_scope.where(id: representatives)
-                    .where(remaining_pairs.arel.exists)
-                    .order(:id)
+      queue_match_scope.where(id: representatives)
+                       .where(remaining_pairs.arel.exists)
+                       .order(:id)
     end
 
     # The returned relation is paginated by the caller before any Pair/Member allocation.
@@ -151,7 +148,7 @@ module DuplicateReconciliation
     private
 
     def current_pair_scope
-      eligible_users = eligible_scope.select(:id, :first_name, :last_name, :date_of_birth)
+      eligible_users = queue_match_scope.select(:id, :first_name, :last_name, :date_of_birth)
       first = eligible_users.arel.as('pair_first')
       second = eligible_users.arel.as('pair_second')
       condition = first[:id].lt(second[:id]).and(same_match_key(first, second))
@@ -191,12 +188,37 @@ module DuplicateReconciliation
       scope.where(pair_case_sql).select('1')
     end
 
-    def eligible_scope
-      Users::Constituent.where(merged_into_user_id: nil)
-                        .where(status: [nil, User.statuses.fetch('active')])
+    def candidate_scope
+      Users::Constituent.in_standing
                         .where.not(first_name: [nil, ''])
                         .where.not(last_name: [nil, ''])
                         .where.not(date_of_birth: nil)
+    end
+
+    def grouped_matches(scope)
+      scope.group(Arel.sql('LOWER(users.first_name)'), Arel.sql('LOWER(users.last_name)'), :date_of_birth)
+           .having('COUNT(*) > 1')
+    end
+
+    def queue_match_scope
+      @queue_match_scope ||= begin
+        representatives = grouped_matches(candidate_scope).select(Arel.sql('MIN(users.id)'))
+        eligible_group_ids = []
+        # A match key shares name eligibility and encrypted DOB. Qualify one representative through
+        # the logical reader before SQL counts or pages; load full members only for the page.
+        candidate_scope.where(id: representatives)
+                       .select(:id, :type, :first_name, :last_name, :date_of_birth, :status, :merged_into_user_id)
+                       .find_each do |user|
+          eligible_group_ids << user.id if eligible_user?(user)
+        end
+
+        group = User.arel_table.alias('eligible_match_group')
+        matching_group = User.unscoped.from(group)
+                             .where(group[:id].in(eligible_group_ids))
+                             .where(same_match_key(group, User.arel_table))
+                             .select('1')
+        candidate_scope.where(matching_group.arel.exists)
+      end
     end
 
     def eligible_user?(user)
@@ -207,9 +229,7 @@ module DuplicateReconciliation
     end
 
     def current_pair_keys
-      eligible_scope
-        .group(Arel.sql('LOWER(users.first_name)'), Arel.sql('LOWER(users.last_name)'), :date_of_birth)
-        .having('COUNT(*) > 1')
+      grouped_matches(candidate_scope)
         .pluck(Arel.sql('ARRAY_AGG(users.id ORDER BY users.id)'))
         .flat_map { |ids| ids.map(&:to_i).combination(2).to_a }
         .sort
@@ -222,7 +242,7 @@ module DuplicateReconciliation
         user.date_of_birth
       ).where.not(id: user.id).select(:id)
 
-      eligible_scope.where(id: duplicate_ids).order(:id).pluck(:id)
+      candidate_scope.where(id: duplicate_ids).order(:id).pluck(:id)
     end
 
     def reconciliation_cases_by_pair
@@ -267,7 +287,7 @@ module DuplicateReconciliation
     def load_users(ids, eligible_only: true)
       return {} if ids.empty?
 
-      scope = eligible_only ? eligible_scope : Users::Constituent.all
+      scope = eligible_only ? candidate_scope : Users::Constituent.all
       scope.where(id: ids.uniq).index_by(&:id)
     end
 
