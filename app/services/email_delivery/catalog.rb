@@ -100,7 +100,6 @@ module EmailDelivery
       'TwoFactor#sms_setup' => [:account_security, :sms, nil, 'TwoFactor::PendingSmsSetupChallenge'],
       'TwoFactor#sms_reauthentication' => [:account_security, :sms, nil, 'Users::Reauthentication'],
       'ContactChange#sms_verification' => [:account_security, :sms, nil, 'Users::ContactChange'],
-      'FaxService#certification_rejected' => [:certification, :fax, nil, 'CertifyingProfessionalNotifier'],
       'Letters#disability_certification_form' => [:certification, :letter, nil, 'Applications::DisabilityCertificationPdfService']
     }.to_h do |key, (category, routing, template, owner)|
       [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner, essential: ESSENTIAL_ACTIONS[key])]
@@ -166,7 +165,7 @@ module EmailDelivery
       entry = mail_action(key)
       return [] unless entry
       return %w[email letter] if entry.routing == :preference
-      return [entry.routing.to_s] if %i[sms fax letter].include?(entry.routing)
+      return [entry.routing.to_s] if %i[sms letter].include?(entry.routing)
 
       ['email']
     end

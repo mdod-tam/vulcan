@@ -137,6 +137,8 @@ module Applications
         reason: resolved_reason,
         notes: notes,
         submission_method: :paper,
+        decision_key: "paper-initial:#{type}",
+        reviewed_blob_id: nil,
         metadata: {}
       )
     end
@@ -161,17 +163,21 @@ module Applications
       if selected_reason == 'none_provided' || !certifying_professional_notification_available?
         return DisabilityCertificationAttachmentService.reject_certification(
           application: @application, admin: @admin, reason: reason_payload[:reason], notes: notes,
+          decision_key: 'paper-initial:disability_certification', reviewed_blob_id: nil,
           reason_code: reason_payload[:reason_code], submission_method: :paper, metadata: {}
         )
       end
 
       reviewer_result = Applications::DisabilityCertificationReviewer.new(@application, @admin).reject(
+        decision_key: 'paper-initial:disability_certification', reviewed_blob_id: nil,
         rejection_reason: reason_payload[:reason],
         notes: notes,
         rejection_reason_code: reason_payload[:reason_code]
       )
 
       if reviewer_result.success?
+        return { success: true, replayed: true } if reviewer_result.data[:replayed]
+
         ActiveRecord.after_all_transactions_commit do
           delivery = reviewer_result.data.fetch(:provider_delivery)
           upload_request_failed = reviewer_result.data[:secure_upload_request]&.dig(:success) == false

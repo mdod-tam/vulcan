@@ -96,7 +96,7 @@ module ConstituentPortal
         status: 'rejected',
         rejection_reason: 'Test rejection reason',
         reviewed_at: time_base - 1.hour,
-        created_at: time_base - 1.hour
+        created_at: time_base - 3.hours
       )
 
       resubmission = Event.create!(
@@ -111,7 +111,7 @@ module ConstituentPortal
 
       assert_equal 3, activities.size
       assert_equal submission.created_at, activities.first.created_at
-      assert_equal review.created_at, activities.second.created_at
+      assert_equal review.reviewed_at, activities.second.created_at
       assert_equal resubmission.created_at, activities.third.created_at
 
       assert_equal :submission, activities.first.activity_type

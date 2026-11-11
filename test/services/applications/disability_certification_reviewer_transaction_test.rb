@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class DisabilityCertificationReviewerTransactionTest < ActiveSupport::TestCase
+    include ProofResubmissionTestHelper
+
     self.use_transactional_tests = false
     include ConcurrencyTestHelper
 
@@ -152,7 +154,7 @@ module Applications
       RequestCertificationUpload.any_instance.expects(:call).never
       CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
 
-      result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature', notes: 'Check the date')
+      result = DisabilityCertificationReviewer.new(@application, @admin).reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Missing signature', notes: 'Check the date')
 
       assert result.success?, result.message
       assert_includes result.message, 'The certification rejection was saved, but a follow-up step did not finish. ' \
@@ -177,7 +179,7 @@ module Applications
       RequestCertificationUpload.any_instance.expects(:call).never
       CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
 
-      result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
+      result = DisabilityCertificationReviewer.new(@application, @admin).reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Missing signature')
 
       assert result.failure?
       assert_equal :unknown, result.data[:commit_state]
@@ -195,7 +197,7 @@ module Applications
       RequestCertificationUpload.any_instance.expects(:call).never
 
       error = assert_raises(RuntimeError) do
-        DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
+        DisabilityCertificationReviewer.new(@application, @admin).reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Missing signature')
       end
 
       assert_equal 'reason lookup failed', error.message
@@ -211,13 +213,54 @@ module Applications
       RequestCertificationUpload.any_instance.expects(:call).never
 
       error = assert_raises(RuntimeError) do
-        DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
+        DisabilityCertificationReviewer.new(@application, @admin).reject(**proof_decision_params(@application, :disability_certification), rejection_reason: 'Missing signature')
       end
 
       assert_equal 'notification write failed', error.message
       assert @application.reload.disability_certification_status_requested?
       assert_empty @application.proof_reviews
       assert_equal 0, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
+    end
+
+    test 'a certification rejection replay preserves history and skips its note and provider follow-up' do
+      identity = proof_decision_params(@application, :disability_certification)
+      RequestCertificationUpload.any_instance.expects(:call).once.returns(
+        BaseService::Result.new(success: true, data: { secure_upload_url: 'https://example.test/certification' })
+      )
+      CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).once
+                                    .returns(success: true, outcome: :submitted, tracking_status: :recorded)
+      first = DisabilityCertificationReviewer.new(@application, @admin).reject(
+        **identity, rejection_reason: 'Missing signature', notes: 'Check the date'
+      )
+      assert first.success?, first.message
+      review = @application.proof_reviews.sole
+
+      assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'ApplicationNote.count',
+                            'Notification.count', 'Event.count', 'SecureRequestForm.count'] do
+        replay = DisabilityCertificationReviewer.new(@application, @admin).reject(
+          **identity, rejection_reason: 'Missing signature', notes: 'Check the date'
+        )
+        assert replay.success?, replay.message
+        assert replay.data[:replayed]
+        assert_equal review.id, replay.data[:proof_review].id
+      end
+      assert_equal 'Missing signature', review.reload.rejection_reason
+    end
+
+    test 'archiving before a bound rejection follow-up skips provider contact and link creation' do
+      CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
+      result = nil
+      assert_no_difference 'SecureRequestForm.count' do
+        ApplicationRecord.transaction do
+          result = DisabilityCertificationReviewer.new(@application, @admin).reject(
+            **proof_decision_params(@application, :disability_certification), rejection_reason: 'Missing signature'
+          )
+          @application.transition_status!(:archived, actor: @admin)
+        end
+      end
+      assert result.success?, result.message
+      assert_equal :superseded, result.data[:provider_delivery][:outcome]
+      assert_match(/no longer needed/, result.message)
     end
 
     private

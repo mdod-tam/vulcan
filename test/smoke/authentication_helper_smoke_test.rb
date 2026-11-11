@@ -2,34 +2,18 @@
 
 require 'test_helper'
 
-# CI smoke coverage for session helpers and test identity isolation.
+# CI smoke coverage for persisted-session helpers and browser isolation.
 if ENV['CI']
   class AuthenticationHelperSmokeTest < ActionDispatch::IntegrationTest
     include AuthenticationTestHelper
     include AuthenticationCore
 
     setup do
-      Thread.current[:test_user_id] = nil
-      ENV['TEST_USER_ID'] = nil
       Current.user = nil if defined?(Current)
     end
 
     teardown do
-      Thread.current[:test_user_id] = nil
-      ENV['TEST_USER_ID'] = nil
       Current.user = nil if defined?(Current)
-    end
-
-    test 'thread-local user ID can be assigned and cleared' do
-      user = create(:user, password: 'password1234', verified: true)
-
-      Thread.current[:test_user_id] = user.id
-
-      assert_equal user.id.to_s, Thread.current[:test_user_id].to_s
-
-      Thread.current[:test_user_id] = nil
-
-      assert_nil Thread.current[:test_user_id]
     end
 
     test 'can create a valid session record' do
@@ -67,8 +51,6 @@ if ENV['CI']
       assert_response :success
       assert_select 'section[aria-labelledby="contact-heading"]', text: /#{Regexp.escape(user.email)}/
 
-      assert_equal user.id.to_s, Thread.current[:test_user_id].to_s if Thread.current[:test_user_id].present?
-
       sign_out
 
       get root_path
@@ -81,8 +63,6 @@ if ENV['CI']
 
       sign_in_for_integration_test(user1)
 
-      assert_equal user1.id.to_s, Thread.current[:test_user_id].to_s if Thread.current[:test_user_id].present?
-
       get root_path
       assert_redirected_to edit_profile_path
       follow_redirect!
@@ -92,17 +72,10 @@ if ENV['CI']
 
       sign_out
 
-      assert_nil Thread.current[:test_user_id]
-
       get root_path
       assert_redirected_to sign_in_path
 
       sign_in_for_integration_test(user2)
-
-      if Thread.current[:test_user_id].present?
-        assert_equal user2.id.to_s, Thread.current[:test_user_id].to_s
-        assert_not_equal user1.id.to_s, Thread.current[:test_user_id].to_s
-      end
 
       get root_path
       assert_redirected_to edit_profile_path

@@ -407,7 +407,6 @@ Rails.application.routes.draw do
 
       member do
         patch :autosave_field
-        post :resubmit_proof
         post :update # Accept POST from application forms.
         post :request_training
       end
@@ -428,7 +427,6 @@ Rails.application.routes.draw do
 
   namespace :webhooks do
     resources :email_events, only: [:create]
-    post 'twilio/fax_status', to: 'twilio#fax_status', as: :twilio_fax_status
     post 'docuseal/disability_certification', to: 'docuseal#disability_certification'
   end
 end

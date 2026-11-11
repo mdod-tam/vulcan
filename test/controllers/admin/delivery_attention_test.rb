@@ -7,7 +7,7 @@ module Admin
     include AuthenticationTestHelper
 
     setup do
-      sign_in_for_integration_test(create(:admin))
+      sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
       @application = create(:application, :in_progress, disability_certification_status: :requested)
     end
 

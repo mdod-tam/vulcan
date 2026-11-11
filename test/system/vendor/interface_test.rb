@@ -9,7 +9,7 @@ module VendorPortal
       @vendor = create(:vendor, :approved)
       @voucher = create(:voucher, :active, vendor: @vendor, initial_value: 100)
       @product = create(:product)
-      system_test_sign_in(@vendor)
+      system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
     end
 
     test 'dashboard offers processing to an authorized vendor' do

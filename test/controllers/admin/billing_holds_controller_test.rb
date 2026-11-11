@@ -8,7 +8,7 @@ module Admin
       ensure_system_audit_actor!
       @admin = create(:admin)
       @purchase = create(:voucher_transaction, vendor: create(:vendor, :approved))
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'staff hold a purchase with a reason, see it on the voucher, and release it' do
@@ -37,7 +37,7 @@ module Admin
     end
 
     test 'only admins can hold purchases' do
-      sign_in_for_integration_test(create(:trainer))
+      sign_in_for_integration_test(create(:trainer), bypass_mfa_enrollment: true)
 
       post admin_voucher_transaction_billing_hold_path(@purchase), params: { reason: 'Nope' }
 

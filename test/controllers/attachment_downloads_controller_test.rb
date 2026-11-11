@@ -491,8 +491,6 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
   def authenticate(user)
     reset!
     clear_test_identity
-    @authenticated_user = nil
-    @test_user_id = nil
     secret = ROTP::Base32.random_base32
     user.totp_credentials.create!(secret: secret, nickname: 'Authenticator', last_used_at: 1.minute.ago) if user.admin? || user.vendor?
     post sign_in_path, params: { email: user.email, password: 'password1234' }

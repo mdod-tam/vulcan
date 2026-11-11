@@ -13,7 +13,7 @@ module Trainers
       @other_product = create(:product, name: 'Alternative practice device')
       create(:product_resource, product: @product, title: 'Captions practice guide')
       create(:product_resource, product: @product, title: 'Guía para practicar subtítulos', locale: 'es')
-      system_test_sign_in(@trainer)
+      system_test_sign_in(@trainer, bypass_mfa_enrollment: true)
     end
 
     teardown do
@@ -24,7 +24,7 @@ module Trainers
       @session.destroy!
       @application.update!(assigned_trainer: nil)
       admin = create(:admin)
-      switch_user(admin)
+      switch_user(admin, bypass_mfa_enrollment: true)
       travel_to(3.hours.ago.change(sec: 0)) do
         visit admin_application_path(@application)
         within '[data-testid="trainer-assignment-section"]' do
@@ -36,7 +36,7 @@ module Trainers
         assert @session.status_requested?
       end
       take_screenshot('admin-assigns-current-trainer', html: true, full: true)
-      switch_user(@trainer)
+      switch_user(@trainer, bypass_mfa_enrollment: true)
       visit trainers_dashboard_path
       within '#needs-scheduling-section' do
         assert_text @constituent.full_name
@@ -180,8 +180,10 @@ module Trainers
     test 'guardian coordinating contact and requested cancellation remain usable at a narrow viewport' do
       manager = create(:constituent, first_name: 'Sam', last_name: 'Guardian', locale: 'es',
                                      physical_address_1: 'Managing Guardian Avenue')
-      @constituent.update!(email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local", dependent_email: manager.email)
       create(:guardian_relationship, guardian_user: manager, dependent_user: @constituent)
+      Current.set(user: manager) do
+        @constituent.update!(email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local", dependent_email: manager.email)
+      end
       @application.update!(managing_guardian: manager)
       page.current_window.resize_to(375, 812)
       visit trainers_training_session_path(@session)
@@ -300,6 +302,7 @@ module Trainers
       assert_equal 'New library', @session.location
 
       travel_to(agreed_time + 1.hour) do
+        switch_user(@trainer, bypass_mfa_enrollment: true)
         visit trainers_training_session_path(@session)
         select 'Record no-show', from: 'training-outcome'
         fill_in 'no_show_no_show_notes', with: '   '
@@ -322,7 +325,7 @@ module Trainers
       admin = create(:admin)
       Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
       create_list(:training_session, 2, :completed, application: @application, trainer: @trainer, product_trained_on: @product)
-      switch_user(admin)
+      switch_user(admin, bypass_mfa_enrollment: true)
       visit admin_application_path(@application)
       within 'section[aria-labelledby="admin-training-heading"]' do
         assert_text '2 completed, 1 reserved, 0 remaining of 3'
@@ -343,7 +346,7 @@ module Trainers
                                                                   assigned_trainer: @trainer, application_date: Date.current)
       create_list(:training_session, 2, :completed, application: managed, trainer: @trainer, product_trained_on: @product)
       requested = create(:training_session, :scheduled, application: managed, trainer: @trainer)
-      switch_user(@trainer)
+      switch_user(@trainer, bypass_mfa_enrollment: true)
       visit trainers_training_session_path(requested)
       select 'Complete training', from: 'training-outcome'
       fill_in 'complete_completed_at', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
@@ -356,7 +359,7 @@ module Trainers
       assert_text 'Training session completed successfully.'
       assert requested.reload.status_completed?
 
-      switch_user(admin)
+      switch_user(admin, bypass_mfa_enrollment: true)
       visit admin_application_path(managed)
       within 'section[aria-labelledby="admin-training-heading"]' do
         assert_text '3 completed, 0 reserved, 0 remaining of 3'
@@ -389,11 +392,11 @@ module Trainers
 
     private
 
-    def switch_user(user)
+    def switch_user(user, bypass_mfa_enrollment: false)
       page.current_window.resize_to(1200, 900)
       system_test_sign_out
       install_stimulus_error_reporting
-      system_test_sign_in(user)
+      system_test_sign_in(user, bypass_mfa_enrollment:)
     end
 
     def assert_action_error(action, heading: 'Please correct the following errors')

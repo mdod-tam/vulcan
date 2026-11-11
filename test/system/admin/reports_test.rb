@@ -6,7 +6,7 @@ module Admin
   class ReportsTest < ApplicationSystemTestCase
     setup do
       @admin = create(:admin)
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'reports page hides voucher report sections when vouchers are disabled' do

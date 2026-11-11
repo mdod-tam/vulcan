@@ -273,14 +273,16 @@ module ConstituentPortal
     # A duplicate candidate can disappear before participant locks are acquired.
     # A missing candidate must return a retry response instead of an HTTP 500.
     test 'a candidate deleted before the lock fails closed with the ordinary retry response' do
-      existing_dependent = create(
-        :constituent,
-        first_name: 'Vanishing',
-        last_name: 'Candidate',
-        date_of_birth: Date.new(2010, 5, 15),
-        email: "portal-dependent-vanish-#{SecureRandom.hex(4)}@example.com",
-        phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
-      )
+      existing_dependent = Current.set(user: @guardian) do
+        create(
+          :constituent,
+          first_name: 'Vanishing',
+          last_name: 'Candidate',
+          date_of_birth: Date.new(2010, 5, 15),
+          email: "portal-dependent-vanish-#{SecureRandom.hex(4)}@example.com",
+          phone: "555-#{rand(100..999)}-#{rand(1000..9999)}"
+        )
+      end
       dependent_email = "portal-dependent-vanish-new-#{SecureRandom.hex(4)}@example.com"
 
       User.stubs(:lock_for_merge_integrity!).with do |*|
@@ -915,7 +917,7 @@ module ConstituentPortal
     test 'should require constituent user' do
       admin = create(:admin)
       sign_out
-      sign_in_for_controller_test(admin)
+      sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
 
       get constituent_portal_dependent_path(@dependent)
       assert_redirected_to root_path
@@ -956,7 +958,9 @@ module ConstituentPortal
       body = dependent_body(email: @guardian.email, phone: @guardian.phone)
       post_dependent(body, portal_creation_key: key)
 
-      @guardian.update!(email: "moved-#{SecureRandom.hex(3)}@example.com", phone: '555-555-7788')
+      Current.set(user: @guardian) do
+        @guardian.update!(email: "moved-#{SecureRandom.hex(3)}@example.com", phone: '555-555-7788')
+      end
 
       assert_no_difference ['User.count', 'GuardianRelationship.count'] do
         post_dependent(body, portal_creation_key: key)

@@ -9,6 +9,19 @@ module Applications
       @admin = create(:admin)
     end
 
+    test 'retains distinct immutable decisions in the same minute ordered by decision time and id' do
+      reviewed_at = 1.day.ago.beginning_of_minute
+      first = create(:proof_review, :rejected, application: @application, admin: @admin,
+                                               reviewed_at: reviewed_at, created_at: 3.days.ago)
+      second = create(:proof_review, :rejected, application: @application, admin: @admin,
+                                                reviewed_at: reviewed_at, created_at: 4.days.ago)
+
+      result = EventDeduplicationService.new.deduplicate([first, second, first])
+
+      assert_equal [second.id, first.id], result.map(&:id)
+      assert_equal reviewed_at, EventDeduplicationService.event_time(result.first)
+    end
+
     test 'retains distinct identity cases resolved in the same minute' do
       events = [101, 102].map do |case_id|
         Event.create!(user: @admin, auditable: @application, action: 'duplicate_review_case_resolved',

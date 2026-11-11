@@ -7,7 +7,7 @@ module Admin
   class VouchersCsvTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'download preserves voucher columns and filters while escaping text and auditing the exported row count' do

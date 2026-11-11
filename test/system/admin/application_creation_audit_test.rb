@@ -39,7 +39,7 @@ module Admin
       # The session reset clears any stored location.
       Capybara.reset_sessions!
 
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
 
       visit admin_applications_path
 
@@ -68,7 +68,7 @@ module Admin
     end
 
     test 'admin can see application creation event for paper applications' do
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       start_new_adult_paper_application
       fill_in_applicant_information(first_name: 'John', last_name: 'Paper', email: 'john.paper@example.com', phone: '555-987-6543')
       attach_and_accept_proofs

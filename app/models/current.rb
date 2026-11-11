@@ -14,9 +14,6 @@ class Current < ActiveSupport::CurrentAttributes
 
   attribute :force_notifications
 
-  # Test environment only: the authentication concern signs this user in.
-  attribute :test_user_id
-
   def force_notifications?
     force_notifications.present?
   end

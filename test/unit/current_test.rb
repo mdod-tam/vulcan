@@ -34,36 +34,22 @@ class CurrentTest < ActiveSupport::TestCase
     assert_not Current.force_notifications?
   end
 
-  test 'test_user_id can be set and retrieved' do
-    assert_nil Current.test_user_id
-
-    Current.test_user_id = 123
-    assert_equal 123, Current.test_user_id
-
-    Current.test_user_id = nil
-    assert_nil Current.test_user_id
-  end
-
   test 'multiple attributes can be set independently' do
     Current.paper_context = true
     Current.force_notifications = true
-    Current.test_user_id = 456
 
     assert Current.paper_context
     assert Current.force_notifications?
-    assert_equal 456, Current.test_user_id
   end
 
   test 'reset clears all attributes' do
     Current.paper_context = true
     Current.force_notifications = true
-    Current.test_user_id = 789
 
     Current.reset
 
     assert_nil Current.paper_context
     assert_nil Current.force_notifications
-    assert_nil Current.test_user_id
     assert_not Current.force_notifications?
   end
 
@@ -105,6 +91,5 @@ class CurrentTest < ActiveSupport::TestCase
   test 'attributes are isolated between test runs' do
     assert_nil Current.paper_context
     assert_nil Current.force_notifications
-    assert_nil Current.test_user_id
   end
 end

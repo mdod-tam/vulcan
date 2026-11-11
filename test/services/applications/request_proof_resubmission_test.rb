@@ -59,7 +59,7 @@ module Applications
       assert_predicate result, :failure?
     end
 
-    test 'delivery_confirmed_for_review? reflects active secure request forms' do
+    test 'delivery confirmation is the exact decision handoff and survives link expiry' do
       assert_not RequestProofResubmission.delivery_confirmed_for_review?(@proof_review)
 
       @mailer_delivery.expects(:deliver_now).returns(true)
@@ -67,6 +67,17 @@ module Applications
       assert_predicate result, :success?
 
       assert RequestProofResubmission.delivery_confirmed_for_review?(@proof_review.reload)
+      form = result.data.fetch(:secure_request_forms).first
+      notice = Notification.find_by!(action: 'proof_resubmission_requested', notifiable: @application)
+      assert_equal @proof_review.id, notice.metadata['proof_review_id']
+      assert_equal 'submitted', notice.delivery_status
+      assert_equal 'email', notice.metadata['actual_delivery_channel']
+      travel_to(form.expires_at + 1.second) do
+        assert_not form.reload.active?
+        assert RequestProofResubmission.delivery_confirmed_for_review?(@proof_review)
+      end
+      other_review = create(:proof_review, :rejected, application: @application, admin: @actor, proof_type: :income)
+      assert_not RequestProofResubmission.delivery_confirmed_for_review?(other_review)
     end
 
     test 'delivery_confirmed_for_review? is false when delivery failed and form was revoked' do

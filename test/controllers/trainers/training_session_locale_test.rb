@@ -8,7 +8,7 @@ module Trainers
       trainer = create(:trainer, locale: 'es')
       application = create(:application, :approved, :with_all_proofs, assigned_trainer: trainer)
       session = create(:training_session, :scheduled, trainer: trainer, application: application)
-      sign_in_for_integration_test(trainer)
+      sign_in_for_integration_test(trainer, bypass_mfa_enrollment: true)
 
       get trainers_training_session_path(session)
 
@@ -43,7 +43,7 @@ module Trainers
       application = create(:application, :approved, :with_all_proofs, assigned_trainer: trainer)
       session = create(:training_session, :scheduled, trainer: trainer, application: application)
       product = create(:product)
-      sign_in_for_integration_test(trainer)
+      sign_in_for_integration_test(trainer, bypass_mfa_enrollment: true)
 
       post complete_trainers_training_session_path(session), params: {
         completed_at: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'), product_trained_on_id: product.id,
@@ -60,7 +60,7 @@ module Trainers
       trainer = create(:trainer, locale: 'unsupported')
       application = create(:application, :approved, :with_all_proofs, assigned_trainer: trainer)
       session = create(:training_session, :scheduled, trainer: trainer, application: application)
-      sign_in_for_integration_test(trainer)
+      sign_in_for_integration_test(trainer, bypass_mfa_enrollment: true)
 
       get trainers_training_session_path(session, locale: 'unsupported')
 
@@ -73,7 +73,7 @@ module Trainers
       trainer = create(:trainer, locale: 'es')
       application = create(:application, :approved, :with_all_proofs, assigned_trainer: trainer)
       session = create(:training_session, :completed, trainer: trainer, application: application, duration_hours: '2.5')
-      sign_in_for_integration_test(trainer)
+      sign_in_for_integration_test(trainer, bypass_mfa_enrollment: true)
 
       get completed_trainers_training_sessions_path
 
@@ -92,7 +92,7 @@ module Trainers
       trainer = create(:trainer, locale: 'es')
       application = create(:application, :approved, :with_all_proofs, assigned_trainer: trainer)
       session = create(:training_session, :completed, trainer: trainer, application: application, duration_hours: 1, summary_locale: 'en')
-      sign_in_for_integration_test(trainer)
+      sign_in_for_integration_test(trainer, bypass_mfa_enrollment: true)
 
       get trainers_training_session_path(session)
 

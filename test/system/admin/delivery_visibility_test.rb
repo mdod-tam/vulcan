@@ -18,7 +18,7 @@ module Admin
     end
 
     test 'notification details work by keyboard in English and Spanish at narrow width' do
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit notifications_path
       within("#notification_#{@notification.id}") do
         assert_text 'Bounced'
@@ -50,7 +50,7 @@ module Admin
       @application.update_columns(certifying_professional_name: nil, certifying_professional_email: nil)
       form = create(:secure_request_form, application: @application, recipient: @application.user, sent_at: 70.minutes.ago)
       @attempt.update!(origin: form, delivery_owner: form.delivery_owner, recipient: form.recipient)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_applications_path
       within("#application_#{@application.id}") do
         assert_link 'Delivery needs attention', href: admin_application_path(@application, anchor: "secure_request_form_#{form.id}")
@@ -82,7 +82,7 @@ module Admin
                                              attempted_at: 5.minutes.ago, bounced_at: 4.minutes.ago, bounce_category: 'HardBounce')
       create(:notification, notifiable: @application, action: 'disability_certification_requested', delivery_status: :queued)
 
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_applications_path
       within("#application_#{@application.id}") do
         assert_link 'Delivery needs attention', href: admin_application_path(@application, anchor: "email_delivery_attempt_#{attempt.id}")

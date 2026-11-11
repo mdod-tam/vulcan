@@ -5,6 +5,7 @@ require 'test_helper'
 module ConstituentPortal
   class DashboardsControllerTest < ActionDispatch::IntegrationTest
     include AuthenticationTestHelper
+    include ProofResubmissionTestHelper
 
     setup do
       @user = create(:constituent, :with_disabilities)
@@ -86,7 +87,8 @@ module ConstituentPortal
       create(:proof_review, application: application, admin: create(:admin), proof_type: 'id', status: 'rejected',
                             rejection_reason: 'Too blurry', created_at: 1.hour.ago)
       result = DisabilityCertificationAttachmentService.reject_certification(
-        application: application, admin: create(:admin), reason: 'Missing signature'
+        application: application, admin: create(:admin), reason: 'Missing signature',
+        **proof_decision_params(application, :disability_certification)
       )
       assert result[:success]
 
@@ -106,6 +108,22 @@ module ConstituentPortal
       assert_select 'p', text: 'Certificación de discapacidad rechazada'
       assert_select 'p', text: /Motivo:\s+"Too blurry"/
       assert_select 'time', text: 'hace alrededor de 2 horas'
+    end
+
+    test 'recent activity keeps the latest ten decisions after history grows' do
+      application = create(:application, :in_progress, user: @user)
+      admin = create(:admin)
+      11.times do |index|
+        create(:proof_review, :rejected, application: application, admin: admin, notes: "Decision #{index + 1}",
+                                         rejection_reason: "Decision #{index + 1}", reviewed_at: (11 - index).hours.ago)
+      end
+
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select 'p', text: /Reason:\s+"Decision 1"/, count: 0
+      assert_select 'p', text: /Reason:\s+"Decision 2"/
+      assert_select 'p', text: /Reason:\s+"Decision 11"/
     end
 
     test 'approved admission and service duration use the viewer locale' do

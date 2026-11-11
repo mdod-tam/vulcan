@@ -6,7 +6,7 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
   setup do
     @evaluator = create(:evaluator)
     @evaluation = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil)
-    sign_in_for_controller_test(@evaluator)
+    sign_in_for_controller_test(@evaluator, bypass_mfa_enrollment: true)
   end
 
   test 'assigned evaluator saves outreach notes without scheduling or submitting a report' do
@@ -114,7 +114,7 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
 
   test 'unassigned evaluator and administrator cannot overwrite working notes' do
     [create(:evaluator), create(:admin)].each do |actor|
-      sign_in_for_controller_test(actor)
+      sign_in_for_controller_test(actor, bypass_mfa_enrollment: true)
       assert_no_difference('Event.where(action: "evaluation_working_notes_updated").count') do
         post save_working_notes_evaluators_evaluation_path(@evaluation), params: {
           evaluation: { working_notes: 'Unauthorized note' }

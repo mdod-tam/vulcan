@@ -28,7 +28,7 @@ module Admin
         certifying_professional_email: 'doctor@example.com',
         certifying_professional_name: 'Dr. Jane Smith'
       )
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     teardown do

@@ -89,7 +89,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'constituent cannot clear portal email from profile while keeping phone' do
-    @user.update!(phone: '410-555-0301', phone_type: 'text')
+    Current.set(user: @user) { @user.update!(phone: '410-555-0301', phone_type: 'text') }
     original_email = @user.email
 
     assert_no_difference('Event.count') do
@@ -114,7 +114,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   test 'should redirect admin to admin dashboard after update' do
     admin = create(:admin)
     sign_out
-    sign_in_for_controller_test(admin)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
 
     patch profile_path, params: {
       user: {
@@ -128,7 +128,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   test 'should redirect evaluator to evaluator dashboard after update' do
     evaluator = create(:evaluator)
     sign_out
-    sign_in_for_controller_test(evaluator)
+    sign_in_for_controller_test(evaluator, bypass_mfa_enrollment: true)
 
     patch profile_path, params: {
       user: {
@@ -142,7 +142,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   test 'should redirect vendor to vendor dashboard after update' do
     vendor = create(:vendor_user)
     sign_out
-    sign_in_for_controller_test(vendor)
+    sign_in_for_controller_test(vendor, bypass_mfa_enrollment: true)
 
     patch profile_path, params: {
       user: {

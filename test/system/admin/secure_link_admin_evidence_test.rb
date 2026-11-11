@@ -11,7 +11,7 @@ module Admin
     setup do
       @admin = create(:admin)
       create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) unless User.exists?(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'provider information panel and activity history after a replaced value' do

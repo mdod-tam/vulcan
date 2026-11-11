@@ -15,8 +15,8 @@ module AdminTests
     end
 
     test 'displays guardian alert in income proof review modal' do
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(@application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_text(/Application Details|Application #/i, wait: 30)
 
       assert_selector '#attachments-section', wait: 15
@@ -35,8 +35,8 @@ module AdminTests
     end
 
     test 'displays guardian alert in residency proof review modal' do
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(@application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_text(/Application Details|Application #/i, wait: 30)
 
       assert_selector '#attachments-section', wait: 15
@@ -55,7 +55,7 @@ module AdminTests
     end
 
     test 'does not display guardian alert for non-guardian applications' do
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
 
       regular_constituent = create(:constituent,
                                    email: "regular_test_#{Time.now.to_i}_#{rand(10_000)}@example.com",
@@ -83,7 +83,7 @@ module AdminTests
 
       regular_application.reload
 
-      visit_admin_application_with_retry(regular_application, user: @admin)
+      visit_admin_application_with_retry(regular_application, user: @admin, bypass_mfa_enrollment: true)
       assert_text(/Application Details|Application #/i, wait: 30)
 
       assert_selector '#attachments-section', wait: 15

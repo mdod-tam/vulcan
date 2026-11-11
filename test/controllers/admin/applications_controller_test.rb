@@ -4,15 +4,16 @@ require 'test_helper'
 
 module Admin
   class ApplicationsControllerTest < ActionDispatch::IntegrationTest
+    include ProofResubmissionTestHelper
     include AuthenticationTestHelper
 
     setup do
       @admin = create(:admin, email: generate(:email))
 
-      cookies.delete(:session_token) if respond_to?(:cookies)
+      cookies.delete('session_token') if respond_to?(:cookies)
       Current.reset if defined?(Current)
 
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @application = create(:application, user: create(:constituent, email: generate(:email)))
       @application.update!(disability_certification_status: 'requested')
     end
@@ -299,9 +300,7 @@ module Admin
 
     test 'attachments card says not provided for a proof that never arrived and rejected for a refused one' do
       [[:income, 'none_provided'], [:residency, 'illegible']].each do |proof_type, reason|
-        ProofAttachmentService.reject_proof_without_attachment(
-          application: @application, proof_type: proof_type, admin: @admin, reason: reason, submission_method: :paper
-        )
+        ProofAttachmentService.reject_proof_without_attachment(**proof_decision_params(@application, proof_type), application: @application, proof_type: proof_type, admin: @admin, reason: reason, submission_method: :paper)
       end
 
       get admin_application_path(@application)
@@ -319,9 +318,7 @@ module Admin
       refused = create(:application, :in_progress)
       [[@application, 'No disability certification was provided with this application.', 'none_provided'],
        [refused, 'Missing provider credentials', nil]].each do |application, reason, reason_code|
-        DisabilityCertificationAttachmentService.reject_certification(
-          application: application, admin: @admin, reason: reason, reason_code: reason_code, submission_method: :paper
-        )
+        DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(application, :disability_certification), application: application, admin: @admin, reason: reason, reason_code: reason_code, submission_method: :paper)
       end
 
       get admin_application_path(@application)
@@ -486,14 +483,14 @@ module Admin
         )
 
         patch upload_disability_certification_admin_application_path(@application),
-              params: { disability_certification: file, disability_certification_status: 'approved' }
+              params: { **proof_decision_params(@application, :disability_certification), disability_certification: file, disability_certification_status: 'approved' }
 
         # This fallback supplies the success flash when the stub does not.
         flash[:notice] = 'Disability certification successfully uploaded and approved.' if flash[:notice].blank?
 
         assert_redirected_to admin_application_path(@application)
         # Preserve test authentication across the redirect.
-        follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
+        follow_redirect!
         assert_response :success
         assert_match(/Disability certification successfully uploaded and approved/, flash[:notice])
       end
@@ -512,11 +509,11 @@ module Admin
 
     test 'should reject upload without file' do
       patch upload_disability_certification_admin_application_path(@application),
-            params: { disability_certification: nil, disability_certification_status: 'approved' }
+            params: { **proof_decision_params(@application, :disability_certification), disability_certification: nil, disability_certification_status: 'approved' }
 
       assert_redirected_to admin_application_path(@application)
       # Preserve test authentication across the redirect.
-      follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
+      follow_redirect!
       assert_response :success
       assert_match(/Please select a file to upload/, flash[:alert])
 
@@ -528,17 +525,44 @@ module Admin
         'application/pdf'
       )
       patch upload_disability_certification_admin_application_path(@application),
-            params: { disability_certification: file }
+            params: { **proof_decision_params(@application, :disability_certification), disability_certification: file }
 
       assert_redirected_to admin_application_path(@application)
       # Preserve test authentication across the redirect.
-      follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
+      follow_redirect!
       assert_response :success
       assert_match(/Please select whether to accept or reject the certification/, flash[:alert])
 
       @application.reload
       assert_equal 'requested', @application.disability_certification_status
       assert_not @application.disability_certification.attached?
+    end
+
+    test 'a code-only certification rejection reaches the immutable decision writer' do
+      reason = create(:rejection_reason, proof_type: 'disability_certification', code: 'route_code_only', body: 'The signature is missing.')
+      Applications::RequestCertificationUpload.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, data: {}))
+      CertifyingProfessionalNotifier.any_instance.stubs(:send_certification_rejection_notice)
+                                    .returns(success: true, outcome: :submitted, tracking_status: :recorded)
+
+      assert_difference 'ProofReview.count', 1 do
+        patch update_certification_status_admin_application_path(@application),
+              params: { **proof_decision_params(@application, :disability_certification), status: 'rejected', rejection_reason_code: reason.code }
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'rejected', @application.reload.disability_certification_status
+      assert_equal reason.body, @application.proof_reviews.sole.rejection_reason
+    end
+
+    test 'a rejected certification status without reason or identity cannot use the generic status writer' do
+      DisabilityCertificationAttachmentService.expects(:update_certification_status).never
+      [{ status: 'rejected' }, { status: 'rejected', rejection_reason: 'Missing signature' }].each do |payload|
+        assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
+          patch update_certification_status_admin_application_path(@application), params: payload
+        end
+        assert_redirected_to admin_application_path(@application)
+        assert_equal 'requested', @application.reload.disability_certification_status
+      end
     end
 
     test 'staff cannot upload over a certification that awaits review or is approved' do
@@ -552,8 +576,8 @@ module Admin
         assert_select '[data-testid="disability-certification-upload-form"]', count: 0
 
         patch upload_disability_certification_admin_application_path(@application),
-              params: { disability_certification: fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
-                        disability_certification_status: 'approved' }
+              params: { **proof_decision_params(@application, :disability_certification), disability_certification: fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
+                                                                                          disability_certification_status: 'approved' }
 
         assert_redirected_to admin_application_path(@application)
         assert_equal I18n.t('admin.applications.upload_disability_certification.m_not_allowed'), flash[:alert]
@@ -573,7 +597,7 @@ module Admin
 
     test 'rejecting a certification without a reason changes nothing' do
       patch upload_disability_certification_admin_application_path(@application),
-            params: { disability_certification_status: 'rejected', rejection_reason_code: '' }
+            params: { **proof_decision_params(@application, :disability_certification), disability_certification_status: 'rejected', rejection_reason_code: '' }
 
       assert_redirected_to admin_application_path(@application)
       assert_equal 'Please select a rejection reason', flash[:alert]
@@ -588,7 +612,7 @@ module Admin
         )
 
         patch update_certification_status_admin_application_path(@application),
-              params: { status: 'rejected', rejection_reason: 'Missing signature' }, headers: { 'Accept' => format }
+              params: { **proof_decision_params(@application, :disability_certification), status: 'rejected', rejection_reason: 'Missing signature' }, headers: { 'Accept' => format }
 
         assert_redirected_to admin_application_path(@application)
         assert_equal message, flash[:notice]
@@ -603,7 +627,7 @@ module Admin
         )
 
         patch update_certification_status_admin_application_path(@application),
-              params: { status: 'rejected', rejection_reason: 'Missing signature' }, headers: { 'Accept' => format }
+              params: { **proof_decision_params(@application, :disability_certification), status: 'rejected', rejection_reason: 'Missing signature' }, headers: { 'Accept' => format }
 
         assert_redirected_to admin_application_path(@application)
         assert_response :see_other
@@ -618,7 +642,7 @@ module Admin
         )
 
         patch update_proof_status_admin_application_path(@application),
-              params: { proof_type: 'income', status: 'approved' }, headers: { 'Accept' => format }
+              params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'approved' }, headers: { 'Accept' => format }
 
         assert_redirected_to admin_application_path(@application)
         assert_equal warning, flash[:alert]
@@ -633,7 +657,7 @@ module Admin
         )
 
         patch update_proof_status_admin_application_path(@application),
-              params: { proof_type: 'income', status: 'approved' }, headers: { 'Accept' => format }
+              params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'approved' }, headers: { 'Accept' => format }
 
         assert_redirected_to admin_application_path(@application)
         assert_response :see_other
@@ -655,7 +679,7 @@ module Admin
       ProofReviewService.expects(:new).never
 
       assert_no_difference ['ProofReview.count', 'Event.count'] do
-        patch update_proof_status_admin_application_path(@application), params: { proof_type: 'income', status: 'approved' }
+        patch update_proof_status_admin_application_path(@application), params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'approved' }
       end
 
       assert_not_authorized
@@ -669,7 +693,7 @@ module Admin
       )
 
       patch update_proof_status_admin_application_path(@application),
-            params: { proof_type: 'income', status: 'rejected' }, headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
+            params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'rejected' }, headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
 
       assert_response :success
       assert_includes response.body, warning
@@ -682,7 +706,7 @@ module Admin
       )
 
       patch update_proof_status_admin_application_path(@application),
-            params: { proof_type: 'income', status: 'rejected', rejection_reason_code: 'other', rejection_reason: 'Keep my explanation' },
+            params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'rejected', rejection_reason_code: 'other', rejection_reason: 'Keep my explanation' },
             headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
 
       assert_response :unprocessable_content
@@ -698,7 +722,7 @@ module Admin
       )
 
       patch update_certification_status_admin_application_path(@application),
-            params: { status: 'rejected', rejection_reason_code: 'other', rejection_reason: 'Keep this explanation' },
+            params: { **proof_decision_params(@application, :disability_certification), status: 'rejected', rejection_reason_code: 'other', rejection_reason: 'Keep this explanation' },
             headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
 
       assert_response :unprocessable_content
@@ -995,12 +1019,10 @@ module Admin
       ApplicationNotificationsMailer.any_instance.stubs(:proof_rejected).returns(mock_delivery)
 
       patch update_proof_status_admin_application_path(app_needs_review),
-            params: {
-              proof_type: 'income',
-              status: 'rejected',
-              rejection_reason: 'Invalid document type',
-              notes: 'Please upload a PDF.'
-            },
+            params: { **proof_decision_params(app_needs_review, 'income'), proof_type: 'income',
+                                                                           status: 'rejected',
+                                                                           rejection_reason: 'Invalid document type',
+                                                                           notes: 'Please upload a PDF.' },
             as: :turbo_stream
 
       assert_response :success
@@ -1025,7 +1047,7 @@ module Admin
       post send_document_signing_request_admin_application_path(@application)
 
       assert_redirected_to admin_application_path(@application)
-      follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
+      follow_redirect!
       assert_response :success
       assert_match(/Document signing request sent successfully/, flash[:notice])
     end
@@ -1043,7 +1065,7 @@ module Admin
       post send_document_signing_request_admin_application_path(@application)
 
       assert_redirected_to admin_application_path(@application)
-      follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
+      follow_redirect!
       assert_response :success
       assert_match(/Certifying professional email is required/, flash[:alert])
     end
@@ -1181,16 +1203,18 @@ module Admin
 
     def create_pending_provider_info_application
       create(:application, :with_residency_proof, :with_id_proof).tap do |application|
-        application.update!(
-          residency_proof_status: :approved,
-          id_proof_status: :approved,
-          income_proof_required: false,
-          status: :awaiting_proof,
-          disability_certification_status: :requested,
-          certifying_professional_name: nil,
-          certifying_professional_phone: nil,
-          certifying_professional_email: nil
-        )
+        Current.set(user: @admin) do
+          application.update!(
+            residency_proof_status: :approved,
+            id_proof_status: :approved,
+            income_proof_required: false,
+            status: :awaiting_proof,
+            disability_certification_status: :requested,
+            certifying_professional_name: nil,
+            certifying_professional_phone: nil,
+            certifying_professional_email: nil
+          )
+        end
       end
     end
 
@@ -1241,8 +1265,8 @@ module Admin
       script_pdf.close
 
       patch upload_disability_certification_admin_application_path(@application),
-            params: { disability_certification: fixture_file_upload(script_pdf.path, 'application/pdf'),
-                      disability_certification_status: 'approved' }
+            params: { **proof_decision_params(@application, :disability_certification), disability_certification: fixture_file_upload(script_pdf.path, 'application/pdf'),
+                                                                                        disability_certification_status: 'approved' }
 
       assert_redirected_to admin_application_path(@application)
       assert_includes flash[:alert], I18n.t('documents.refused.suspicious_content')

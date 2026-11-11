@@ -6,7 +6,7 @@ module Admin
   class ReportsControllerTest < ActionDispatch::IntegrationTest
     def setup
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       FeatureFlag.disable!(:vouchers_enabled)
     end
 

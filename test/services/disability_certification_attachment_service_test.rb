@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveStorageHelper
   include ActionDispatch::TestProcess::FixtureFile
 
@@ -13,6 +14,55 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     @admin = create(:admin)
     @test_file = scanned_upload(fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
                                 user: @admin, purpose: :certification, slot: 'disability_certification')
+  end
+
+  test 'a manual approval records its target and a same-key replay changes nothing' do
+    @application.disability_certification.attach(@test_file)
+    identity = proof_decision_params(@application, :disability_certification)
+    first = DisabilityCertificationAttachmentService.update_certification_status(
+      application: @application, status: :approved, admin: @admin, **identity
+    )
+    assert first[:success], first[:error]&.message
+    assert first[:recorded]
+    review = first.fetch(:proof_review)
+    assert_equal identity[:reviewed_blob_id], review.reviewed_blob_id
+    assert review.status_approved?
+
+    assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
+      replay = DisabilityCertificationAttachmentService.update_certification_status(
+        application: @application, status: :approved, admin: @admin, **identity
+      )
+      assert replay[:success], replay[:error]&.message
+      assert_equal false, replay[:recorded]
+      assert_equal review.id, replay[:proof_review].id
+    end
+  end
+
+  test 'a stale manual approval cannot approve a replacement certification' do
+    @application.disability_certification.attach(@test_file)
+    identity = proof_decision_params(@application, :disability_certification)
+    replacement = scanned_upload(fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
+                                 user: @admin, purpose: :certification, slot: 'disability_certification')
+    @application.disability_certification.attach(replacement)
+    replacement_id = @application.disability_certification.blob.id
+
+    assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Notification.count'] do
+      result = DisabilityCertificationAttachmentService.update_certification_status(
+        application: @application, status: :approved, admin: @admin, **identity
+      )
+      assert_not result[:success]
+      assert_kind_of ProofReview::DecisionConflict, result[:error]
+    end
+    assert_equal replacement_id, @application.disability_certification.blob.id
+    assert_not @application.reload.disability_certification_status_approved?
+  end
+
+  test 'the generic status writer refuses rejection decisions' do
+    assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Notification.count'] do
+      result = DisabilityCertificationAttachmentService.update_certification_status(application: @application, status: :rejected, admin: @admin)
+      assert_not result[:success]
+      assert_kind_of ArgumentError, result[:error]
+    end
   end
 
   test 'accept_submission applies one placement table to every submission channel' do
@@ -156,9 +206,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
       Rails.logger.stub(:info, capture_message) do
         assert_no_difference ['ApplicationStatusChange.count', 'Notification.count'] do
           assert_difference -> { Event.where(action: 'disability_certification_attachment_failed', auditable: @application).count }, 1 do
-            result = DisabilityCertificationAttachmentService.update_certification_status(
-              application: @application, status: :approved, admin: @admin, submission_method: :admin_review
-            )
+            result = DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(@application, :disability_certification), application: @application, status: :approved, admin: @admin, submission_method: :admin_review)
           end
         end
       end
@@ -194,9 +242,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
 
     result = Rails.logger.stub(:error, capture_message) do
       Rails.logger.stub(:info, capture_message) do
-        DisabilityCertificationAttachmentService.update_certification_status(
-          application: @application, status: :approved, admin: @admin
-        )
+        DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(@application, :disability_certification), application: @application, status: :approved, admin: @admin)
       end
     end
 
@@ -304,9 +350,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
             requested_at: 1.hour.ago, admin: @admin
           )
         end
-        result = DisabilityCertificationAttachmentService.update_certification_status(
-          application: @application, status: :approved, admin: @admin
-        )
+        result = DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(@application, :disability_certification), application: @application, status: :approved, admin: @admin)
         assert_not result[:success]
         assert_instance_of DocumentScan::NotCleared, result[:error]
       end
@@ -320,13 +364,11 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     assert_no_difference 'ActiveStorage::Attachment.count' do
       assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
         assert_difference 'Notification.count', 1 do
-          result = DisabilityCertificationAttachmentService.reject_certification(
-            application: @application,
-            admin: @admin,
-            reason: 'missing_signature',
-            notes: 'Test rejection note',
-            submission_method: :admin_review
-          )
+          result = DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(@application, :disability_certification), application: @application,
+                                                                                                                                                   admin: @admin,
+                                                                                                                                                   reason: 'missing_signature',
+                                                                                                                                                   notes: 'Test rejection note',
+                                                                                                                                                   submission_method: :admin_review)
 
           assert result[:success], 'Rejection should succeed'
         end
@@ -352,13 +394,11 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'clears stored rejection reason code when rejecting with free text' do
-    first_result = DisabilityCertificationAttachmentService.reject_certification(
-      application: @application,
-      admin: @admin,
-      reason: 'Initial coded rejection reason',
-      reason_code: 'missing_signature',
-      submission_method: :admin_review
-    )
+    first_result = DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(@application, :disability_certification), application: @application,
+                                                                                                                                                   admin: @admin,
+                                                                                                                                                   reason: 'Initial coded rejection reason',
+                                                                                                                                                   reason_code: 'missing_signature',
+                                                                                                                                                   submission_method: :admin_review)
 
     assert first_result[:success], 'Initial coded rejection should succeed'
     @application.reload
@@ -366,17 +406,17 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'missing_signature', @application.disability_certification_rejection_reason_code
     assert_equal 'missing_signature', first_review.rejection_reason_code
 
-    second_result = DisabilityCertificationAttachmentService.reject_certification(
-      application: @application,
-      admin: @admin,
-      reason: 'Custom follow-up rejection text',
-      reason_code: '',
-      submission_method: :admin_review
-    )
+    second_result = DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(@application, :disability_certification), application: @application,
+                                                                                                                                                    admin: @admin,
+                                                                                                                                                    reason: 'Custom follow-up rejection text',
+                                                                                                                                                    reason_code: '',
+                                                                                                                                                    submission_method: :admin_review)
 
     assert second_result[:success], 'Follow-up free-text rejection should succeed'
     @application.reload
-    second_review = @application.proof_reviews.find_by!(proof_type: :disability_certification, status: :rejected)
+    second_review = @application.proof_reviews.where(proof_type: :disability_certification, status: :rejected).recent.first!
+    assert_not_equal first_review.id, second_review.id
+    assert_equal 'missing_signature', first_review.reload.rejection_reason_code
     assert_equal 'Custom follow-up rejection text', @application.disability_certification_rejection_reason
     assert_nil @application.disability_certification_rejection_reason_code
     assert_equal 'Custom follow-up rejection text', second_review.rejection_reason
@@ -387,9 +427,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     @application.disability_certification.attach(@test_file)
     @application.update_columns(disability_certification_status: Application.disability_certification_statuses[:requested])
 
-    result = DisabilityCertificationAttachmentService.update_certification_status(
-      application: @application, status: :approved, admin: @admin, submission_method: :admin_review
-    )
+    result = DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(@application, :disability_certification), application: @application, status: :approved, admin: @admin, submission_method: :admin_review)
 
     assert result[:success], result[:error]&.message
     change = @application.status_changes.disability_certification.sole
@@ -401,9 +439,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
   test 'a rejection records the previous status in its history row and audit event' do
     @application.update_columns(disability_certification_status: Application.disability_certification_statuses[:received])
 
-    DisabilityCertificationAttachmentService.reject_certification(
-      application: @application, admin: @admin, reason: 'Unreadable', submission_method: :admin_review
-    )
+    DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(@application, :disability_certification), application: @application, admin: @admin, reason: 'Unreadable', submission_method: :admin_review)
 
     change = @application.status_changes.disability_certification.sole
     assert_equal %w[received rejected], [change.from_status, change.to_status]
@@ -415,9 +451,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     @application.disability_certification.attach(@test_file)
 
     %i[received approved].each do |status|
-      result = DisabilityCertificationAttachmentService.update_certification_status(
-        application: @application, status: status, admin: @admin, submission_method: :admin_review
-      )
+      result = DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(@application, :disability_certification), application: @application, status: status, admin: @admin, submission_method: :admin_review)
       assert result[:success], result[:error]&.message
     end
 
@@ -432,10 +466,8 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     create(:rejection_reason, code: 'zz_cert_address', proof_type: 'disability_certification',
                               body: 'The provider address must match %<address>s.')
 
-    DisabilityCertificationAttachmentService.reject_certification(
-      application: @application, admin: @admin, reason: 'Replaced by the stored reason', reason_code: 'zz_cert_address',
-      submission_method: :admin_review
-    )
+    DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(@application, :disability_certification), application: @application, admin: @admin, reason: 'Replaced by the stored reason', reason_code: 'zz_cert_address',
+                                                                                                                                    submission_method: :admin_review)
 
     review = @application.proof_reviews.find_by!(proof_type: :disability_certification, status: :rejected)
     assert_equal 'The provider address must match 9 Oak Rd Towson, MD 21204.', review.rejection_reason
@@ -444,13 +476,21 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
   test 'a rejection logs one outcome line and returns its result keys' do
     log = StringIO.new
     result = Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
-      DisabilityCertificationAttachmentService.reject_certification(
-        application: @application, admin: @admin, reason: 'missing_signature', submission_method: :admin_review
-      )
+      DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(@application, :disability_certification), application: @application, admin: @admin, reason: 'missing_signature', submission_method: :admin_review)
     end
 
     assert result[:success]
-    assert_equal %i[duration_ms error notification_id success], result.keys.sort
+    assert_equal %i[duration_ms error notification_id proof_review recorded success], result.keys.sort
+    assert_nil result[:error]
+    assert_equal true, result[:recorded]
+    review = result[:proof_review]
+    assert_predicate review, :persisted?
+    assert_equal @application.id, review.application_id
+    assert_equal @admin.id, review.admin_id
+    assert_equal 'disability_certification', review.proof_type
+    assert_equal 'rejected', review.status
+    notification = Notification.find(result[:notification_id])
+    assert_equal review.id, notification.metadata.fetch('proof_review_id')
     assert_equal 1, log.string.scan(/Disability certification rejected completed in \d+ms/).size
     assert_not_includes log.string, 'METRICS:'
   end
@@ -461,9 +501,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
 
     error = Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
       assert_raises(RuntimeError) do
-        DisabilityCertificationAttachmentService.reject_certification(
-          application: @application, admin: @admin, reason: 'missing_signature', submission_method: :admin_review
-        )
+        DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(@application, :disability_certification), application: @application, admin: @admin, reason: 'missing_signature', submission_method: :admin_review)
       end
     end
 
@@ -474,7 +512,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
   test 'a status update that fails returns its error without raising and logs the outcome line' do
     log = StringIO.new
     result = Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
-      DisabilityCertificationAttachmentService.update_certification_status(application: @application, status: :approved, admin: @admin)
+      DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(@application, :disability_certification), application: @application, status: :approved, admin: @admin)
     end
 
     assert_not result[:success]

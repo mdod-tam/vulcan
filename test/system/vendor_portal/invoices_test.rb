@@ -7,7 +7,7 @@ module VendorPortal
     setup do
       ensure_system_audit_actor!
       @vendor_user = create(:vendor_user)
-      system_test_sign_in(@vendor_user)
+      system_test_sign_in(@vendor_user, bypass_mfa_enrollment: true)
     end
 
     test 'the dashboard shows what is not yet invoiced apart from what is invoiced and awaiting payment' do

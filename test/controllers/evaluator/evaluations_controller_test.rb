@@ -8,7 +8,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     @evaluator = create(:evaluator)
     @other_evaluator = create(:evaluator)
     @admin = create(:admin)
-    sign_in_for_controller_test(@evaluator)
+    sign_in_for_controller_test(@evaluator, bypass_mfa_enrollment: true)
     @product = create(:product, name: 'iPad Air')
     @evaluation = create(:evaluation, evaluator: @evaluator, status: :scheduled)
     @requested_evaluation = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil, location: nil)
@@ -52,7 +52,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select '#complete_evaluation_location[required][aria-required=true]'
 
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
     [@evaluation, @requested_evaluation].each do |evaluation|
       evaluation.update!(evaluator: @admin)
       get evaluators_evaluation_path(evaluation)
@@ -167,7 +167,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   test 'administrator completed route applies the selected assignment scope' do
     assigned = create(:evaluation, :completed, evaluator: @admin)
     other = create(:evaluation, :completed, evaluator: @evaluator)
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     get completed_evaluators_evaluations_path, params: { scope: 'mine' }
 
@@ -183,7 +183,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
 
   test 'administrator can switch between assigned and all evaluations' do
     assigned = create(:evaluation, evaluator: @admin, status: :scheduled)
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluations_path, params: { scope: 'mine' }
 
@@ -227,7 +227,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     cancelled = create(:evaluation, evaluator: @admin, status: :cancelled)
     no_show = create(:evaluation, evaluator: @admin, status: :no_show)
     other = create(:evaluation, evaluator: @evaluator, status: :cancelled)
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluations_path, params: { scope: 'mine', status: 'needs_followup' }
 
@@ -266,7 +266,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'a[aria-current="page"]', text: 'All'
     assert_select "a[href='#{evaluators_evaluations_path(scope: 'mine')}']", text: 'All'
 
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
     get evaluators_evaluations_path, params: { scope: 'unsupported', status: 'unsupported' }
 
     assert_evaluation_rows(included: [@evaluation, @requested_evaluation, other])
@@ -526,7 +526,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
 
   test 'requested report exposes outside consultation only to its assigned administrator and preserves retry inputs' do
     @requested_evaluation.update!(evaluator: @admin)
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
     get evaluators_evaluation_path(@requested_evaluation)
 
     assert_response :success
@@ -562,7 +562,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'administrator oversight cannot expose or submit another evaluators outside consultation action' do
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
     get evaluators_evaluation_path(@requested_evaluation)
 
     assert_select '#complete-evaluation-form', count: 0
@@ -582,7 +582,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       evaluation_date: nil, location: nil, products_tried: []
     )
     evaluation.application.transition_status!(:archived, actor: @admin)
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluation_path(evaluation)
     assert_response :success
@@ -939,7 +939,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin can view evaluation but only in read-only mode' do
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluation_path(@evaluation)
 
@@ -950,7 +950,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin cannot schedule an evaluation' do
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     post schedule_evaluators_evaluation_path(@requested_evaluation),
          params: {
@@ -963,7 +963,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin cannot patch lifecycle actions through update' do
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     assert_no_difference('Event.where(action: "evaluation_cancelled").count') do
       patch evaluators_evaluation_path(@evaluation), params: {
@@ -980,7 +980,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin cannot submit an evaluation report' do
-    sign_in_for_controller_test(@admin)
+    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
     post submit_report_evaluators_evaluation_path(@evaluation), params: {
       evaluation: {
@@ -1000,7 +1000,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'other evaluator cannot mutate an evaluation' do
-    sign_in_for_controller_test(@other_evaluator)
+    sign_in_for_controller_test(@other_evaluator, bypass_mfa_enrollment: true)
 
     post schedule_evaluators_evaluation_path(@requested_evaluation),
          params: { evaluation: { evaluation_date: 2.days.from_now, location: 'Other evaluator attempt' } }

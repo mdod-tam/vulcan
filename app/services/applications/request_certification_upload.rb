@@ -9,7 +9,8 @@ module Applications
 
     attr_reader :application, :actor, :channel, :resend_of, :public_recovery
 
-    def initialize(application:, actor:, channel: :email, resend_of: nil, public_recovery: false, deliver_email: false)
+    # rubocop:disable-next Metrics/ParameterLists -- Bound reviews share the existing request and resend issuer.
+    def initialize(application:, actor:, channel: :email, resend_of: nil, public_recovery: false, deliver_email: false, proof_review: nil)
       super()
       @application = application
       @actor = actor
@@ -17,11 +18,15 @@ module Applications
       @resend_of = resend_of
       @public_recovery = public_recovery
       @deliver_email = deliver_email
+      @proof_review = proof_review
+      if proof_review && (proof_review.application_id != application.id || !proof_review.proof_type_disability_certification? || !proof_review.status_rejected?)
+        raise ArgumentError, 'The rejection decision must belong to this certification'
+      end
     end
 
     def call
       with_issuance_errors(application) do
-        return failure(message(:request_not_needed)) unless application.certification_requestable_via_secure_form?
+        return request_not_needed_result unless application.certification_requestable_via_secure_form?
         return failure(message(:provider_email_required)) if provider_email.blank?
         return failure(message(:unsupported_channel)) unless channel == :email
 
@@ -34,6 +39,10 @@ module Applications
 
         ApplicationRecord.transaction do
           application.with_lock do
+            raise SecureRequestIssuance::Refused, :request_not_needed unless application.certification_requestable_via_secure_form?
+
+            raise SecureRequestIssuance::Refused, :request_not_needed if @proof_review && !@proof_review.current_rejection?(application: application)
+
             delivery = create_request
             DisabilityCertificationService.new(application: application, actor: actor)
                                           .prepare_upload_request!(notification: Notification.find(delivery.notification_id))
@@ -47,12 +56,18 @@ module Applications
 
         success(message(:request_created), result_data(delivery.secure_request_form, delivery.raw_token))
       end
+    rescue SecureRequestIssuance::Refused
+      request_not_needed_result
     rescue StandardError => e
       Rails.logger.warn("Certification upload request failed for application #{application.id}: #{e.class.name}")
       failure(message(:delivery_failed))
     end
 
     private
+
+    def request_not_needed_result
+      failure(message(:request_not_needed), @proof_review ? { superseded_review: true } : {})
+    end
 
     # An application has one certifying provider, so a new request replaces every open one.
     def create_request
@@ -86,6 +101,7 @@ module Applications
         notifiable: application,
         metadata: {
           secure_request_form_id: request_form.id,
+          proof_review_id: @proof_review&.id,
           application_id: application.id,
           request_batch_id: request_form.request_batch_id,
           provider_name: request_form.recipient_name,
@@ -174,7 +190,7 @@ module Applications
     end
 
     def rejection_reason_for_delivery
-      latest_review = application.latest_disability_certification_rejection_review
+      latest_review = @proof_review || application.latest_disability_certification_rejection_review
       latest_review&.rejection_reason.presence ||
         application.disability_certification_rejection_reason.presence ||
         I18n.t('secure_certification_form_resends.create.default_rejection_reason')

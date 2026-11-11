@@ -27,7 +27,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     assert_not @vendor.w9_form.attached?
     assert_nil @vendor.terms_accepted_at
     assert_empty @vendor.voucher_transactions
-    sign_in_actor(@vendor)
+    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
 
     click_link 'Upload W9 on your profile'
     complete_required_profile_address
@@ -48,7 +48,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     submitted_blob = @vendor.w9_form.blob
     take_screenshot('vendor-onboarding-awaiting-review', html: true, full: true)
 
-    sign_in_actor(@admin)
+    sign_in_actor(@admin, bypass_mfa_enrollment: true)
     visit admin_vendor_path(@vendor)
     click_link 'Review W9'
     assert_field 'w9_review_reviewed_blob_id', with: submitted_blob.id.to_s, type: 'hidden'
@@ -60,18 +60,18 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     assert @vendor.vendor_pending?, 'document approval must not authorize the vendor account'
     assert_equal submitted_blob.id, @vendor.w9_reviews.sole.reviewed_blob_id
 
-    sign_in_actor(@vendor)
+    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
     assert_text 'W9 approved; vendor authorization is still pending'
     assert_no_link 'Process Voucher'
     take_screenshot('vendor-onboarding-awaiting-authorization', html: true, full: true)
 
-    sign_in_actor(@admin)
+    sign_in_actor(@admin, bypass_mfa_enrollment: true)
     visit edit_admin_vendor_path(@vendor)
     select 'Approved', from: 'Vendor approval'
     click_button 'Update Vendor'
     assert @vendor.reload.vendor_approved?
 
-    sign_in_actor(@vendor)
+    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
     open_redemption(@voucher, @constituent.date_of_birth)
     assert_button 'Process Redemption', disabled: true
     page.current_window.resize_to(390, 844)
@@ -119,7 +119,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
 
     # Invoice runs cover redemptions before the run day. Advance time through that boundary.
     travel 1.day do
-      sign_in_actor(@admin)
+      sign_in_actor(@admin, bypass_mfa_enrollment: true)
       visit admin_invoices_path
       within('section', text: 'Not yet invoiced') do
         assert_text 'Connected Vendor Updated'
@@ -141,7 +141,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
       assert_text 'Payment recorded.'
       assert invoice.reload.status_invoice_paid?
 
-      sign_in_actor(@vendor)
+      sign_in_actor(@vendor, bypass_mfa_enrollment: true)
       click_link 'Invoices'
       click_link "Invoice #{invoice.invoice_number}"
       assert_text 'Paid'
@@ -174,7 +174,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
   end
 
   test 'production-style unpublished terms block new browser acceptance without blocking profile work' do
-    sign_in_actor(@vendor)
+    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
     click_link 'Upload W9 on your profile'
     assert_text I18n.t('vendor_onboarding.terms.unavailable')
     assert_no_field 'users_vendor_terms_accepted'
@@ -221,9 +221,9 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     fill_in 'Zip Code', with: '21201'
   end
 
-  def sign_in_actor(actor)
+  def sign_in_actor(actor, bypass_mfa_enrollment: false)
     Capybara.reset_sessions!
     install_stimulus_error_reporting
-    system_test_sign_in(actor)
+    system_test_sign_in(actor, bypass_mfa_enrollment:)
   end
 end

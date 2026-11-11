@@ -23,6 +23,7 @@ class ProofReviewValidationTest < ActiveSupport::TestCase
     admin = create(:admin)
 
     proof_review = ProofReview.new(
+      decision_key: SecureRandom.uuid, decision_fingerprint: SecureRandom.hex(32),
       application: @application,
       admin: admin,
       proof_type: 'income',
@@ -36,6 +37,7 @@ class ProofReviewValidationTest < ActiveSupport::TestCase
     user = create(:constituent)
 
     proof_review = ProofReview.new(
+      decision_key: SecureRandom.uuid, decision_fingerprint: SecureRandom.hex(32),
       application: @application,
       admin: user,
       proof_type: 'income',

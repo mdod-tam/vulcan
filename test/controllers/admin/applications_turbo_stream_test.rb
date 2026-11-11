@@ -4,11 +4,12 @@ require 'test_helper'
 
 module Admin
   class ApplicationsTurboStreamTest < ActionDispatch::IntegrationTest
+    include ProofResubmissionTestHelper
     include AuthenticationTestHelper
 
     setup do
       @admin = create(:admin, email: generate(:email))
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @application = create(:application, :in_progress, user: create(:constituent, email: generate(:email)))
     end
 
@@ -21,7 +22,7 @@ module Admin
       attach_income_proof!
 
       patch update_proof_status_admin_application_path(@application),
-            params: { proof_type: 'income', status: 'approved' },
+            params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'approved' },
             as: :turbo_stream
 
       assert_response :see_other
@@ -40,7 +41,7 @@ module Admin
                             metadata: { changes: { equipment_needs: { old: [], new: [{ product_id: product.id, remaining_quantity: 2 }] } } })
 
       patch update_proof_status_admin_application_path(@application),
-            params: { proof_type: 'income', status: 'rejected', rejection_reason: 'invalid_document', notes: 'Please upload a valid PDF.' },
+            params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'rejected', rejection_reason: 'invalid_document', notes: 'Please upload a valid PDF.' },
             as: :turbo_stream
 
       assert_response :success
@@ -74,11 +75,9 @@ module Admin
       )
 
       patch update_proof_status_admin_application_path(@application),
-            params: {
-              proof_type: 'income',
-              status: 'rejected',
-              rejection_reason: 'Income documentation is not acceptable.'
-            },
+            params: { **proof_decision_params(@application, 'income'), proof_type: 'income',
+                                                                       status: 'rejected',
+                                                                       rejection_reason: 'Income documentation is not acceptable.' },
             as: :turbo_stream
 
       assert_response :success
@@ -92,7 +91,7 @@ module Admin
       DocumentScanFixtures.clear!(@application.residency_proof.blob, user: @admin, slot: 'residency_proof', fixture: 'residency_proof.pdf')
 
       patch update_proof_status_admin_application_path(@application),
-            params: { proof_type: 'residency', status: 'approved' },
+            params: { **proof_decision_params(@application, 'residency'), proof_type: 'residency', status: 'approved' },
             as: :turbo_stream
 
       assert_response :see_other
@@ -109,7 +108,7 @@ module Admin
       )
 
       patch update_proof_status_admin_application_path(@application),
-            params: { proof_type: 'income', status: 'rejected', rejection_reason: 'invalid_document' },
+            params: { **proof_decision_params(@application, 'income'), proof_type: 'income', status: 'rejected', rejection_reason: 'invalid_document' },
             as: :turbo_stream
 
       assert_response :unprocessable_content
@@ -126,13 +125,14 @@ module Admin
   class ApplicationProofReviewCommitResponsesTest < ActionDispatch::IntegrationTest
     include AuthenticationTestHelper
     include ConcurrencyTestHelper
+    include ProofResubmissionTestHelper
 
     self.use_transactional_tests = false
 
     setup do
       @admin = create(:admin, email: generate(:email))
       @user = create(:constituent, email: generate(:email))
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @application = create(:application, :in_progress, :income_not_required, user: @user)
       @application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
       @application.id_proof.attach(io: file_fixture('disability_certification_valid.pdf').open, filename: 'id.pdf', content_type: 'application/pdf')
@@ -182,7 +182,7 @@ module Admin
 
     def submit_review(format)
       patch update_proof_status_admin_application_path(@application, format: format),
-            params: { proof_type: 'residency', status: 'approved' }
+            params: { **proof_decision_params(@application, 'residency'), proof_type: 'residency', status: 'approved' }
     end
 
     def assert_saved_review

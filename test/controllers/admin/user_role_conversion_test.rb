@@ -8,7 +8,7 @@ module Admin
     TURBO = { 'Accept' => Mime[:turbo_stream].to_s }.freeze
 
     setup do
-      sign_in_for_integration_test(create(:admin))
+      sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
     end
 
     test 'a vendor becomes a constituent with every vendor-only field reset' do

@@ -5,7 +5,7 @@ require 'test_helper'
 module Admin
   class VouchersIndexTest < ActionDispatch::IntegrationTest
     setup do
-      sign_in_for_integration_test(create(:admin))
+      sign_in_for_integration_test(create(:admin), bypass_mfa_enrollment: true)
     end
 
     test 'voucher detail shows separate purchases and the required status event' do

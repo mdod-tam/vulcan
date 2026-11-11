@@ -17,7 +17,7 @@ module Trainers
     end
 
     test 'trainer sees only their own recent activity' do
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
       own_event = create_training_event(@session, 'Own session activity')
       other_event = create_training_event(@other_session, 'Other session activity')
 
@@ -36,7 +36,7 @@ module Trainers
     end
 
     test 'admin sees broader recent training activity' do
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       own_event = create_training_event(@session, 'Trainer session activity')
       other_event = create_training_event(@other_session, 'Other trainer activity')
 
@@ -48,7 +48,7 @@ module Trainers
     end
 
     test 'recent activity feed is limited' do
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
       11.times do |index|
         create_training_event(@session, "Activity #{index}", created_at: index.minutes.ago)
       end
@@ -60,7 +60,7 @@ module Trainers
     end
 
     test 'follow-up sessions exclude cancelled sessions superseded by a newer scheduled session' do
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
       application = covered_application
       cancelled_session = create(:training_session, :cancelled, trainer: @trainer, application: application, created_at: 1.day.ago)
       create(:training_session, :scheduled, trainer: @trainer, application: application, created_at: Time.current)
@@ -73,7 +73,7 @@ module Trainers
     end
 
     test 'recent follow-up sessions are ordered by newest updated_at first' do
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
       older_application = covered_application
       newer_application = covered_application
       older_session = create(:training_session, :cancelled, trainer: @trainer, application: older_application, updated_at: 2.days.ago)
@@ -87,7 +87,7 @@ module Trainers
     end
 
     test 'requested and scheduled sessions render in their own open-session buckets' do
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
       requested_application = covered_application
       scheduled_application = covered_application
       requested_session = create(:training_session, :requested, trainer: @trainer, application: requested_application, created_at: 1.day.ago)
@@ -102,7 +102,7 @@ module Trainers
     end
 
     test 'scheduled sessions keep legitimate appointments on separate applications isolated by current trainer' do
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
       additional_application = covered_application
       additional_session = create(:training_session, :scheduled, trainer: @trainer, application: additional_application, scheduled_for: 2.days.from_now)
 
@@ -118,11 +118,11 @@ module Trainers
     end
 
     test 'past outcomes are separated from upcoming scheduled and confirmed appointments' do
-      sign_in_for_integration_test(@trainer)
       later = create(:training_session, :scheduled, trainer: @trainer, application: covered_application, scheduled_for: 3.days.from_now)
       confirmed = create(:training_session, :scheduled, status: :confirmed, trainer: @trainer, application: covered_application, scheduled_for: 4.days.from_now)
 
       travel_to 2.days.from_now do
+        sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
         get trainers_dashboard_path
 
         assert_response :success
@@ -148,7 +148,7 @@ module Trainers
       assert_predicate Applications::TrainerAssignment.unassign(@application, actor: @admin), :success?
       assert_predicate Applications::TrainerAssignment.assign(@application, @other_trainer, actor: @admin), :success?
       replacement = @application.latest_training_session
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
 
       get trainers_dashboard_path
 
@@ -164,7 +164,7 @@ module Trainers
     test 'covered requests hand off to the current trainer without exposing administrative application links' do
       application, report = requested_covered_application(@trainer)
       other_application, = requested_covered_application(@other_trainer)
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
 
       get trainers_dashboard_path
 
@@ -186,7 +186,7 @@ module Trainers
       covered_application, = requested_covered_application(@trainer)
       uncovered = create(:application, :approved, :with_all_proofs, user: create(:constituent, first_name: 'Uncovered', last_name: 'Participant'),
                                                                     application_date: Date.current, training_requested_at: Time.current)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
 
       get trainers_dashboard_path
 
@@ -207,7 +207,7 @@ module Trainers
     end
 
     test 'admin dashboard surfaces scheduled sessions assigned to the admin separately' do
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       admin_constituent = create(:constituent, first_name: 'Admin', last_name: 'Training')
       admin_application = covered_application(trainer: @admin, user: admin_constituent)
       admin_session = create(:training_session, :scheduled, trainer: @admin, application: admin_application)
@@ -226,7 +226,7 @@ module Trainers
     test 'needs scheduling counts every pending application request and displays requests beyond ten' do
       applications = Array.new(12) { requested_covered_application(@trainer).first }
       assigned_session = create(:training_session, :requested, trainer: @trainer, application: covered_application)
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
 
       get trainers_dashboard_path
 
@@ -247,7 +247,7 @@ module Trainers
       future = create(:training_session, :scheduled, trainer: @trainer, application: covered_application, scheduled_for: 4.days.from_now)
 
       travel_to 2.days.from_now do
-        sign_in_for_integration_test(@trainer)
+        sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
         get trainers_dashboard_path
 
         assert_response :success
@@ -278,7 +278,7 @@ module Trainers
       own_future = create(:training_session, :scheduled, trainer: @admin, application: covered_application(trainer: @admin), scheduled_for: 4.days.from_now)
 
       travel_to 2.days.from_now do
-        sign_in_for_integration_test(@admin)
+        sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
         get trainers_dashboard_path
 
         assert_equal 2, assigns(:my_scheduled_sessions_count)
@@ -292,7 +292,7 @@ module Trainers
       @trainer.update!(locale: 'es')
       application, report = requested_covered_application(@trainer)
       requested = create(:training_session, :requested, trainer: @trainer, application: covered_application)
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
 
       get trainers_dashboard_path
 
@@ -307,7 +307,7 @@ module Trainers
       @trainer.update!(locale: 'es')
       create_training_event(@session, 'PRIVATE SENTINEL')
       create(:training_session, :scheduled, status: :confirmed, trainer: @trainer, application: covered_application)
-      sign_in_for_integration_test(@trainer)
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
 
       get trainers_dashboard_path
 

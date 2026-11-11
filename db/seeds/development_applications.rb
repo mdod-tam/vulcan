@@ -91,6 +91,7 @@ module Seeds
       when :rejected_proof
         review_proofs(application, proof_types(application) - [:id])
         Applications::ProofReviewer.new(application, @admin).review(
+          **proof_decision_identity(application, :id, :rejected),
           proof_type: :id, status: :rejected, rejection_reason: 'The photo ID is unreadable. Please upload a clearer copy.'
         )
         transition(application, :awaiting_proof, 'Waiting for a clearer photo ID')
@@ -120,6 +121,7 @@ module Seeds
       case stage
       when :certification_rejected
         DisabilityCertificationAttachmentService.reject_certification(
+          **proof_decision_identity(application, :disability_certification, :rejected),
           application: application, admin: @admin, reason: 'Provider signature is missing.'
         )
       when :archived
@@ -147,8 +149,14 @@ module Seeds
 
     def review_proofs(application, types)
       types.each do |type|
-        Applications::ProofReviewer.new(application, @admin).review(proof_type: type, status: :approved)
+        Applications::ProofReviewer.new(application, @admin).review(
+          **proof_decision_identity(application, type, :approved), proof_type: type, status: :approved
+        )
       end
+    end
+
+    def proof_decision_identity(application, type, status)
+      { decision_key: "development:#{type}:#{status}", reviewed_blob_id: application.document_attachment_for(type).blob&.id }
     end
 
     def with_document(filename)

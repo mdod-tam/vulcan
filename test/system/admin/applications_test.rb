@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module Admin
   class ApplicationsTest < ApplicationSystemTestCase
+    include ProofResubmissionTestHelper
+
     setup do
       @admin = create(:admin)
       @application = create(:application, :in_progress_with_pending_proofs, skip_proofs: true)
@@ -17,12 +19,12 @@ module Admin
 
       @application.update!(disability_certification_status: :received)
 
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'admin can view application details successfully with factory-created records' do
       @application.update!(household_size: 3, annual_income: 24_000)
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector 'h1#application-title', wait: 30
       assert_text(@application.user.full_name, wait: 20)
@@ -55,7 +57,7 @@ module Admin
       )
       @application.status_changes.create!(from_status: 'in_progress', to_status: 'approved', user: @admin, change_type: :status,
                                           metadata: { submission_method: 'paper' }, notes: 'Application approved')
-      visit_admin_application_with_retry(@application, user: @admin)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       within '[data-testid="disability-certification-history"]' do
         assert_selector '.history-item', count: 1, wait: 25
@@ -70,11 +72,9 @@ module Admin
     test 'admin can approve disability certification directly via service' do
       assert_equal 'received', @application.disability_certification_status
 
-      result = DisabilityCertificationAttachmentService.update_certification_status(
-        application: @application,
-        status: :approved,
-        admin: @admin
-      )
+      result = DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(@application, :disability_certification), application: @application,
+                                                                                                                                                      status: :approved,
+                                                                                                                                                      admin: @admin)
 
       assert result[:success], 'Disability certification approval failed'
 
@@ -88,7 +88,7 @@ module Admin
 
         if has_selector?('form[action="/sign_in"]', wait: 2)
           puts '=== DEBUG: Need to re-authenticate'
-          system_test_sign_in(@admin)
+          system_test_sign_in(@admin, bypass_mfa_enrollment: true)
           visit admin_application_path(@application)
           wait_for_turbo
         end
@@ -150,17 +150,13 @@ module Admin
 
       proof_reviewer = Applications::ProofReviewer.new(@application, @admin)
 
-      income_result = proof_reviewer.review(
-        proof_type: 'income',
-        status: 'approved'
-      )
+      income_result = proof_reviewer.review(**proof_decision_params(@application, 'income'), proof_type: 'income',
+                                                                                             status: 'approved')
 
-      residency_result = proof_reviewer.review(
-        proof_type: 'residency',
-        status: 'approved'
-      )
+      residency_result = proof_reviewer.review(**proof_decision_params(@application, 'residency'), proof_type: 'residency',
+                                                                                                   status: 'approved')
 
-      id_result = proof_reviewer.review(proof_type: 'id', status: 'approved')
+      id_result = proof_reviewer.review(**proof_decision_params(@application, 'id'), proof_type: 'id', status: 'approved')
 
       # ProofReviewer returns true after a successful review.
       assert income_result, 'Income proof approval failed'

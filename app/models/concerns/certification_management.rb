@@ -8,7 +8,7 @@ module CertificationManagement
   def latest_disability_certification_rejection_review
     proof_reviews
       .where(proof_type: :disability_certification, status: :rejected)
-      .order(created_at: :desc)
+      .recent
       .first
   end
 
@@ -52,14 +52,6 @@ module CertificationManagement
     status = status.to_sym if status.respond_to?(:to_sym)
     status = :approved if status == :accepted
     status
-  end
-
-  # A rejection requires both :rejected status and a reason.
-  # @param status [Symbol] The normalized status
-  # @param params [ActionController::Parameters] The controller parameters
-  # @return [Boolean] True if rejection was requested with reason
-  def rejection_requested?(status, params)
-    status == :rejected && params[:rejection_reason].present?
   end
 
   # The one writer of the certification status. It moves the status, records its history row, and logs its

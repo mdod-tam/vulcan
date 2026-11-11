@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_08_050401) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -670,9 +670,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_08_050401) do
     t.integer "status"
     t.integer "submission_method"
     t.datetime "updated_at", null: false
+    t.string "decision_key", null: false
+    t.string "decision_fingerprint", null: false
+    t.bigint "reviewed_blob_id"
     t.index ["admin_id", "created_at"], name: "index_proof_reviews_on_admin_id_and_created_at"
     t.index ["admin_id"], name: "index_proof_reviews_on_admin_id"
+    t.index ["application_id", "decision_key"], name: "index_proof_reviews_on_application_id_and_decision_key", unique: true
     t.index ["application_id", "proof_type", "created_at"], name: "idx_on_application_id_proof_type_created_at_4b8ffa7c5f"
+    t.index ["application_id", "proof_type", "reviewed_at", "id"], name: "index_proof_reviews_on_decision_history"
     t.index ["application_id", "proof_type", "status"], name: "idx_on_application_id_proof_type_status_78cb268d0d"
     t.index ["application_id"], name: "index_proof_reviews_on_application_id"
     t.index ["rejection_reason_code"], name: "index_proof_reviews_on_rejection_reason_code"

@@ -6,7 +6,7 @@ module Admin
   class VendorRoleConversionTest < ApplicationSystemTestCase
     test 'converting a vendor asks for confirmation; dismissing keeps the vendor' do
       vendor = create(:vendor, :approved, :with_w9, business_name: 'Accessible Phones Co')
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit admin_users_path(q: vendor.email)
 

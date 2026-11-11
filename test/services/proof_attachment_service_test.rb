@@ -195,15 +195,13 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     Event.delete_all
 
     result = without_auto_resubmission do
-      ProofAttachmentService.reject_proof_without_attachment(
-        application: @application,
-        proof_type: 'income',
-        admin: @admin,
-        submission_method: :paper,
-        reason: 'invalid_document',
-        notes: 'Document does not meet requirements',
-        metadata: { ip_address: '127.0.0.1' }
-      )
+      ProofAttachmentService.reject_proof_without_attachment(**proof_decision_params(@application, 'income'), application: @application,
+                                                                                                              proof_type: 'income',
+                                                                                                              admin: @admin,
+                                                                                                              submission_method: :paper,
+                                                                                                              reason: 'invalid_document',
+                                                                                                              notes: 'Document does not meet requirements',
+                                                                                                              metadata: { ip_address: '127.0.0.1' })
     end
 
     assert result[:success], 'Expected reject_proof_without_attachment to succeed'
@@ -238,15 +236,16 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_includes review.rejection_reason, '123 Main St Apt 4 Baltimore, MD 21201'
   end
 
-  test 'a repeat paper rejection of the same proof updates its review and still counts as a rejection' do
+  test 'a later paper rejection preserves the original decision and counts separately' do
     reject_on_paper('income', reason: 'First reason')
     first_review = @application.proof_reviews.find_by!(proof_type: 'income', status: 'rejected')
 
     reject_on_paper('income', reason: 'Second reason')
 
     reviews = @application.proof_reviews.where(proof_type: 'income', status: 'rejected')
-    assert_equal [first_review.id], reviews.ids, 'a repeat decision keeps one row'
-    assert_equal 'Second reason', first_review.reload.rejection_reason
+    assert_equal 2, reviews.count
+    assert_equal 'First reason', first_review.reload.rejection_reason
+    assert_equal 'Second reason', reviews.recent.first.rejection_reason
     assert_equal 2, @application.reload.total_rejections, 'each rejection counts, first or repeat'
     assert_equal 2, Event.where(action: 'proof_rejected', auditable: @application).count, 'each rejection is audited'
   end
@@ -336,9 +335,7 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
 
   def reject_on_paper(proof_type, reason:)
     without_auto_resubmission do
-      ProofAttachmentService.reject_proof_without_attachment(
-        application: @application, proof_type: proof_type, admin: @admin, submission_method: :paper, reason: reason
-      )
+      ProofAttachmentService.reject_proof_without_attachment(**proof_decision_params(@application, proof_type), application: @application, proof_type: proof_type, admin: @admin, submission_method: :paper, reason: reason)
     end
   end
 

@@ -60,6 +60,8 @@ class ProofAttachmentService
   # @param admin [User] The admin user performing the rejection (required)
   # @param submission_method [Symbol] The method of submission (:paper, :web, :email, etc.)
   # @param rejection_details [Hash] Details about the rejection, including:
+  #   - :decision_key [String] Stable identifier for this decision, retained on request retries (required)
+  #   - :reviewed_blob_id [Integer, nil] Reviewed document identifier, or nil for a missing document (required)
   #   - :reason [String] The reason for rejection (e.g., 'unclear', 'incomplete', 'other')
   #   - :notes [String, nil] Optional notes explaining the rejection
   #   - :metadata [Hash] Additional metadata to store with the rejection audit
@@ -72,12 +74,27 @@ class ProofAttachmentService
       status: :rejected
     }
 
-    with_service_flow(context) do |result|
-      # ProofReview owns `proof_rejected` and delivery through Applications::RequestProofResubmission.
-      # An extra `#{proof_type}_proof_rejected` event or notification here would duplicate audit records or delivery.
-      result[:success] = perform_rejection(application: application, proof_type: proof_type, admin: admin,
-                                           submission_method: submission_method, rejection_details: rejection_details)
+    key = rejection_details.fetch(:decision_key)
+    review = nil
+    commit = Applications::ReviewCommit.new(application: application, subject: 'proof review', again: 'reviewing it again') do
+      {
+        review: application.proof_reviews.find_by(decision_key: key)&.attributes_for_database,
+        application: Application.where(id: application.id).pick(:status, "#{proof_type}_proof_status", :total_rejections)
+      }
     end
+    result = AttachmentOperation.measure("Proof #{proof_type} rejected", on_error: ->(error) { record_failure(error, context) }) do |outcome|
+      commit.run(on_committed: ->(error) { review&.log_follow_up_failure(error) }) do
+        commit.transaction do
+          review = perform_rejection(application: application, proof_type: proof_type, admin: admin,
+                                     submission_method: submission_method, rejection_details: rejection_details)
+        end
+      end
+      outcome[:success] = true
+      outcome[:proof_review] = review
+      outcome[:warning] = commit.warning if commit.warning
+    end
+    result[:commit_state] = :unknown if result[:error].is_a?(Applications::ReviewCommit::Unconfirmed)
+    result
   end
 
   def self.record_failure(error, context)
@@ -285,33 +302,21 @@ class ProofAttachmentService
     def perform_rejection(application:, proof_type:, admin:, submission_method:, rejection_details:)
       raw_reason = rejection_details.fetch(:reason, 'other')
       notes      = rejection_details.fetch(:notes, nil)
-
-      resolved = RejectionReason.resolve_for_persistence(
-        code: raw_reason,
-        proof_type: proof_type.to_s,
-        fallback: raw_reason,
-        application: application
-      )
-      reason_text = resolved[:text]
-      reason_code = resolved[:code]
-
-      application.reject_proof_without_attachment!(
-        proof_type,
-        admin: admin,
-        reason: reason_text,
-        notes: notes || 'Rejected during paper application submission'
-      )
-
-      review = ProofReview.for_decision(application, proof_type: proof_type, status: :rejected).record!(
-        admin: admin,
-        rejection_reason: reason_text,
-        rejection_reason_code: reason_code,
-        notes: notes,
-        submission_method: submission_method
-      )
-      # A new rejection and a repeat follow up alike, once this transaction and any around it have committed.
-      ActiveRecord.after_all_transactions_commit { Applications::ProofDecisionFollowUp.new(review).call }
-      review
+      decision = ProofReview.record_decision!(
+        application: application, decision_key: rejection_details.fetch(:decision_key),
+        reviewed_blob_id: rejection_details.fetch(:reviewed_blob_id), proof_type: proof_type, status: :rejected,
+        admin: admin, rejection_reason: raw_reason, notes: notes
+      ) do |review|
+        resolved = RejectionReason.resolve_for_persistence(
+          code: raw_reason, proof_type: proof_type.to_s, fallback: raw_reason, application: application
+        )
+        review.record!(rejection_reason: resolved[:text], rejection_reason_code: resolved[:code], submission_method: submission_method)
+        application.reject_proof_without_attachment!(
+          proof_type, admin: admin, reason: resolved[:text], notes: notes || 'Rejected during paper application submission'
+        )
+        ActiveRecord.after_all_transactions_commit { Applications::ProofDecisionFollowUp.new(review).call }
+      end
+      decision.review
     end
 
     # Resolves the file before proof state changes. Refusal raises at this boundary.

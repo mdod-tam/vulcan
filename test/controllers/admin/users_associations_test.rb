@@ -11,7 +11,7 @@ module Admin
 
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       build_family
     end
 

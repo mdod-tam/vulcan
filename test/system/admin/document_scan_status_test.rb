@@ -7,7 +7,7 @@ module Admin
     setup do
       ensure_system_audit_actor!
       @admin = create(:admin)
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'certification recovery keeps another applications document out of the form' do

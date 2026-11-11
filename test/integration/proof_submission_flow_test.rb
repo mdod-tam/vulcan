@@ -18,12 +18,6 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
     @valid_pdf = scanned_upload(@raw_pdf, user: @user, purpose: :proof, slot: 'income_proof').signed_id
 
     sign_in_for_integration_test(@user)
-    assert_authenticated(@user)
-
-    # Preserve the test-user header after the redirect.
-    def follow_redirect_with_user!
-      follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
-    end
   end
 
   teardown do
@@ -43,7 +37,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
                  params: { proof_type: 'income', income_proof: @valid_pdf }
 
             assert_response :redirect
-            follow_redirect_with_user!
+            follow_redirect!
             assert_equal 'Proof submitted successfully', flash[:notice]
 
             @application.reload
@@ -73,7 +67,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
              params: { proof_type: 'income', income_proof: @valid_pdf }
 
         assert_response :redirect
-        follow_redirect_with_user!
+        follow_redirect!
         assert_equal 'Invalid proof type or status', flash[:alert]
 
         @application.reload
@@ -133,8 +127,6 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
 
     # Clear the test helper's remaining authentication state.
     sign_out
-
-    assert_authentication_required
 
     # Unauthenticated request.
     post path, params: { proof_type: 'income', income_proof: @valid_pdf }

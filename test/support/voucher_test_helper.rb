@@ -38,18 +38,6 @@ module VoucherTestHelper
                           payment_notes: 'Payment processed by GAD')
   end
 
-  def sign_in_vendor(vendor)
-    session = vendor.sessions.create!(
-      user_agent: 'Rails Testing',
-      ip_address: '127.0.0.1'
-    )
-    cookies.signed[:session_token] = {
-      value: session.session_token,
-      httponly: true,
-      expires: 30.days.from_now
-    }
-  end
-
   def assert_voucher_redeemed(voucher, amount)
     assert_equal 0, voucher.reload.remaining_value
     assert_equal 'redeemed', voucher.status

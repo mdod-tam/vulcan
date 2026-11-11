@@ -14,8 +14,7 @@ module EmailDelivery
 
     test 'All off blocks ordinary messages on every channel' do
       set(ALL_CONTROL, false)
-      { @action => %w[email letter], 'SmsService#proof_resubmission' => ['sms'],
-        'FaxService#certification_rejected' => ['fax'] }.each do |action, channels|
+      { @action => %w[email letter], 'SmsService#proof_resubmission' => ['sms'] }.each do |action, channels|
         context = Policy.capture(mail_action: action, params: { sms_credential_id: @sms.id, phone_number: @sms.phone_number })
         channels.each do |channel|
           assert_equal 'all_disabled', Policy.verify_delivery(action, context, channel: channel).reason

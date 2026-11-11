@@ -10,8 +10,7 @@ module VendorPortal
       VendorTerms.stubs(:published?).returns(true)
       VendorTerms.stubs(:agreement).returns('Test-only vendor agreement for profile acceptance.')
       @vendor_user = create(:vendor, vendor_authorization_status: :pending)
-      sign_in_for_integration_test(@vendor_user)
-      assert_authenticated(@vendor_user)
+      sign_in_for_integration_test(@vendor_user, bypass_mfa_enrollment: true)
     end
 
     test 'should get edit' do
@@ -100,7 +99,7 @@ module VendorPortal
       }
       assert_redirected_to vendor_portal_dashboard_url
       # follow_redirect! does not inherit default_headers, so pass them explicitly.
-      follow_redirect!(headers: { 'X-Test-User-Id' => @vendor_user.id.to_s })
+      follow_redirect!
       assert_equal 'Profile updated successfully', flash[:notice]
       @vendor_user.reload
       assert_equal 'New Name', @vendor_user.business_name

@@ -40,13 +40,9 @@ module Authentication
   def current_session
     return @current_session if defined?(@current_session)
 
-    @current_session = if Rails.env.test?
-                         find_test_session
-                       else
-                         find_production_session
-                       end
+    @current_session = find_production_session
 
-    clear_expired_session if @current_session.respond_to?(:expired?) && @current_session.expired?
+    clear_expired_session if @current_session&.expired?
     if @current_session && !@current_session.user.public_login_active?
       @current_session.destroy! if @current_session.persisted?
       clear_expired_session
@@ -61,63 +57,11 @@ module Authentication
     Session.for_token(presented_session_token).take
   end
 
-  def find_test_session
-    # Explicit test identities take priority over cookies.
-    find_current_test_user ||
-      find_header_test_user ||
-      find_env_test_user ||
-      find_cookie_session
-  end
-
-  def find_current_test_user
-    return unless defined?(Current) && Current.test_user_id.present?
-
-    create_test_session_for_user_id(Current.test_user_id)
-  end
-
-  def find_header_test_user
-    test_user_id = request.headers['X-Test-User-Id'] || request.headers['HTTP_X_TEST_USER_ID']
-    return if test_user_id.blank?
-
-    create_test_session_for_user_id(test_user_id)
-  end
-
-  def find_env_test_user
-    return if ENV['TEST_USER_ID'].blank?
-
-    create_test_session_for_user_id(ENV.fetch('TEST_USER_ID', nil))
-  end
-
-  def create_test_session_for_user_id(user_id)
-    test_user = User.find_by(id: user_id)
-    return unless test_user
-
-    Session.new(user: test_user, last_active_at: Time.current,
-                expires_at: Session.default_expiry_period.from_now)
-  end
-
-  def find_cookie_session
-    find_signed_cookie_session || find_unsigned_cookie_session
-  end
-
-  def find_signed_cookie_session
-    return if cookies.signed[:session_token].blank?
-
-    Session.for_token(cookies.signed[:session_token]).take
-  end
-
-  def find_unsigned_cookie_session
-    return if cookies[:session_token].blank?
-
-    Session.for_token(cookies[:session_token]).take
-  end
-
   # JSON callers need a 401 response. The sign-in action has no JSON responder.
   # Use the format, not xhr?, because Turbo callers need the sign-in redirect.
   def authenticate_user!
     if current_user.present?
       # Recheck activity here because subclasses can reorder this callback.
-      return unless current_session&.persisted?
       return if track_session_activity? ? current_session.record_activity! : !current_session.expired?
 
       clear_expired_session

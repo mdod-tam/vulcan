@@ -4,26 +4,31 @@ module Admin
   # Admin duplicate review: queue, case detail, keep-separate resolution, and same-person merge.
   # Services do all data changes. This controller only translates form parameters.
   class DuplicateReviewsController < BaseController
+    QUEUE_PAGE_SIZE = 20
+
     before_action :set_review_case, only: %i[show resolve merge]
 
     def index
-      @open_cases = DuplicateReviewCase.open
-                                       .includes(:subject_user, duplicate_review_case_candidates: :candidate_user)
-                                       .order(opened_at: :desc)
-      population_pairs = DuplicateReconciliation::Population.new.pairs
-      open_pair_keys = @open_cases.flat_map do |review_case|
-        review_case.duplicate_review_case_candidates.filter_map do |candidate|
-          next if review_case.subject_user_id.blank? || candidate.candidate_user_id.blank?
-
-          [review_case.subject_user_id, candidate.candidate_user_id].sort
-        end
-      end.to_set
-      @unreviewed_pairs = population_pairs.select do |pair|
-        pair.state == :unreviewed && open_pair_keys.exclude?(pair.ids)
+      @case_pagy, @open_cases = paginate_or_first_page(
+        DuplicateReviewCase.open.includes(:subject_user, duplicate_review_case_candidates: :candidate_user)
+                           .order(opened_at: :desc, id: :desc),
+        limit: QUEUE_PAGE_SIZE, page_param: :cases_page
+      )
+      population = DuplicateReconciliation::Population.new
+      @group_pagy, groups = paginate_or_first_page(population.unreviewed_groups, limit: QUEUE_PAGE_SIZE, page_param: :groups_page)
+      @match_groups = groups.to_a
+      @selected_match_group = @match_groups.find { |group| group.id.to_s == params[:match_group_id].to_s } || @match_groups.first
+      @unreviewed_pairs = []
+      if @selected_match_group
+        @pair_pagy, pair_rows = paginate_or_first_page(
+          population.unreviewed_pairs_for_group(@selected_match_group.id), limit: QUEUE_PAGE_SIZE, page_param: :comparisons_page
+        )
+        @unreviewed_pairs = population.queue_pairs(pair_rows)
       end
-      @unreviewed_match_groups = DuplicateReconciliation::PairGroup.build_all(@unreviewed_pairs)
-      unresolved_pair_ids = population_pairs.select(&:unresolved?).flat_map(&:ids).uniq
-      @legacy_flagged_users = legacy_flagged_users(excluding_pair_ids: unresolved_pair_ids)
+      @unreviewed_match_groups = @unreviewed_pairs.empty? ? [] : [DuplicateReconciliation::PairGroup.new(@unreviewed_pairs)]
+      @legacy_pagy, @legacy_flagged_users = paginate_or_first_page(
+        population.legacy_flagged_users, limit: QUEUE_PAGE_SIZE, page_param: :flags_page
+      )
     end
 
     def show
@@ -133,15 +138,6 @@ module Admin
 
     def set_review_case
       @review_case = DuplicateReviewCase.find(params[:id])
-    end
-
-    def legacy_flagged_users(excluding_pair_ids:)
-      open_case_participant_ids = @open_cases.flat_map do |review_case|
-        [review_case.subject_user_id, *review_case.duplicate_review_case_candidates.map(&:candidate_user_id)]
-      end.compact.uniq
-      User.where(needs_duplicate_review: true)
-          .where.not(id: open_case_participant_ids + excluding_pair_ids)
-          .order(:last_name, :first_name)
     end
 
     # Only the case subject and its recorded candidates can merge, so a forged id cannot add

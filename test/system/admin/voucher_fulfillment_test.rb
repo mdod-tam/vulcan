@@ -13,7 +13,7 @@ module Admin
       service.correct_shipment!(shipment_id: shipment.id, attributes: { 'tracking_number' => 'AAA112' },
                                 expected_lock_version: shipment.lock_version)
 
-      system_test_sign_in(create(:admin))
+      system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       visit admin_voucher_path(voucher)
 
       assert_text 'Tracking number: AAA112'

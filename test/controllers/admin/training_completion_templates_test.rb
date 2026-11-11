@@ -6,7 +6,7 @@ module Admin
   class TrainingCompletionTemplatesTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       load_seeded_email_templates('training_session_notifications_training_completed')
       @template = EmailTemplate.find_by!(name: 'training_session_notifications_training_completed', format: :text, locale: 'en')
     end

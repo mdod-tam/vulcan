@@ -11,7 +11,7 @@ module Trainers
         @application = create(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: @trainer)
         @source = create(:training_session, :cancelled, application: @application, trainer: @trainer,
                                                         internal_notes: 'Retained private history')
-        sign_in_for_controller_test(@trainer)
+        sign_in_for_controller_test(@trainer, bypass_mfa_enrollment: true)
       end
 
       test 'follow-up form starts blank preserves all fields on error and creates one agreed appointment on retry' do
@@ -73,11 +73,11 @@ module Trainers
       end
 
       test 'another trainer and a completed report cannot use the follow-up operation' do
-        sign_in_for_controller_test(create(:trainer))
+        sign_in_for_controller_test(create(:trainer), bypass_mfa_enrollment: true)
         post trainers_training_session_follow_up_path(@source), params: valid_params
         assert_response :not_found
 
-        sign_in_for_controller_test(@trainer)
+        sign_in_for_controller_test(@trainer, bypass_mfa_enrollment: true)
         report = create(:training_session, :completed, application: @application, trainer: @trainer)
         assert_no_difference ['TrainingSession.count', 'Event.count'] do
           post trainers_training_session_follow_up_path(report), params: valid_params

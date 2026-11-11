@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
+
   def setup
     setup_paper_application_context
     @vouchers_flag = FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
@@ -260,7 +262,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app.stubs(:purge_rejected_proof).returns(true)
 
     reviewer = Applications::ProofReviewer.new(app, admin)
-    reviewer.review(proof_type: :residency, status: :approved)
+    reviewer.review(**proof_decision_params(app, :residency), proof_type: :residency, status: :approved)
 
     app.reload
     assert app.status_approved?, "Expected auto-approval, got #{app.status}"
@@ -284,7 +286,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     assert_no_difference -> { Event.where(action: 'application_auto_approved').count } do
       assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
-        reviewer.review(proof_type: :residency, status: :approved)
+        reviewer.review(**proof_decision_params(app, :residency), proof_type: :residency, status: :approved)
       end
     end
 

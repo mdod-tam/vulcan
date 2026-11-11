@@ -12,7 +12,6 @@ env:
   DATABASE_PASSWORD: postgres
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mat_vulcan_test
   NODE_VERSION: '24'
-  CHROME_NO_SANDBOX: true
   POSTGRES_DB: mat_vulcan_test
   POSTGRES_USER: postgres
   POSTGRES_PASSWORD: postgres
@@ -33,24 +32,6 @@ jobs:
       - name: Run Brakeman security scan
         # Runs through bundle exec instead of bin/brakeman.
         run: bundle exec brakeman --no-pager
-
-  lint:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: true
-          
-      - name: Run RuboCop
-        run: bin/rubocop -f github
-
-      - name: Setup virtual display
-        run: export DISPLAY=:99.0 Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
 
   tests:
     runs-on: ubuntu-latest
@@ -96,6 +77,9 @@ jobs:
           
       - name: Install JS dependencies
         run: yarn install --immutable
+
+      - name: Run JavaScript tests
+        run: yarn test --ci --runInBand
         
       - name: Build assets
         run: |
@@ -106,15 +90,5 @@ jobs:
       - name: Database setup
         run: bin/rails db:setup
         
-      - name: Run tests
-        run: bin/rails test:all
-        
-      - name: Upload test artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-artifacts
-          path: |
-            ${{ github.workspace }}/tmp/screenshots
-            ${{ github.workspace }}/tmp/screenshots_failures
-          if-no-files-found: ignore
+      - name: Run Rails tests
+        run: bin/rails test

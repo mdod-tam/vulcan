@@ -6,7 +6,7 @@ module VendorPortal
   class ProfilesTest < ApplicationSystemTestCase
     setup do
       @vendor_user = create(:vendor, :approved, email_verified: true)
-      system_test_sign_in(@vendor_user)
+      system_test_sign_in(@vendor_user, bypass_mfa_enrollment: true)
     end
 
     test 'profile editing keeps the tax ID and earlier terms acceptance' do

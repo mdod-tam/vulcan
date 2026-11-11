@@ -11,7 +11,7 @@ class AssignTrainerTest < ApplicationSystemTestCase
 
     Policy.find_or_create_by(key: 'max_training_sessions').update(value: 2)
 
-    system_test_sign_in(@admin)
+    system_test_sign_in(@admin, bypass_mfa_enrollment: true)
   end
 
   test 'admin can assign trainer to an approved application' do

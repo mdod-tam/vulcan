@@ -7,6 +7,10 @@ module Applications
     # Duplicates on two sides of a bucket boundary both stay.
     DEDUPLICATION_WINDOW = 1.minute
 
+    def self.event_time(event)
+      event.is_a?(ProofReview) ? event.reviewed_at : event.created_at
+    end
+
     # @param events [Array<Notification, ApplicationStatusChange, Event, ProofReview>]
     # @return [Array] one event per duplicate group, newest first
     def deduplicate(events)
@@ -15,13 +19,12 @@ module Applications
       grouped_events = events.group_by do |event|
         [
           event_fingerprint(event),
-          (event.created_at.to_i / DEDUPLICATION_WINDOW) * DEDUPLICATION_WINDOW
+          (self.class.event_time(event).to_i / DEDUPLICATION_WINDOW) * DEDUPLICATION_WINDOW
         ]
       end
 
-      grouped_events.values.map do |group|
-        select_best_event(group)
-      end.sort_by(&:created_at).reverse
+      deduplicated = grouped_events.values.map { |group| select_best_event(group) }
+      deduplicated.sort_by { |event| [self.class.event_time(event), event.id || 0] }.reverse
     end
 
     private
@@ -59,7 +62,7 @@ module Applications
     end
 
     def fingerprint_for_proof_review(event)
-      "#{event.proof_type}-#{event.status}"
+      event.id.to_s
     end
 
     def fingerprint_for_notification(event)
@@ -129,7 +132,7 @@ module Applications
     # Highest priority_score wins. The newest event breaks a tie.
     def select_best_event(group)
       group.max_by do |event|
-        [priority_score(event), event.created_at]
+        [priority_score(event), self.class.event_time(event), event.id || 0]
       end
     end
 

@@ -7,7 +7,8 @@ module Admin
   # detection depend on.
   class UserDateOfBirthEditTest < ActionDispatch::IntegrationTest
     setup do
-      sign_in_for_integration_test(create(:admin))
+      @admin = create(:admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @constituent = create(:constituent, date_of_birth: Date.new(1980, 9, 10))
     end
 
@@ -47,7 +48,7 @@ module Admin
       assert_response :unprocessable_content
       assert_equal 'Users::Trainer', trainer.reload.type
 
-      trainer.update!(date_of_birth: '09/10/1980')
+      Current.set(user: @admin) { trainer.update!(date_of_birth: '09/10/1980') }
       patch update_role_admin_user_path(trainer), params: { role: 'Constituent' }, headers: { 'Accept' => Mime[:turbo_stream].to_s }
       assert_equal 'Users::Constituent', User.find(trainer.id).type
     end

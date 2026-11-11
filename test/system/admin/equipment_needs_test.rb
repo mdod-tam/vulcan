@@ -14,7 +14,7 @@ module Admin
       alternate = create(:product, name: 'Alternative consultation device')
       EquipmentNeeds::Writer.initialize_from!(report, actor: admin)
       original_report = report.reload.attributes
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_equipment_index_path(tab: 'needs_ordering', product_id: original_product.id)
       assert_text original_product.name
       take_screenshot('equipment-needs-original-queue', html: true, full: true)
@@ -97,7 +97,7 @@ module Admin
       other_admin = create(:admin)
       application = create(:application, :approved, :with_all_proofs)
       product = create(:product, name: 'Device from another staff decision')
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit edit_admin_application_equipment_needs_path(application)
       product_label = page.find('select option', text: product.name).text
       select product_label, from: 'Catalog model'
@@ -172,7 +172,7 @@ module Admin
       original_report = report.reload.attributes
       marker = application.reload.equipment_needs_initialized_at
       context = { tab: 'needs_ordering', product_id: product.id.to_s, vendor_id: vendor.id.to_s }
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
       within '#equipment' do
         assert_selector 'span.badge.badge-warning', text: 'Needs a catalog product'

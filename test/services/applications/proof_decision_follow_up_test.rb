@@ -6,6 +6,8 @@ module Applications
   # The effects of a recorded income, residency, or ID decision. The writers that record one schedule this after
   # their transaction commits; these tests run it directly on a decision the factory saved.
   class ProofDecisionFollowUpTest < ActiveSupport::TestCase
+    include ProofResubmissionTestHelper
+
     setup do
       @admin = create(:admin)
       @application = create(:application, :in_progress, skip_proofs: true)
@@ -24,7 +26,8 @@ module Applications
       RequestProofResubmission.expects(:new).with(
         application: @application,
         actor: @admin,
-        proof_type: :income
+        proof_type: :income,
+        proof_review: instance_of(ProofReview)
       ).returns(service)
       NotificationService.expects(:create_and_deliver!).never
 
@@ -50,7 +53,7 @@ module Applications
           params[:recipient] == guardian &&
           params[:actor] == @admin &&
           params[:notifiable] == application &&
-          params[:metadata] == { proof_type: 'income' } &&
+          params[:metadata] == { proof_type: 'income', proof_review_id: review.id } &&
           params[:deliver] == false
       end
 
@@ -81,8 +84,7 @@ module Applications
         load Rails.root.join("db/seeds/email_templates/#{name}.rb")
       end
       ActionMailer::Base.deliveries.clear
-      review = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
-                          .record!(admin: @admin, rejection_reason: 'Unreadable')
+      review = record_proof_review(application: @application, proof_type: :income, status: :rejected, admin: @admin, rejection_reason: 'Unreadable')
 
       assert_emails(1) { follow_up(review) }
 
@@ -105,11 +107,9 @@ module Applications
     test 'distinct rejection-limit decisions retain their audit while repeated follow-up is deduplicated' do
       freeze_time do
         @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1)
-        income = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
-                            .record!(admin: @admin, rejection_reason: 'Unreadable')
+        income = record_proof_review(application: @application, proof_type: :income, status: :rejected, admin: @admin, rejection_reason: 'Unreadable')
         follow_up(income)
-        residency = ProofReview.for_decision(@application, proof_type: :residency, status: :rejected)
-                               .record!(admin: @admin, rejection_reason: 'Unreadable')
+        residency = record_proof_review(application: @application, proof_type: :residency, status: :rejected, admin: @admin, rejection_reason: 'Unreadable')
 
         assert_difference -> { Event.where(action: 'max_rejections_warning', auditable: @application).count }, 1 do
           follow_up(residency)
@@ -121,8 +121,7 @@ module Applications
 
     test 'repeated follow-up keeps one archive intent and never redispatches its queued or failed notice' do
       @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
-      review = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
-                          .record!(admin: @admin, rejection_reason: 'Unreadable')
+      review = record_proof_review(application: @application, proof_type: :income, status: :rejected, admin: @admin, rejection_reason: 'Unreadable')
 
       assert_difference -> { Notification.where(action: 'max_rejections_reached', notifiable: @application).count }, 1 do
         follow_up(review)
@@ -150,8 +149,9 @@ module Applications
       result = nil
 
       Notification.stub(:create!, fail_archive_intent) do
-        result = ProofReviewService.new(@application, @admin,
-                                        ActionController::Parameters.new(proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable')).call
+        result = ProofReviewService.new(@application, @admin, ActionController::Parameters.new(
+                                                                proof_decision_params(@application, 'income').merge(proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable')
+                                                              )).call
       end
 
       assert result.success?, result.message
@@ -193,27 +193,25 @@ module Applications
     end
 
     test 'a repeat rejection of the same proof follows up like a new one, with its own audit event' do
-      first = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
-                         .record!(admin: @admin, rejection_reason: 'Unreadable')
+      first = record_proof_review(application: @application, proof_type: :income, status: :rejected, admin: @admin, rejection_reason: 'Unreadable')
       follow_up(first)
 
-      assert_no_difference -> { ProofReview.count } do
+      assert_difference -> { ProofReview.count }, 1 do
         assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
-          repeat = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
-                              .record!(admin: @admin, rejection_reason: 'Still unreadable')
+          repeat = record_proof_review(application: @application, proof_type: :income, status: :rejected, admin: @admin, rejection_reason: 'Still unreadable')
           follow_up(repeat)
         end
       end
     end
 
     test 'a repeat approval follows up like a new one, so each approval has its own audit event and record' do
-      first = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
+      first = record_proof_review(application: @application, proof_type: :income, status: :approved, admin: @admin)
       follow_up(first)
 
-      assert_no_difference -> { ProofReview.count } do
+      assert_difference -> { ProofReview.count }, 1 do
         assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 1 do
           assert_difference -> { Notification.where(action: 'proof_approved', notifiable: @application).count }, 1 do
-            repeat = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
+            repeat = record_proof_review(application: @application, proof_type: :income, status: :approved, admin: @admin)
             follow_up(repeat)
           end
         end
@@ -221,8 +219,8 @@ module Applications
     end
 
     test 'approvals of two proofs in quick succession each keep their own audit event' do
-      income = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
-      residency = ProofReview.for_decision(@application, proof_type: :residency, status: :approved).record!(admin: @admin)
+      income = record_proof_review(application: @application, proof_type: :income, status: :approved, admin: @admin)
+      residency = record_proof_review(application: @application, proof_type: :residency, status: :approved, admin: @admin)
 
       assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 2 do
         follow_up(income)

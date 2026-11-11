@@ -8,7 +8,7 @@ module VendorPortal
       @vendor = create(:vendor_user)
       # rubocop:disable-next FactoryBot/ExcessiveCreateList -- Exercises more than one 20-row page.
       create_list(:voucher_transaction, 23, vendor: @vendor, processed_at: Time.zone.local(2026, 10, 9, 12), amount: 40)
-      system_test_sign_in(@vendor)
+      system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
     end
 

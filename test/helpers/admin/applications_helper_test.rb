@@ -4,6 +4,7 @@ require 'test_helper'
 
 module Admin
   class ApplicationsHelperTest < ActionView::TestCase
+    include ProofResubmissionTestHelper
     include ApplicationsHelper
     include ::ApplicationHelper
     include ::BadgeHelper
@@ -15,6 +16,25 @@ module Admin
         certifying_professional_name: 'Dr. Provider',
         certifying_professional_email: 'provider@example.test'
       )
+    end
+
+    test 'proof review retry fields retain a submitted empty target and stable key' do
+      stubs(:params).returns(ActionController::Parameters.new(
+                               proof_type: 'disability_certification', status: 'rejected', decision_key: 'retry-key', reviewed_blob_id: ''
+                             ))
+
+      assert_equal({ decision_key: 'retry-key', reviewed_blob_id: '' },
+                   proof_review_request_params(@application, :disability_certification, :rejected))
+    end
+
+    test 'a review missing its submitted target is not silently retargeted on validation rerender' do
+      stubs(:params).returns(ActionController::Parameters.new(proof_type: 'income', status: 'rejected', decision_key: 'retry-key'))
+
+      assert_equal({ decision_key: 'retry-key', reviewed_blob_id: 'missing' },
+                   proof_review_request_params(@application, :income, :rejected))
+      another = proof_review_request_params(@application, :residency, :rejected)
+      assert_not_equal 'retry-key', another[:decision_key]
+      assert_equal @application.residency_proof.blob&.id, another[:reviewed_blob_id]
     end
 
     test 'disability certification action state derives requested after rejection from notifications' do
@@ -197,15 +217,11 @@ module Admin
     private
 
     def reject_certification(application, reason, reason_code)
-      DisabilityCertificationAttachmentService.reject_certification(
-        application: application, admin: create(:admin), reason: reason, reason_code: reason_code, submission_method: :paper
-      )
+      DisabilityCertificationAttachmentService.reject_certification(**proof_decision_params(application, :disability_certification), application: application, admin: create(:admin), reason: reason, reason_code: reason_code, submission_method: :paper)
     end
 
     def reject_without_file(proof_type, reason)
-      ProofAttachmentService.reject_proof_without_attachment(
-        application: @application, proof_type: proof_type, admin: create(:admin), reason: reason, submission_method: :paper
-      )
+      ProofAttachmentService.reject_proof_without_attachment(**proof_decision_params(@application, proof_type), application: @application, proof_type: proof_type, admin: create(:admin), reason: reason, submission_method: :paper)
     end
 
     def proof_rejection_activity(proof_type)

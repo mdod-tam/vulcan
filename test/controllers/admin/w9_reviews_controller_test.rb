@@ -6,7 +6,7 @@ module Admin
   class W9ReviewsControllerTest < ActionDispatch::IntegrationTest
     setup do
       @admin = create(:admin)
-      sign_in_as(@admin)
+      sign_in_as(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'should get new with attached w9' do
@@ -228,7 +228,7 @@ module Admin
 
       attach_w9(vendor)
 
-      cookies.delete(:session_token)
+      cookies.delete('session_token')
       delete sign_out_path
 
       get new_admin_vendor_w9_review_path(vendor)
@@ -269,7 +269,7 @@ module Admin
       non_admin = create(:vendor)
 
       delete sign_out_path
-      sign_in_as(non_admin)
+      sign_in_as(non_admin, bypass_mfa_enrollment: true)
 
       get new_admin_vendor_w9_review_path(vendor)
       assert_redirected_to root_path

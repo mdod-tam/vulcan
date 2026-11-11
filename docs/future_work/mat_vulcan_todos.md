@@ -152,7 +152,6 @@ Options:
 3. Reverse proxy. `maryland.gov/<path>` is routed to the application, so the URL stays on maryland.gov. This is a DoIT web server or CDN change, not Drupal configuration.
    - Needs no caching on our path, cookies and POSTs passed through, forwarded host and proto headers, and `trusted_proxies` (none is configured) so `request.remote_ip` (rate limits, session records) is not the proxy.
    - The application assumes it is mounted at `/`: `publicPath: '/assets'` in `esbuild.config.js`, `report_uri '/csp_reports'` in the CSP initializer, and root-relative `fetch` and `Turbo.visit` URLs in the admin Stimulus controllers.
-   - Twilio signature validation uses `request.original_url`, so webhooks should keep our own hostname.
 4. Header and footer from Drupal (extends option 1). Fetch them server-side with `Rails.cache` (Solid Cache in production) and a stale fallback so a Drupal outage does not break sign-in, or vendor a static copy. Markup and CSS only; no DoIT-supplied scripts on authenticated pages. The CSP allows only `'self'` for styles, fonts, and images (plus `data:` and `blob:` for images), so their stylesheet, logo, and fonts must be copied into our assets or their origin added to `style-src`, `font-src`, and `img-src`.
 
 Leaning toward 1 and 4 on a maryland.gov subdomain. The hostname has to be settled before launch: it sets the WebAuthn RP ID (`APPLICATION_HOST` / `WEBAUTHN_RP_ID`), mailer links, and webhook URLs, and changing it afterward orphans enrolled security keys.
@@ -217,7 +216,3 @@ Consolidated `Proof` model
 MAT stands for Maryland Accessible Telecommunications. Vulcan is the Roman god of the forge—a maker of equipment. Since MAT helps people get accessible telecommunications equipment, the name is a playful nod to that connection. A little mythology, a little wordplay; no relation to the Vulcans from Star Trek.
 
 “Vulcan” is an internal nickname. Public-facing pages and messages use Maryland Accessible Telecommunications. Internal module, database, deployment, and synthetic-email identifiers retain their existing names; they are not display labels. The existing TOTP issuer also remains `MatVulcan`.
-
-### Fax-provider replacement
-
-Fax is off. The installed Twilio SDK has no fax API, so `FaxService` refuses to send. Choosing a replacement provider also settles whether we receive faxes. Before turning the transport back on, verify the provider and keep these in place: All/category enforcement, authorization of the original attempt, exact SID callback identity, idempotent fallback, and media ownership. Historical signed callbacks still work. Legacy and canceled attempts are never replayed automatically.

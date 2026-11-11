@@ -103,17 +103,6 @@ module ConstituentPortal
       end
     end
 
-    def resubmit_proof
-      @application = current_user.applications.find(params[:id])
-      if @application.resubmit_proof!
-        redirect_with_notice(constituent_portal_application_path(@application),
-                             'Proof resubmitted successfully')
-      else
-        redirect_with_alert(constituent_portal_application_path(@application),
-                            'Failed to resubmit proof')
-      end
-    end
-
     def request_training
       @application = Application.accessible_by(current_user).find(params.expect(:id))
 

@@ -12,7 +12,7 @@ module Admin
       @pending_letter2 = create(:print_queue_item, :pending, letter_type: :other_notification)
       @printed_letter = create(:print_queue_item, letter_type: :account_created, admin: @admin)
 
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'the queue groups letters by stage and gates release on a selection' do

@@ -30,7 +30,8 @@ module Applications
         admin: @admin,
         proof_type: 'income',
         status: 'approved',
-        reviewed_at: Time.current
+        reviewed_at: 1.hour.ago,
+        created_at: 1.day.ago
       )
 
       @notification = Notification.create!(
@@ -62,7 +63,9 @@ module Applications
 
         assert_includes logs, @status_change
 
-        assert_equal logs.map(&:created_at), logs.map(&:created_at).sort.reverse
+        timestamps = logs.map { |log| EventDeduplicationService.event_time(log) }
+        assert_equal timestamps.sort.reverse, timestamps
+        assert_equal @proof_review.reviewed_at, EventDeduplicationService.event_time(logs.grep(ProofReview).sole)
       end
     end
 

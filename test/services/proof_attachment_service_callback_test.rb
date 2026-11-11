@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveJob::TestHelper
   include ActionDispatch::TestProcess::FixtureFile
 
@@ -58,7 +59,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     app.reload
 
     assert_not_nil app.needs_review_since
-    assert Applications::ProofReviewer.new(app, @admin).review(proof_type: :income, status: :approved)
+    assert Applications::ProofReviewer.new(app, @admin).review(**proof_decision_params(app, :income), proof_type: :income, status: :approved)
     assert_nil app.reload.needs_review_since
   end
 

@@ -15,7 +15,7 @@ module Admin
     end
 
     test 'All dominates saved channels and print release explains a refusal without losing history' do
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
       within('[data-email-control="communications.global"]') { accept_confirm { click_button 'Turn off' } }
       within('[data-email-control="communications.sms"]') do
@@ -60,7 +60,7 @@ module Admin
     test 'SMS setup preserves a refused phone number and can retry with a replacement' do
       EmailDelivery::ControlWriter.set(name: EmailDelivery::CHANNEL_CONTROLS['sms'], enabled: false,
                                        actor: @admin, operation_id: SecureRandom.uuid)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit new_credential_two_factor_authentication_path(type: 'sms')
       fill_in 'Phone Number', with: '555-123-4567'
       click_button 'Continue'
@@ -84,7 +84,7 @@ module Admin
                                         context: EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form'), actor: @admin) do
         StringIO.new('%PDF second letter')
       end
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_print_queue_index_path
       assert_button 'Release and download selected', disabled: true
       within('section[aria-label="Awaiting release"]') do
@@ -108,7 +108,7 @@ module Admin
     end
 
     test 'a storage failure retains the batch selection and allows a deliberate retry' do
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_print_queue_index_path
       find("#letter-#{@letter.id}").check
       ActiveStorage::Blob.any_instance.stubs(:download).raises(ActiveStorage::FileNotFoundError)
@@ -130,7 +130,7 @@ module Admin
     end
 
     test 'a released letter can be marked as printed' do
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_print_queue_index_path
       within('section[aria-label="Awaiting release"]') do
         find("#letter-#{@letter.id}").check

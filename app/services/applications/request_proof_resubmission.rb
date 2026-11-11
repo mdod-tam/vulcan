@@ -16,7 +16,7 @@ module Applications
 
     # rubocop:disable-next Metrics/ParameterLists
     def initialize(application:, actor:, proof_type:, recipient_ids: nil, channel_overrides: {}, resend_of: nil,
-                   public_recovery: false)
+                   public_recovery: false, proof_review: nil)
       super()
       @application = application
       @actor = actor
@@ -25,17 +25,21 @@ module Applications
       @channel_overrides = channel_overrides
       @resend_of = resend_of
       @public_recovery = public_recovery
+      @proof_review = proof_review
+      return unless proof_review
+      return if proof_review.application_id == application.id && proof_review.proof_type == proof_type.to_s && proof_review.status_rejected?
+
+      raise ArgumentError, 'The rejection decision must belong to this application and proof'
     end
 
     def self.delivery_confirmed_for_review?(proof_review)
       proof_type = proof_review.proof_type.to_sym
       return false unless PROOF_KIND_BY_TYPE.key?(proof_type)
 
-      # Failed deliveries retain revoked rows for audit. They must not suppress admin warnings.
-      SecureRequestForm.public_send("#{proof_type}_proof")
-                       .active
-                       .where(application_id: proof_review.application_id)
-                       .exists?(created_at: proof_review.created_at..)
+      # Link expiry and submission do not undo a recorded delivery handoff. This does not prove receipt.
+      Notification.where(action: 'proof_resubmission_requested', notifiable: proof_review.application)
+                  .where("metadata->>'proof_review_id' = ?", proof_review.id.to_s)
+                  .with_delivery_handoff.exists?
     end
 
     def call
@@ -47,6 +51,7 @@ module Applications
         deliveries = prepare_requests do
           # Repeat the preliminary proof-state check under the issuance lock.
           raise SecureRequestIssuance::Refused, :request_not_needed unless requestable_proof_state?
+          raise SecureRequestIssuance::Refused, :request_not_needed if @proof_review && !@proof_review.current_rejection?(application: application)
         end
         delivery_result = deliver_requests(deliveries)
         return delivery_result if delivery_result.failure?
@@ -76,7 +81,7 @@ module Applications
       @latest_rejection_review ||= begin
         reviews = application.proof_reviews
         reviews.where(proof_type: proof_type, status: :rejected)
-               .order(updated_at: :desc, created_at: :desc)
+               .recent
                .first
       end
     end
@@ -94,6 +99,7 @@ module Applications
         candidate: candidate, request_batch_id: request_batch_id, notification_type: 'proof_resubmission_requested',
         tracking_metadata: {
           proof_type: proof_type.to_s,
+          proof_review_id: proof_request_rejected? ? latest_rejection_review&.id : nil,
           proof_request_display_mode: proof_request_display_mode,
           rejection_reason: proof_request_rejection_reason,
           rejection_reason_code: proof_request_rejection_reason_code

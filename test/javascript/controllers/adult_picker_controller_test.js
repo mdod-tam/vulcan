@@ -152,8 +152,14 @@ describe("AdultPickerController", () => {
     jest.clearAllMocks()
   })
 
+  async function loadSelectedAdultContext() {
+    controller.constituentIdFieldTarget.value = '42'
+    controller.selectedValue = true
+    await controller.fetchAdultContext('42')
+  }
+
   it("does not silently copy application fields when adult context loads", async () => {
-    await controller.fetchAdultContext("42")
+    await loadSelectedAdultContext()
 
     expect(setFieldValue).not.toHaveBeenCalled()
     expect(setVisible).toHaveBeenCalledWith(controller.incomeCopyButtonTarget, true)
@@ -165,7 +171,7 @@ describe("AdultPickerController", () => {
     const box = fixture.querySelector(".adult-details-container")
     expect(box.textContent).toBe("")
 
-    await controller.fetchAdultContext("42")
+    await loadSelectedAdultContext()
 
     expect(box.textContent).toContain("Pat Q Applicant")
     expect(box.childElementCount).toBeGreaterThan(0)
@@ -177,7 +183,7 @@ describe("AdultPickerController", () => {
     const box = fixture.querySelector(".adult-details-container")
     box.innerHTML = '<div class="chosen">Chosen by click</div>'
 
-    await controller.fetchAdultContext("42")
+    await loadSelectedAdultContext()
 
     expect(box.textContent).toContain("Chosen by click")
   })
@@ -195,7 +201,7 @@ describe("AdultPickerController", () => {
   })
 
   it("formats selected adult DOB for text date inputs", async () => {
-    await controller.fetchAdultContext("42")
+    await loadSelectedAdultContext()
     controller._autopopulateFields(controller._adultApplicationContext.user)
 
     expect(fixture.querySelector('input[name="constituent[date_of_birth]"]').value).toBe("01/01/1980")
@@ -225,6 +231,183 @@ describe("AdultPickerController", () => {
 
     fixture.querySelectorAll("#contactModeSection input, #verificationSection input").forEach(field => {
       expect(field.disabled).toBe(true)
+    })
+  })
+
+  describe("context response ownership", () => {
+    let requests
+
+    const context = (id, locale = 'en', income = 11000) => ({
+      success: true,
+      user: {
+        first_name: `Applicant ${id}`, last_name: 'Selected', date_of_birth: '1980-01-01',
+        email: `applicant${id}@example.com`, phone: '4105550100',
+        physical_address_1: `${id} Selected Street`, physical_address_2: `Apt ${id}`,
+        city: `City ${id}`, state: 'MD', zip_code: '21201', locale,
+        preferred_means_of_communication: 'written'
+      },
+      household_size: Number(id), annual_income: income,
+      certifying_professional_name: `Professional ${id}`
+    })
+
+    beforeEach(() => {
+      requests = []
+      global.fetch.mockImplementation(() => new Promise((resolve, reject) => requests.push({ resolve, reject })))
+    })
+
+    async function flushResponses() {
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+
+    async function respond(index, data) {
+      requests[index].resolve({ ok: true, json: async () => data })
+      await flushResponses()
+    }
+
+    function selectAdult(id) {
+      controller.selectAdult(id, `<div>Applicant ${id}</div>`)
+    }
+
+    function expectCurrentContext(id, locale = 'en', income = 11000) {
+      expect(controller.constituentIdFieldTarget.value).toBe(id)
+      expect(fixture.querySelector('[name="constituent[physical_address_1]"]').value).toBe(`${id} Selected Street`)
+      expect(fixture.querySelector('[name="constituent[locale]"]').value).toBe(locale)
+      expect(controller._onFileData.physical_address_1).toBe(`${id} Selected Street`)
+      expect(controller.onFileSummaryContentTarget).toHaveTextContent(`Applicant ${id}`)
+      expect(controller._adultApplicationContext.annual_income).toBe(income)
+      expect(controller.contactModeSectionTarget).not.toHaveClass('hidden')
+      expect(controller.verificationSectionTarget).not.toHaveClass('hidden')
+    }
+
+    it("keeps fields, on-file data, and copy sources on the current selection", async () => {
+      selectAdult('1')
+      selectAdult('2')
+      await respond(1, context('2', 'es', 22000))
+      await respond(0, context('1'))
+
+      expectCurrentContext('2', 'es', 22000)
+      controller.useLastApplicationIncomeInfo()
+      controller.useLastApplicationCertifyingProfessional()
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[annual_income]"]', 22000)
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_name]"]', 'Professional 2')
+    })
+
+    it("rejects an earlier response when the same adult is selected again", async () => {
+      selectAdult('1')
+      selectAdult('2')
+      selectAdult('1')
+      await respond(2, context('1', 'es', 33000))
+      await respond(0, context('1'))
+
+      expectCurrentContext('1', 'es', 33000)
+    })
+
+    it("checks ownership after delayed JSON parsing", async () => {
+      let resolveJson
+      selectAdult('1')
+      requests[0].resolve({ ok: true, json: () => new Promise(resolve => { resolveJson = resolve }) })
+      await flushResponses()
+      selectAdult('2')
+      await respond(1, context('2', 'es', 22000))
+      resolveJson(context('1'))
+      await flushResponses()
+
+      expectCurrentContext('2', 'es', 22000)
+    })
+
+    it("removes previous context and verification while a replacement loads", async () => {
+      selectAdult('1')
+      await respond(0, context('1'))
+      controller.verificationCheckboxTarget.checked = true
+      selectAdult('2')
+
+      controller.useLastApplicationIncomeInfo()
+      controller.useLastApplicationCertifyingProfessional()
+
+      expect(setFieldValue).not.toHaveBeenCalled()
+      expect(controller._adultApplicationContext).toBeNull()
+      expect(controller._onFileData).toEqual({})
+      expect(controller.onFileSummaryTarget).toHaveClass('hidden')
+      expect(controller.verificationCheckboxTarget.checked).toBe(false)
+    })
+
+    it.each(['clearSelection', 'createNewApplicant', 'disconnect'])("invalidates pending responses on %s", async action => {
+      selectAdult('1')
+      controller[action]()
+      await respond(0, context('1'))
+
+      expect(controller._adultApplicationContext).toBeNull()
+      expect(controller._onFileData).toEqual({})
+      expect(controller.onFileSummaryTarget).toHaveClass('hidden')
+      expect(fixture.querySelector('[name="constituent[physical_address_1]"]').value).toBe('')
+    })
+
+    it("does not log an obsolete request failure or disturb current context", async () => {
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        selectAdult('1')
+        selectAdult('2')
+        await respond(1, context('2', 'es', 22000))
+        requests[0].reject(new Error('Previous request failed'))
+        await flushResponses()
+
+        expectCurrentContext('2', 'es', 22000)
+        expect(warning).not.toHaveBeenCalled()
+      } finally {
+        warning.mockRestore()
+      }
+    })
+
+    it("leaves no previous adult context available after the current request fails", async () => {
+      const warning = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        selectAdult('1')
+        await respond(0, context('1'))
+        selectAdult('2')
+        requests[1].reject(new Error('Current request failed'))
+        await flushResponses()
+
+        expect(controller._adultApplicationContext).toBeNull()
+        expect(controller._onFileData).toEqual({})
+        expect(controller.onFileSummaryTarget).toHaveClass('hidden')
+        expect(controller.verificationCheckboxTarget.checked).toBe(false)
+        expect(warning).toHaveBeenCalledTimes(1)
+      } finally {
+        warning.mockRestore()
+      }
+    })
+
+    it("rejects a response from before disconnect even after reconnecting to the same adult", async () => {
+      selectAdult('1')
+      controller.disconnect()
+      controller.connect()
+      await respond(1, context('1', 'es', 33000))
+      await respond(0, context('1'))
+
+      expectCurrentContext('1', 'es', 33000)
+    })
+
+    it("preserves restored corrections and populates a replacement adult after clearing", async () => {
+      fixture.dataset.adultPickerRestoredValue = 'true'
+      controller.constituentIdFieldTarget.value = '1'
+      fixture.querySelector('[name="constituent[physical_address_1]"]').value = 'Corrected on paper'
+      fixture.querySelector('[name="constituent[locale]"]').value = 'es'
+      controller.verificationCheckboxTarget.checked = true
+      controller.connect()
+      await respond(0, context('1'))
+
+      expect(fixture.querySelector('[name="constituent[physical_address_1]"]').value).toBe('Corrected on paper')
+      expect(fixture.querySelector('[name="constituent[locale]"]').value).toBe('es')
+      expect(controller.verificationCheckboxTarget.checked).toBe(true)
+      expect(controller._onFileData.physical_address_1).toBe('1 Selected Street')
+
+      controller.clearSelection()
+      selectAdult('2')
+      await respond(1, context('2'))
+
+      expectCurrentContext('2')
+      expect(controller.verificationCheckboxTarget.checked).toBe(false)
     })
   })
 })

@@ -35,7 +35,7 @@
       <% end %>
     </div>
 
-    <% if can_resubmit_proof?(application, proof_type, @max_proof_submissions) %>
+    <% if application.proof_resubmittable_via_portal?(proof_type) %>
       <%= link_to t('applications.proof_card.upload', proof: t("applications.proof_card.types.#{proof_type}")),
                   new_proof_constituent_portal_application_path(application, proof_type: proof_type),
                   class: 'btn btn-primary' %>

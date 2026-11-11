@@ -8,7 +8,7 @@ class JavascriptCleanupContractTest < ApplicationSystemTestCase
 
   test 'paper search sends one frame request per typing burst for adults and guardians' do
     person = create(:constituent, first_name: 'Searchcontract', last_name: 'Person')
-    system_test_sign_in(create(:admin))
+    system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
     visit new_admin_paper_application_path
     install_request_recording
 

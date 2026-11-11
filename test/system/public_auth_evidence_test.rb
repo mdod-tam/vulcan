@@ -3,6 +3,22 @@
 require 'application_system_test_case'
 
 class PublicAuthEvidenceTest < ApplicationSystemTestCase
+  test 'signing in as a second actor uses only its own persisted session' do
+    first_actor = create(:constituent, first_name: 'First actor')
+    second_actor = create(:constituent, first_name: 'Second actor')
+    system_test_sign_in(first_actor)
+
+    system_test_sign_in(second_actor)
+    visit edit_profile_path
+    assert_field 'First name', with: 'Second actor'
+    assert_empty first_actor.sessions.reload
+    assert_equal 1, second_actor.sessions.reload.count
+
+    system_test_sign_out
+
+    assert_empty second_actor.sessions.reload
+  end
+
   test 'public auth and profile visible states have current screenshot evidence' do
     visit sign_in_path
     assert_text I18n.t('sessions.title')

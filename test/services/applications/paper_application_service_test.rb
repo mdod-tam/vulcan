@@ -532,6 +532,7 @@ module Applications
 
       reviewer_result = BaseService::Result.new(success: true, data: { provider_delivery: { success: true, outcome: :deferred } })
       Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).with(
+        decision_key: 'paper-initial:disability_certification', reviewed_blob_id: nil,
         rejection_reason: custom_note,
         notes: nil,
         rejection_reason_code: nil

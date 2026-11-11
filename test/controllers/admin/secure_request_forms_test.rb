@@ -8,7 +8,7 @@ module Admin
 
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'proof chooser exposes explicit SMS with provider information already complete' do
@@ -33,7 +33,7 @@ module Admin
       application = create(:application, :in_progress, :with_income_proof, user: recipient)
 
       patch update_proof_status_admin_application_path(application),
-            params: { proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable document' },
+            params: { **proof_decision_params(application, :income), proof_type: 'income', status: 'rejected', rejection_reason: 'Unreadable document' },
             as: :turbo_stream
 
       assert_response :success

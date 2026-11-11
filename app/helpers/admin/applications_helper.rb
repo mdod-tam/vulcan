@@ -2,7 +2,25 @@
 
 module Admin
   module ApplicationsHelper
+    def proof_review_request_params(application, proof_type, status)
+      submitted = params[:proof_type].to_s == proof_type.to_s &&
+                  (params[:status] || params[:disability_certification_status]).to_s == status.to_s && params[:decision_key].present?
+      if submitted
+        { decision_key: params[:decision_key], reviewed_blob_id: params.fetch(:reviewed_blob_id, 'missing') }
+      else
+        { decision_key: SecureRandom.uuid, reviewed_blob_id: application.document_attachment_for(proof_type).blob&.id }
+      end
+    end
+
+    def proof_rejection_decisions(application, proof_types)
+      proof_types.index_with { |type| proof_review_request_params(application, type, :rejected) }
+    end
+
     include RejectionReasonsHelper
+
+    def audit_log_timestamp(log)
+      Applications::EventDeduplicationService.event_time(log).strftime('%B %d, %Y %I:%M %p')
+    end
 
     def practitioner_assignment_option_label(practitioner)
       identifier = practitioner.email.presence || "ID ##{practitioner.id}"
@@ -117,7 +135,7 @@ module Admin
       return nil unless application.respond_to?(proof_status_method)
       return nil unless application.send(proof_status_method) == 'rejected'
 
-      proof_review = application.proof_reviews.where(proof_type: proof_type, status: 'rejected').order(created_at: :desc).first
+      proof_review = application.proof_reviews.rejections.where(proof_type: proof_type).recent.first
       proof_review&.rejection_reason || 'Reason unavailable'
     end
 
@@ -154,7 +172,7 @@ module Admin
       return false unless document_status(application, proof_type) == 'rejected'
       return false if application.document_attachment_for(proof_type).attached?
 
-      latest = application.proof_reviews.rejections.where(proof_type: proof_type).order(created_at: :desc, id: :desc).first
+      latest = application.proof_reviews.rejections.where(proof_type: proof_type).recent.first
       latest.present? && latest.none_provided?
     end
 

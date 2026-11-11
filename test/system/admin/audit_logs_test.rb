@@ -54,8 +54,8 @@ module Admin
     end
 
     test 'audit logs correctly show proof review actions without duplicates' do
-      system_test_sign_in(@admin)
-      visit_admin_application_with_retry(@application, user: @admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
 
       assert_selector '#attachments-section', wait: 15
 

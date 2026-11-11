@@ -4,6 +4,8 @@ import { setVisible } from "../../utils/visibility"
 export default class extends Controller {
   static targets = [
     "proofType",         // Hidden input for proof type
+    "decisionKey",
+    "reviewedBlobId",
     "reasonCode",        // Hidden input for rejection_reason_code (snake_case DB key)
     "reasonButton",      // Predefined rejection reason buttons
     "reasonField",       // Text area for rejection reason
@@ -14,24 +16,30 @@ export default class extends Controller {
     "generalReasons"     // General rejection reasons container (income/residency/id)
   ]
 
-  static values = {}
+  static values = { decisions: Object }
 
   connect() {
     this._boundProofTypeChanged = this._handleProofTypeChanged.bind(this)
+    this._proofType = this.hasProofTypeTarget ? this.proofTypeTarget.value : ""
+    const restoredReason = this.hasReasonFieldTarget && this.reasonFieldTarget.value.trim()
 
     if (this.hasReasonFieldTarget) {
-      this.reasonFieldTarget.value = ""
       this.reasonFieldTarget.classList.remove('border-danger-500')
       this._lockReasonField()
     }
     this._hideLanguageNotice()
-    this._resetReasonCodeState()
+    if (!restoredReason) this._resetReasonCodeState()
+    else if (!this.hasReasonCodeTarget || !this.reasonCodeTarget.value || this.reasonCodeTarget.value === "other") {
+      this._unlockReasonField()
+      this._showLanguageNotice()
+    }
 
     this._initializeReasonButtons()
     this._syncGroupInteractivity()
 
     if (this.hasProofTypeTarget && this.proofTypeTarget.value) {
       this._updateReasonGroupsVisibility(this.proofTypeTarget.value)
+      this._setDecision(this.proofTypeTarget.value)
     }
 
     this.element.addEventListener('proof-type-changed', this._boundProofTypeChanged)
@@ -43,6 +51,9 @@ export default class extends Controller {
 
   _handleProofTypeChanged(event) {
     const proofType = event.detail.proofType
+    this._setDecision(proofType)
+    if (proofType === this._proofType) return
+    this._proofType = proofType
 
     if (this.hasProofTypeTarget) {
       this.proofTypeTarget.value = proofType
@@ -57,13 +68,16 @@ export default class extends Controller {
     }
   }
 
+  _setDecision(proofType) {
+    const decision = this.decisionsValue[proofType]
+    if (!decision) return
+    if (this.hasDecisionKeyTarget) this.decisionKeyTarget.value = decision.decision_key
+    if (this.hasReviewedBlobIdTarget) this.reviewedBlobIdTarget.value = decision.reviewed_blob_id ?? ""
+  }
+
   // HTML: data-action="click->rejection-form#handleProofTypeClick"
   handleProofTypeClick(event) {
-    const proofType = event.currentTarget.dataset.proofType
-    if (proofType && this.hasProofTypeTarget) {
-      this.proofTypeTarget.value = proofType
-      this._updateReasonGroupsVisibility(proofType)
-    }
+    this._handleProofTypeChanged({ detail: { proofType: event.currentTarget.dataset.proofType } })
   }
 
   _updateReasonGroupsVisibility(proofType) {

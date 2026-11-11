@@ -16,13 +16,17 @@ module Applications
     # confirm the commit, the result fails with data[:commit_state] set to :unknown. Under a caller's open
     # transaction (paper intake) the caller owns the commit, and an error propagates.
     # @param rejection_reason [String] The reason for rejection
+    # @param decision_key [String] Stable identifier for this decision, retained on request retries
+    # @param reviewed_blob_id [Integer, nil] Reviewed document identifier, or nil for a missing document
     # @param notes [String, nil] Optional additional notes for internal use
     # @param rejection_reason_code [String, nil] Stable code for locale-aware resolution (e.g. missing_signature)
     # @return [BaseService::Result] Result object with success status and any error messages
-    def reject(rejection_reason:, notes: nil, rejection_reason_code: nil)
+    def reject(rejection_reason:, decision_key:, reviewed_blob_id:, notes: nil, rejection_reason_code: nil)
       Rails.logger.info "Rejecting disability certification for Application ##{application.id}"
+      @decision_key = decision_key
+      @reviewed_blob_id = reviewed_blob_id
 
-      validation_result = validate_rejection_inputs(rejection_reason)
+      validation_result = validate_rejection_inputs(rejection_reason, rejection_reason_code)
       return validation_result if validation_result.failure?
 
       commit = review_commit
@@ -31,6 +35,10 @@ module Applications
       end
       # A nil result means the rejection committed and a later step failed.
       return failure(service_result[:error]&.message || 'Disability certification service failed') if service_result && !service_result[:success]
+      if service_result.to_h[:recorded] == false
+        return success('This disability certification rejection was already recorded. Review its delivery tracking before sending another notice.',
+                       { notification_id: service_result[:notification_id], proof_review: service_result[:proof_review], replayed: true })
+      end
 
       note_result = create_rejection_note(notes)
       warnings = note_result.failure? ? [note_result.message] : []
@@ -41,24 +49,38 @@ module Applications
                               provider_delivery: { success: false, outcome: :deferred }, warnings: warnings })
       result.message = rejection_message(result.data)
 
-      # Paper intake may own an outer transaction. Rollback discards this provider attempt.
-      ActiveRecord.after_all_transactions_commit do
-        request_result = request_secure_certification_upload
-        result.data[:secure_upload_request] = { success: request_result.success?, message: request_result.message }
-        result.data[:provider_delivery].replace(
-          notify_certifying_professional(
-            rejection_reason, service_result[:notification_id],
-            secure_upload_url: request_result.data&.dig(:secure_upload_url)
-          )
-        )
-        result.message = rejection_message(result.data)
-      end
+      schedule_provider_follow_up(result, service_result)
       result
     rescue ReviewCommit::Unconfirmed => e
       failure(e.message, { commit_state: :unknown })
+    rescue ProofReview::DecisionConflict => e
+      failure(e.message)
     end
 
     private
+
+    # Paper intake may own an outer transaction. Rollback discards this provider attempt.
+    def schedule_provider_follow_up(result, service_result)
+      proof_review = service_result.fetch(:proof_review)
+      ActiveRecord.after_all_transactions_commit do
+        request_result = request_secure_certification_upload(proof_review)
+        result.data[:secure_upload_request] = {
+          success: request_result.success?, message: request_result.message,
+          superseded_review: request_result.data&.dig(:superseded_review)
+        }
+        if request_result.data&.dig(:superseded_review)
+          result.data[:provider_delivery].replace(success: false, outcome: :superseded)
+        else
+          result.data[:provider_delivery].replace(
+            notify_certifying_professional(
+              proof_review.rejection_reason, service_result[:notification_id],
+              secure_upload_url: request_result.data&.dig(:secure_upload_url)
+            )
+          )
+        end
+        result.message = rejection_message(result.data)
+      end
+    end
 
     def review_commit
       ReviewCommit.new(application: application, subject: 'certification rejection', again: 'rejecting it again') { durable_state }
@@ -77,7 +99,7 @@ module Applications
     end
 
     def rejection_review
-      application.proof_reviews.find_by(proof_type: :disability_certification, status: :rejected)
+      application.proof_reviews.find_by(decision_key: @decision_key)
     end
 
     # The provider is not contacted, because the saved state is not fully known.
@@ -88,9 +110,10 @@ module Applications
       result
     end
 
-    def validate_rejection_inputs(rejection_reason)
-      return failure('Rejection reason is required') if rejection_reason.blank?
+    def validate_rejection_inputs(rejection_reason, rejection_reason_code)
+      return failure('Rejection reason is required') if rejection_reason.blank? && rejection_reason_code.blank?
       return failure('Admin user is required') if admin.blank?
+      return failure('Reload this application before submitting a review.') if @decision_key.blank?
 
       success
     end
@@ -99,16 +122,19 @@ module Applications
       DisabilityCertificationAttachmentService.reject_certification(
         application: application,
         admin: admin,
+        decision_key: @decision_key,
+        reviewed_blob_id: @reviewed_blob_id,
         reason: rejection_reason,
         notes: notes,
         reason_code: rejection_reason_code
       )
     end
 
-    def request_secure_certification_upload
+    def request_secure_certification_upload(review)
       result = Applications::RequestCertificationUpload.new(
         application: application,
         actor: admin,
+        proof_review: review,
         deliver_email: false
       ).call
 
@@ -144,11 +170,14 @@ module Applications
                 when :queued then 'Provider email queued.'
                 when :deferred then 'Provider notification will be attempted after the application is saved.'
                 when :suppressed then 'Provider email was not sent because delivery is disabled. Contact the provider manually.'
+                when :superseded then 'Provider notice was skipped because this certification request is no longer needed.'
                 else 'Provider email was not sent. Contact the provider manually.'
                 end
       warnings = data.fetch(:warnings).dup
       warnings << 'Delivery tracking failed; verify provider email before retrying.' if delivery[:tracking_status] == :failed
-      warnings << 'A secure upload link could not be created.' if data[:secure_upload_request] && !data[:secure_upload_request][:success]
+      if data[:secure_upload_request] && !data[:secure_upload_request][:success] && !data[:secure_upload_request][:superseded_review]
+        warnings << 'A secure upload link could not be created.'
+      end
       ['Disability certification rejected.', message, *warnings].join(' ')
     end
 

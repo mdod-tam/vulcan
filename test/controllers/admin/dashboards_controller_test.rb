@@ -9,7 +9,7 @@ module Admin
     end
 
     def test_should_get_index
-      sign_in_as(@admin_david)
+      sign_in_as(@admin_david, bypass_mfa_enrollment: true)
       get admin_root_path
       assert_response :success
     end

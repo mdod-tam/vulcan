@@ -6,6 +6,7 @@ require 'test_helper'
 # The generic class name avoids a conflict between the Constituent model and the ConstituentPortal namespace.
 class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
   include ActionDispatch::TestProcess::FixtureFile
+  include ActiveJob::TestHelper
 
   setup do
     @user = create(:constituent)
@@ -113,12 +114,15 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test 'can access dependent application for proof submission' do
+  test 'managing guardian can access dependent application for proof submission' do
     dependent = create(:constituent, :with_address_and_phone)
 
     create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
 
-    dependent_application = create(:application, :paper_rejected_proofs, user: dependent)
+    dependent_application = create(:application, :paper_rejected_proofs, user: dependent, managing_guardian: @user)
+
+    get constituent_portal_application_new_proof_path(application_id: dependent_application.id, proof_type: 'income')
+    assert_response :success
 
     assert_difference 'Event.count', 2 do
       post "/constituent_portal/applications/#{dependent_application.id}/proofs/resubmit",
@@ -131,6 +135,69 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     dependent_application.reload
     assert dependent_application.income_proof.attached?
     assert_equal 'not_reviewed', dependent_application.income_proof_status
+  end
+
+  %i[form submission].each do |entrypoint|
+    test "managed applicant cannot access proof #{entrypoint}" do
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @user)
+      @application.update!(managing_guardian: guardian)
+
+      assert_proof_access_denied(@application, entrypoint)
+    end
+
+    test "nonmanaging related guardian cannot access proof #{entrypoint}" do
+      dependent = create(:constituent, :with_address_and_phone)
+      manager = create(:constituent)
+      create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
+      create(:guardian_relationship, guardian_user: manager, dependent_user: dependent)
+      application = create(:application, :paper_rejected_proofs, user: dependent, managing_guardian: manager)
+
+      assert_proof_access_denied(application, entrypoint)
+    end
+
+    test "unrelated constituent cannot access proof #{entrypoint}" do
+      application = create(:application, :paper_rejected_proofs)
+
+      assert_proof_access_denied(application, entrypoint)
+    end
+  end
+
+  test 'unmanaged applicant with a guardian relationship can still submit proof' do
+    guardian = create(:constituent)
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: @user)
+
+    assert_nil @application.reload.managing_guardian_id
+    get constituent_portal_application_new_proof_path(application_id: @application.id, proof_type: 'income')
+    assert_response :success
+
+    post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
+         params: { proof_type: 'income', income_proof: @valid_pdf }
+
+    assert_redirected_to constituent_portal_application_path(@application)
+    assert_equal 'not_reviewed', @application.reload.income_proof_status
+    assert_nil @application.managing_guardian_id
+    assert @application.income_proof.attached?
+  end
+
+  test 'named managing guardian can view proof form after relationship removal' do
+    dependent = create(:constituent, :with_address_and_phone)
+    relationship = create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
+    application = create(:application, :paper_rejected_proofs, user: dependent, managing_guardian: @user)
+    relationship.destroy!
+
+    get constituent_portal_application_new_proof_path(application_id: application.id, proof_type: 'income')
+
+    assert_response :success
+  end
+
+  test 'obsolete proof resubmission route is unavailable' do
+    assert_raises(ActionController::RoutingError) do
+      Rails.application.routes.recognize_path(
+        "/constituent_portal/applications/#{@application.id}/resubmit_proof",
+        method: :post
+      )
+    end
   end
 
   test 'proof upload help shows the program phone number' do
@@ -189,5 +256,35 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to constituent_portal_application_path(@application)
     assert_equal usable, @application.reload.income_proof.blob
+  end
+
+  private
+
+  def assert_proof_access_denied(application, entrypoint)
+    application.update!(id_proof_status: :rejected)
+    original_state = application.reload.attributes
+    original_attachments = ActiveStorage::Attachment.where(record: application).pluck(:id, :blob_id)
+
+    %w[income residency id].each do |proof_type|
+      %i[html json].each do |format|
+        request_options = format == :json ? { as: :json } : {}
+
+        assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count', 'DocumentScan.count'] do
+          assert_no_enqueued_jobs do
+            if entrypoint == :form
+              get constituent_portal_application_new_proof_path(application_id: application.id, proof_type: proof_type), **request_options
+            else
+              post "/constituent_portal/applications/#{application.id}/proofs/resubmit",
+                   params: { proof_type: proof_type, "#{proof_type}_proof" => @valid_pdf }, **request_options
+            end
+          end
+        end
+
+        assert_redirected_to constituent_portal_dashboard_path
+        assert_equal 'Application not found', flash[:alert]
+        assert_equal original_state, application.reload.attributes
+        assert_equal original_attachments, ActiveStorage::Attachment.where(record: application).pluck(:id, :blob_id)
+      end
+    end
   end
 end

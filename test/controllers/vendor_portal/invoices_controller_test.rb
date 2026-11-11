@@ -10,7 +10,7 @@ module VendorPortal
     setup do
       ensure_system_audit_actor!
       @vendor_user = create(:vendor_user)
-      sign_in_with_headers(@vendor_user)
+      sign_in_for_integration_test(@vendor_user, bypass_mfa_enrollment: true)
       @invoices = create_list(:invoice, 3, vendor: @vendor_user)
     end
 
@@ -58,7 +58,7 @@ module VendorPortal
       shared.each { |fact| assert_match fact, response.body }
       ['Recorded by', 'Rhea Ledger', 'Internal: cleared early'].each { |fact| assert_no_match fact, response.body }
 
-      sign_in_with_headers(admin)
+      sign_in_for_integration_test(admin, bypass_mfa_enrollment: true)
       get admin_invoice_url(invoice)
       assert_response :success
       (shared + ['Recorded by', 'Rhea Ledger', 'Internal: cleared early']).each { |fact| assert_match fact, response.body }

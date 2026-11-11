@@ -21,29 +21,26 @@ module Applications
       Current.paper_context = nil
     end
 
-    test 'rejected re-review updates existing proof review when reason code changes' do
+    test 'a later rejection preserves the earlier reviewer reason and decision time' do
       assert_difference -> { @application.proof_reviews.where(proof_type: :income, status: :rejected).count }, +1 do
-        @reviewer.review(
-          proof_type: :income,
-          status: :rejected,
-          rejection_reason_code: 'missing_name',
-          rejection_reason: 'First rejected reason text'
-        )
+        @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income,
+                                                                         status: :rejected,
+                                                                         rejection_reason_code: 'missing_name',
+                                                                         rejection_reason: 'First rejected reason text')
       end
 
       original_review_id = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected).id
 
-      assert_no_difference -> { @application.proof_reviews.where(proof_type: :income, status: :rejected).count } do
-        @reviewer.review(
-          proof_type: :income,
-          status: :rejected,
-          rejection_reason_code: 'wrong_document',
-          rejection_reason: 'Second rejected reason text'
-        )
+      assert_difference -> { @application.proof_reviews.where(proof_type: :income, status: :rejected).count }, 1 do
+        @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income,
+                                                                         status: :rejected,
+                                                                         rejection_reason_code: 'wrong_document',
+                                                                         rejection_reason: 'Second rejected reason text')
       end
 
-      review = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected)
-      assert_equal original_review_id, review.id
+      review = @application.proof_reviews.where(proof_type: :income, status: :rejected).recent.first
+      assert_not_equal original_review_id, review.id
+      assert_equal 'missing_name', ProofReview.find(original_review_id).rejection_reason_code
       assert_equal 'wrong_document', review.rejection_reason_code
       assert review.rejection_reason.present?
     end
@@ -56,27 +53,25 @@ module Applications
       )
       mark_document_clean!(@application.income_proof.blob, user: @application.user, slot: 'income_proof')
 
-      @reviewer.review(
-        proof_type: :income,
-        status: :approved,
-        rejection_reason_code: 'wrong_document',
-        rejection_reason: 'Should not persist for approved review'
-      )
+      @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income,
+                                                                       status: :approved,
+                                                                       rejection_reason_code: 'wrong_document',
+                                                                       rejection_reason: 'Should not persist for approved review')
 
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :approved)
       assert_nil review.rejection_reason_code
       assert_nil review.rejection_reason
     end
 
-    test 'approving a proof again after a replacement records another approval on the same review row' do
-      @reviewer.review(proof_type: :income, status: :approved)
+    test 'approving a newly submitted proof records another immutable approval' do
+      @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income, status: :approved)
       assert_equal 1, Event.where(action: 'proof_approved', auditable: @application).count
 
-      # A replacement returns the proof to review, and the next approval updates the existing approved row.
+      # A replacement returns the proof to review, and the next approval records a separate decision.
       @application.update!(income_proof_status: :not_reviewed)
-      assert_no_difference -> { @application.proof_reviews.where(proof_type: :income, status: :approved).count } do
+      assert_difference -> { @application.proof_reviews.where(proof_type: :income, status: :approved).count }, 1 do
         assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 1 do
-          ProofReviewer.new(@application, @admin).review(proof_type: :income, status: :approved)
+          ProofReviewer.new(@application, @admin).review(**proof_decision_params(@application, :income), proof_type: :income, status: :approved)
         end
       end
     end
@@ -97,12 +92,10 @@ module Applications
         body: 'The address must match %<address>s.'
       )
 
-      @reviewer.review(
-        proof_type: :income,
-        status: :rejected,
-        rejection_reason_code: 'address_mismatch_test',
-        rejection_reason: 'Address mismatch'
-      )
+      @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income,
+                                                                       status: :rejected,
+                                                                       rejection_reason_code: 'address_mismatch_test',
+                                                                       rejection_reason: 'Address mismatch')
 
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected)
       assert_equal 'The address must match 123 Main St Apt 4B Baltimore, MD 21201.', review.rejection_reason
@@ -126,7 +119,7 @@ module Applications
       assert_difference -> { app.status_changes.count }, 1 do
         assert_difference -> { Event.where(action: 'application_status_changed', auditable: app).count }, 1 do
           assert_no_difference -> { Event.where(action: 'application_auto_approved', auditable: app).count } do
-            reviewer.review(proof_type: :residency, status: :approved)
+            reviewer.review(**proof_decision_params(app, :residency), proof_type: :residency, status: :approved)
           end
         end
       end
@@ -147,12 +140,10 @@ module Applications
       Current.paper_context = true
 
       without_auto_resubmission do
-        @reviewer.review(
-          proof_type: :income,
-          status: :rejected,
-          rejection_reason_code: 'missing_name',
-          rejection_reason: 'First rejected reason text'
-        )
+        @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income,
+                                                                         status: :rejected,
+                                                                         rejection_reason_code: 'missing_name',
+                                                                         rejection_reason: 'First rejected reason text')
       end
       travel AuditEventService::DEDUP_WINDOW + 1.second
 
@@ -162,17 +153,16 @@ module Applications
       Applications::RequestProofResubmission.expects(:new).with(
         application: @application,
         actor: @admin,
-        proof_type: :income
+        proof_type: :income,
+        proof_review: instance_of(ProofReview)
       ).returns(service)
 
       assert_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count }, 1 do
         assert_difference -> { @application.reload.total_rejections }, 1 do
-          @reviewer.review(
-            proof_type: :income,
-            status: :rejected,
-            rejection_reason_code: 'wrong_document',
-            rejection_reason: 'Second rejected reason text'
-          )
+          @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income,
+                                                                           status: :rejected,
+                                                                           rejection_reason_code: 'wrong_document',
+                                                                           rejection_reason: 'Second rejected reason text')
         end
       end
     end
@@ -192,7 +182,7 @@ module Applications
       )
       mark_document_clean!(@application.income_proof.blob, user: @application.user, slot: 'income_proof')
 
-      @reviewer.review(proof_type: :income, status: :approved)
+      @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income, status: :approved)
 
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :approved)
       assert_predicate review, :submission_method_secure_form?
@@ -213,15 +203,14 @@ module Applications
       Applications::RequestProofResubmission.expects(:new).with(
         application: @application,
         actor: @admin,
-        proof_type: :income
+        proof_type: :income,
+        proof_review: instance_of(ProofReview)
       ).returns(service)
 
-      @reviewer.review(
-        proof_type: :income,
-        status: :rejected,
-        rejection_reason_code: 'missing_name',
-        rejection_reason: 'Rejected after paper submission'
-      )
+      @reviewer.review(**proof_decision_params(@application, :income), proof_type: :income,
+                                                                       status: :rejected,
+                                                                       rejection_reason_code: 'missing_name',
+                                                                       rejection_reason: 'Rejected after paper submission')
 
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected)
       assert_predicate review, :submission_method_paper?

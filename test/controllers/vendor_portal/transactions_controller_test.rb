@@ -8,8 +8,7 @@ module VendorPortal
 
     setup do
       @vendor_user = create(:vendor_user)
-      sign_in_with_headers(@vendor_user)
-      assert_authenticated(@vendor_user)
+      sign_in_for_integration_test(@vendor_user, bypass_mfa_enrollment: true)
     end
 
     test 'should show transactions index with pagination' do

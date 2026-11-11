@@ -18,7 +18,7 @@ module AdminNamespace
 
       @application.update!(training_requested_at: Time.current)
 
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     teardown do

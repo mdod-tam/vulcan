@@ -6,15 +6,14 @@ require 'application_system_test_case'
 class W9UploadRetryTest < ApplicationSystemTestCase
   setup do
     @vendor = create(:vendor, :with_w9, terms_accepted_at: 1.day.ago)
-    system_test_sign_in(@vendor)
+    system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
   end
 
   test 'a refused replacement keeps the earlier usable W-9 for the retry' do
     visit edit_vendor_portal_profile_path
     {
       business_name: 'Retry Business', business_tax_id: '123456789', website_url: 'ftp://example.com',
-      physical_address_1: '42 New Street', city: 'Baltimore', state: 'MD', zip_code: '21201',
-      phone: '410-555-1234', email: "retry-#{@vendor.id}@example.com"
+      physical_address_1: '42 New Street', city: 'Baltimore', state: 'MD', zip_code: '21201'
     }.each { |field, value| fill_in "users_vendor_#{field}", with: value }
     attach_cleared_document 'Upload New W9', Rails.root.join('test/fixtures/files/sample_w9.pdf')
     click_button 'Save Changes'

@@ -432,7 +432,7 @@ class Application < ApplicationRecord
 
     return true if latest_review.nil? && latest_audit.present?
 
-    latest_audit.present? && latest_review.present? && latest_audit.created_at > latest_review.created_at
+    latest_audit.present? && latest_review.present? && latest_audit.created_at > latest_review.reviewed_at
   end
 
   def proof_review_state(proof_type)
@@ -463,7 +463,7 @@ class Application < ApplicationRecord
   # @param proof_type [String] The proof type ("income", "residency", or "id")
   # @return [Array] The latest review and submission audit event, in that order
   def latest_review_and_audit(proof_type)
-    latest_review = proof_reviews.where(proof_type: proof_type).order(created_at: :desc).first
+    latest_review = proof_reviews.where(proof_type: proof_type).recent.first
     latest_audit = latest_proof_submission_event(proof_type)
 
     [latest_review, latest_audit]

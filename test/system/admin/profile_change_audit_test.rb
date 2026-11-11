@@ -11,7 +11,7 @@ module Admin
 
       Event.where(action: %w[profile_updated profile_updated_by_guardian profile_created_by_admin_via_paper]).delete_all
 
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
       wait_for_turbo
     end
 

@@ -14,7 +14,6 @@ module EmailDelivery
 
     def self.record_not_sent(decision, context:, mail_action:)
       Current.denial_decision = decision
-      CertifyingProfessionalNotifier.record_fallback_outcome(context, status: decision.outcome, reason: decision.reason) if context&.dig('provider_notification_id')
       action = decision.configuration_error? ? CONFIGURATION_ERROR : SUPPRESSED
       request_id = context&.dig('request_id').presence
       ActiveSupport::Notifications.instrument("#{action}.email_delivery", reason: decision.reason, mail_action: mail_action)
@@ -51,7 +50,6 @@ module EmailDelivery
 
     # The queue adapter reported an enqueue failure; this event does not claim provider handoff.
     def self.record_enqueue_failure(error, context:, mail_action:)
-      CertifyingProfessionalNotifier.record_fallback_outcome(context, status: :enqueue_failed, reason: error.class.name) if context&.dig('provider_notification_id')
       request_id = context&.dig('request_id').presence
       ActiveSupport::Notifications.instrument("#{ENQUEUE_FAILED}.email_delivery", mail_action: mail_action)
       Rails.logger.error("EmailDelivery: #{ENQUEUE_FAILED} #{mail_action} #{error.class} request=#{request_id}")

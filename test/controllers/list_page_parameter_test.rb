@@ -29,7 +29,7 @@ class ListPageParameterTest < ActionDispatch::IntegrationTest
   LISTS.each do |name, (role, path)|
     INVALID_PAGES.each do |page|
       test "#{name} shows its first page for page=#{page}" do
-        sign_in_for_integration_test(create(role))
+        sign_in_for_integration_test(create(role), bypass_mfa_enrollment: role != :constituent)
 
         get instance_exec(&path), params: { page: page }
 

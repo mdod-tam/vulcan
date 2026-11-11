@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class ProofReviewServiceTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveJob::TestHelper
 
   setup do
@@ -76,8 +77,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     result = nil
     assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        result = ProofReviewService.new(@application, @admin,
-                                        { proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' }).call
+        result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' })).call
       end
     end
 
@@ -94,8 +94,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'the rejection that archives the application reports no upload request owed' do
     @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
 
-    result = ProofReviewService.new(@application, @admin,
-                                    { proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' }).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' })).call
 
     assert result.success?, result.message
     assert_predicate @application.reload, :status_archived?
@@ -108,8 +107,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
       result = nil
       assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
         assert_no_enqueued_jobs do
-          result = ProofReviewService.new(@application, @admin,
-                                          { proof_type: 'income', status: 'rejected', rejection_reason: reason }).call
+          result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({ proof_type: 'income', status: 'rejected', rejection_reason: reason })).call
         end
       end
 
@@ -123,8 +121,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'a rejected review accepts a resolved reason code without submitted reason text' do
     reason = create(:rejection_reason)
 
-    result = ProofReviewService.new(@application, @admin,
-                                    { proof_type: 'income', status: 'rejected', rejection_reason_code: reason.code }).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({ proof_type: 'income', status: 'rejected', rejection_reason_code: reason.code })).call
 
     assert result.success?, result.message
     review = @application.proof_reviews.where(proof_type: :income, status: :rejected).sole
@@ -156,8 +153,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'a delivery confirmation query failure does not report the saved rejection as failed' do
     Applications::RequestProofResubmission.stubs(:delivery_confirmed_for_review?).raises(ActiveRecord::ConnectionNotEstablished)
 
-    result = ProofReviewService.new(@application, @admin,
-                                    { proof_type: 'income', status: 'rejected', rejection_reason: 'Missing name' }).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({ proof_type: 'income', status: 'rejected', rejection_reason: 'Missing name' })).call
 
     assert result.success?, result.message
     assert_match(/review was saved.*delivery could not be confirmed/, result.data[:warning])
@@ -198,11 +194,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_equal %w[income id residency], ProofReview.reviewable_proof_types
 
     ProofReview.reviewable_proof_types.each do |proof_type|
-      result = ProofReviewService.new(
-        @application,
-        @admin,
-        { proof_type: proof_type, status: 'approved' }
-      ).call
+      result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, proof_type).merge({ proof_type: proof_type, status: 'approved' })).call
 
       assert result.success?, "#{proof_type} should be accepted by ProofReviewService: #{result.message}"
       review = @application.proof_reviews.find_by!(proof_type: proof_type, status: :approved)
@@ -211,11 +203,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
       assert_equal 'approved', @application.reload.public_send("#{proof_type}_proof_status")
     end
 
-    invalid_result = ProofReviewService.new(
-      @application,
-      @admin,
-      { proof_type: 'disability_certification', status: 'approved' }
-    ).call
+    invalid_result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'disability_certification').merge({ proof_type: 'disability_certification', status: 'approved' })).call
 
     assert_not invalid_result.success?
     assert_equal 'Invalid proof type', invalid_result.message
@@ -224,11 +212,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'rejects income proof review when income_proof_required is false' do
     @application.update_columns(income_proof_required: false)
 
-    result = ProofReviewService.new(
-      @application,
-      @admin,
-      { proof_type: 'income', status: 'approved' }
-    ).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({ proof_type: 'income', status: 'approved' })).call
 
     assert_not result.success?
     assert_equal 'Income proof review is not applicable for this application', result.message
@@ -237,11 +221,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'allows residency proof review when income_proof_required is false' do
     @application.update_columns(income_proof_required: false)
 
-    result = ProofReviewService.new(
-      @application,
-      @admin,
-      { proof_type: 'residency', status: 'approved' }
-    ).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'approved' })).call
 
     assert result.success?, "Residency review should still work when income is off: #{result.message}"
     assert_equal 'approved', @application.reload.residency_proof_status
@@ -258,21 +238,18 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     reviewer = mock('proof_reviewer')
     reviewer.stubs(:review).returns(true)
     reviewer.stubs(:proof_review).returns(proof_review)
+    reviewer.stubs(:recorded).returns(true)
     reviewer.stubs(:warning).returns(nil)
     Applications::ProofReviewer.stubs(:new).returns(reviewer)
     Applications::RequestProofResubmission.stubs(:delivery_confirmed_for_review?)
                                           .with(proof_review)
                                           .returns(false)
 
-    result = ProofReviewService.new(
-      @application,
-      @admin,
-      {
-        proof_type: 'income',
-        status: 'rejected',
-        rejection_reason: 'Income documentation is not acceptable.'
-      }
-    ).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({
+                                                                                                                proof_type: 'income',
+                                                                                                                status: 'rejected',
+                                                                                                                rejection_reason: 'Income documentation is not acceptable.'
+                                                                                                              })).call
 
     assert result.success?, result.message
     assert_equal proof_review, result.data[:proof_review]
@@ -282,11 +259,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'rejects proof review when the proof is not currently reviewable' do
     @application.update_columns(income_proof_status: Application.income_proof_statuses[:approved])
 
-    result = ProofReviewService.new(
-      @application,
-      @admin,
-      { proof_type: 'income', status: 'approved' }
-    ).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({ proof_type: 'income', status: 'approved' })).call
 
     assert_not result.success?
     assert_equal 'Proof is not reviewable for this application', result.message
@@ -296,11 +269,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     EmailDelivery::ControlWriter.set(name: EmailDelivery.category_control('proof'), enabled: false, actor: @admin,
                                      operation_id: 'op-1')
 
-    result = ProofReviewService.new(
-      @application,
-      @admin,
-      { proof_type: 'residency', status: 'rejected', rejection_reason: 'Address mismatch' }
-    ).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'rejected', rejection_reason: 'Address mismatch' })).call
 
     assert result.success?, result.message
     assert_equal 'rejected', @application.reload.residency_proof_status
@@ -320,15 +289,11 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     mark_document_clean!(application.residency_proof.blob, user: application.user, slot: 'residency_proof')
     NotificationService.stubs(:create_and_deliver!).returns(true)
 
-    result = ProofReviewService.new(
-      application,
-      @admin,
-      {
-        proof_type: 'residency',
-        status: 'rejected',
-        rejection_reason: 'Address mismatch'
-      }
-    ).call
+    result = ProofReviewService.new(application, @admin, proof_decision_params(application, 'residency').merge({
+                                                                                                                 proof_type: 'residency',
+                                                                                                                 status: 'rejected',
+                                                                                                                 rejection_reason: 'Address mismatch'
+                                                                                                               })).call
 
     assert result.success?, result.message
     assert_equal 'rejected', application.reload.residency_proof_status
@@ -340,43 +305,31 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
 
     assert_difference -> { @application.reload.total_rejections }, 3 do
       perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
-        income_result = ProofReviewService.new(
-          @application,
-          @admin,
-          {
-            proof_type: 'income',
-            status: 'rejected',
-            rejection_reason: 'Income documentation is not acceptable.'
-          }
-        ).call
+        income_result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({
+                                                                                                                           proof_type: 'income',
+                                                                                                                           status: 'rejected',
+                                                                                                                           rejection_reason: 'Income documentation is not acceptable.'
+                                                                                                                         })).call
         assert income_result.success?, income_result.message
       end
       assert_not @application.reload.income_proof.attached?
 
       perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
-        residency_result = ProofReviewService.new(
-          @application,
-          @admin,
-          {
-            proof_type: 'residency',
-            status: 'rejected',
-            rejection_reason: 'Residency documentation is not acceptable.'
-          }
-        ).call
+        residency_result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({
+                                                                                                                                 proof_type: 'residency',
+                                                                                                                                 status: 'rejected',
+                                                                                                                                 rejection_reason: 'Residency documentation is not acceptable.'
+                                                                                                                               })).call
         assert residency_result.success?, residency_result.message
       end
       assert_not @application.reload.residency_proof.attached?
 
       perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
-        id_result = ProofReviewService.new(
-          @application,
-          @admin,
-          {
-            proof_type: 'id',
-            status: 'rejected',
-            rejection_reason: 'ID documentation is not acceptable.'
-          }
-        ).call
+        id_result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'id').merge({
+                                                                                                                   proof_type: 'id',
+                                                                                                                   status: 'rejected',
+                                                                                                                   rejection_reason: 'ID documentation is not acceptable.'
+                                                                                                                 })).call
         assert id_result.success?, id_result.message
       end
       assert_not @application.reload.id_proof.attached?
@@ -390,12 +343,13 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   private
 
   def review_income
-    ProofReviewService.new(@application, @admin, { proof_type: 'income', status: 'approved' }).call
+    ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({ proof_type: 'income', status: 'approved' })).call
   end
 end
 
 # These outcomes require the transaction to commit, including its callbacks.
 class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveJob::TestHelper
   include ConcurrencyTestHelper
 
@@ -422,7 +376,7 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
 
   test 'post review logging failure retains committed review without claiming save failure' do
     private_token = 'post-review-log-secret-225'
-    service = ProofReviewService.new(@application, @admin, { proof_type: 'residency', status: 'approved' })
+    service = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'approved' }))
     service.stubs(:log_review_success).raises(StandardError, "logging failed token=#{private_token}")
 
     result = service.call
@@ -457,7 +411,7 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
     assert_equal @admin, history.user
     assert @application.events.exists?(action: 'application_status_changed')
     failure = @application.events.where(action: 'proof_review_follow_up_failed').sole
-    assert_equal review.id, failure.metadata['proof_review_id']
+    assert_equal result.data[:proof_review].id, failure.metadata['proof_review_id']
     assert_equal 'StandardError', failure.metadata['error_class']
   end
 
@@ -465,8 +419,7 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
     @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
     Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit failed')
 
-    result = ProofReviewService.new(@application, @admin,
-                                    { proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' }).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' })).call
 
     assert result.success?, result.message
     assert_match(/review was saved.*follow-up step/, result.data[:warning])
@@ -506,56 +459,120 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
                                    status: :rejected, rejection_reason: 'Old reason', reviewed_at: 1.day.ago)
     Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'repeat follow-up failed')
 
-    result = ProofReviewService.new(@application, @admin,
-                                    { proof_type: 'residency', status: 'rejected', rejection_reason: 'New reason' }).call
+    result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'rejected', rejection_reason: 'New reason' })).call
 
     assert result.success?, result.message
     assert_match(/review was saved.*follow-up step/, result.data[:warning])
-    assert_equal review.id, result.data[:proof_review].id
-    assert_equal 'New reason', review.reload.rejection_reason
+    assert_not_equal review.id, result.data[:proof_review].id
+    assert_equal 'Old reason', review.reload.rejection_reason
+    assert_equal 'New reason', result.data[:proof_review].rejection_reason
     assert_equal 'rejected', @application.reload.residency_proof_status
     assert_equal 'in_progress', @application.status
     failure = @application.events.where(action: 'proof_review_follow_up_failed').sole
-    assert_equal review.id, failure.metadata['proof_review_id']
+    assert_equal result.data[:proof_review].id, failure.metadata['proof_review_id']
   end
 
-  test 'an unchanged repeated review under frozen time cannot prove a failed transaction committed' do
+  test 'an approval replay succeeds under frozen time without another mutation or follow-up' do
     freeze_time do
-      assert review_residency.success?
-      review = @application.proof_reviews.where(proof_type: :residency, status: :approved).sole
-      original_attributes = review.attributes_for_database
-      original_transaction = ApplicationRecord.method(:transaction)
-      transaction_open = false
-      fail_before_commit = lambda do |**options, &block|
-        next original_transaction.call(**options, &block) if transaction_open
-
-        transaction_open = true
-        begin
-          original_transaction.call(**options) do
-            block.call
-            raise 'transaction did not commit'
-          end
-        ensure
-          transaction_open = false
-        end
+      params = proof_decision_params(@application, :residency).merge(proof_type: 'residency', status: 'approved')
+      first = ProofReviewService.new(@application, @admin, params).call
+      assert first.success?, first.message
+      Applications::ProofDecisionFollowUp.expects(:new).never
+      assert_no_difference ['ProofReview.count', 'Event.count', 'Notification.count', 'ApplicationStatusChange.count'] do
+        replay = ProofReviewService.new(@application, @admin, params).call
+        assert replay.success?, replay.message
+        assert_equal first.data[:proof_review].id, replay.data[:proof_review].id
+        assert_nil replay.data[:warning]
       end
-
-      reviewer = Applications::ProofReviewer.new(@application, @admin)
-      ApplicationRecord.stub :transaction, fail_before_commit do
-        assert_raises Applications::ReviewCommit::Unconfirmed do
-          reviewer.review(proof_type: :residency, status: :approved)
-        end
-      end
-
-      assert_equal original_attributes, review.reload.attributes_for_database
-      assert_nil reviewer.warning
-      assert_not @application.events.exists?(action: 'proof_review_follow_up_failed')
     end
+  end
+
+  test 'a rejection replay after purge preserves its original reason and does not issue another request' do
+    params = proof_decision_params(@application, :residency).merge(
+      proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable first document'
+    )
+    first = ProofReviewService.new(@application, @admin, params).call
+    assert first.success?, first.message
+    assert_not @application.reload.residency_proof.attached?
+    review = first.data.fetch(:proof_review)
+    assert_equal params[:reviewed_blob_id], review.reviewed_blob_id
+    Applications::ProofDecisionFollowUp.expects(:new).never
+
+    assert_no_difference ['ProofReview.count', 'Event.count', 'Notification.count', 'SecureRequestForm.count',
+                          '@application.reload.total_rejections'] do
+      replay = ProofReviewService.new(@application, @admin, params).call
+      assert replay.success?, replay.message
+      assert_equal review.id, replay.data[:proof_review].id
+      assert replay.data[:replayed]
+      assert_match(/already recorded/, replay.message)
+    end
+    assert_raises(ActiveRecord::ReadOnlyRecord) { review.update!(rejection_reason: 'Replacement history') }
+
+    replacement = ActiveStorage::Blob.create_and_upload!(io: file_fixture('residency_proof.pdf').open,
+                                                         filename: 'replacement.pdf', content_type: 'application/pdf')
+    mark_document_clean!(replacement, user: @application.user, slot: 'residency_proof')
+    upload = ProofAttachmentService.attach_proof(application: @application, proof_type: :residency, blob_or_file: replacement,
+                                                 status: :not_reviewed, admin: @application.user, submission_method: :web)
+    assert upload[:success], upload[:error]&.message
+    Applications::RequestProofResubmission.expects(:delivery_confirmed_for_review?).never
+
+    assert_no_difference ['ProofReview.count', 'Event.count', 'Notification.count', '@application.reload.total_rejections'] do
+      replay = ProofReviewService.new(@application, @admin, params).call
+      assert replay.success?, replay.message
+      assert replay.data[:replayed]
+      assert_equal true, replay.data[:resubmission_delivered], 'a superseded rejection owes no new upload link'
+    end
+    assert_equal 'not_reviewed', @application.reload.residency_proof_status
+    assert_equal replacement.id, @application.residency_proof.blob.id
+  end
+
+  test 'a spent key refuses changed details without changing the recorded decision' do
+    params = proof_decision_params(@application, :residency).merge(
+      proof_type: 'residency', status: 'rejected', rejection_reason: 'First reason'
+    )
+    first = ProofReviewService.new(@application, @admin, params).call
+    assert first.success?, first.message
+
+    assert_no_difference ['ProofReview.count', 'Event.count', 'Notification.count', '@application.reload.total_rejections'] do
+      conflict = ProofReviewService.new(@application, @admin, params.merge(rejection_reason: 'Changed reason')).call
+      assert conflict.failure?
+      assert_match(/already submitted with different details/, conflict.message)
+    end
+    assert_equal 'First reason', first.data[:proof_review].reload.rejection_reason
+  end
+
+  test 'an old form cannot decide a replacement document' do
+    params = proof_decision_params(@application, :residency).merge(proof_type: 'residency', status: 'approved')
+    @application.residency_proof.attach(io: StringIO.new('replacement document'), filename: 'new.pdf', content_type: 'application/pdf')
+    mark_document_clean!(@application.residency_proof.blob, user: @application.user, slot: 'residency_proof')
+
+    assert_no_difference ['ProofReview.count', 'Event.count', 'Notification.count'] do
+      result = ProofReviewService.new(@application, @admin, params).call
+      assert result.failure?
+      assert_match(/document changed/, result.message)
+    end
+    assert_equal 'not_reviewed', @application.reload.residency_proof_status
+  end
+
+  test 'replay does not resolve a reason template again after its address changes' do
+    reason = create(:rejection_reason, proof_type: 'residency', code: 'test_address', body: 'Use %<address>s.')
+    params = proof_decision_params(@application, :residency).merge(
+      proof_type: 'residency', status: 'rejected', rejection_reason_code: reason.code
+    )
+    first = ProofReviewService.new(@application, @admin, params).call
+    assert first.success?, first.message
+    original_reason = first.data[:proof_review].rejection_reason
+    Current.set(user: @admin) { @application.user.update!(physical_address_1: '99 Changed Street') }
+    RejectionReason.expects(:resolve_text).never
+
+    replay = ProofReviewService.new(@application, @admin, params).call
+    assert replay.success?, replay.message
+    assert_equal original_reason, replay.data[:proof_review].rejection_reason
   end
 
   private
 
   def review_residency
-    ProofReviewService.new(@application, @admin, { proof_type: 'residency', status: 'approved' }).call
+    ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'residency').merge({ proof_type: 'residency', status: 'approved' })).call
   end
 end

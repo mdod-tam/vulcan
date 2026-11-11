@@ -8,7 +8,7 @@ module VendorPortal
 
     setup do
       @vendor = create(:vendor_user)
-      sign_in_with_headers(@vendor)
+      sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
       @purchase = create(:voucher_transaction, vendor: @vendor)
     end
 
@@ -112,7 +112,7 @@ module VendorPortal
       suspended = create(:vendor, :suspended)
       purchase = create(:voucher_transaction, vendor: suspended)
       assert_not suspended.can_process_vouchers?
-      sign_in_with_headers(suspended)
+      sign_in_for_integration_test(suspended, bypass_mfa_enrollment: true)
 
       post vendor_portal_transaction_shipments_url(purchase), params: { fulfillment_version: 0, shipment: { tracking_number: 'AAA111' } }
 

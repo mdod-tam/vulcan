@@ -15,7 +15,7 @@ class HotwireFormFeedbackTest < ApplicationSystemTestCase
     assert application.can_create_voucher?
     recovery = create(:recovery_request)
     credential = create(:webauthn_credential, user: recovery.user)
-    system_test_sign_in(create(:admin))
+    system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
 
     visit admin_recovery_requests_path
     confirm_action('Approve Reset', accept: false)
@@ -60,7 +60,7 @@ class HotwireFormFeedbackTest < ApplicationSystemTestCase
     install_stimulus_error_reporting
     vendor = create(:vendor, :with_w9, terms_accepted_at: 1.day.ago)
     original_name = vendor.business_name
-    system_test_sign_in(vendor)
+    system_test_sign_in(vendor, bypass_mfa_enrollment: true)
     visit edit_vendor_portal_profile_path
     fields = {
       business_name: 'Revised Business', business_tax_id: '123456789', website_url: 'ftp://example.com',

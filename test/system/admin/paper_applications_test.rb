@@ -11,7 +11,7 @@ module Admin
 
     setup do
       @admin = users(:admin_david)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
 
       Policy.find_or_create_by(key: 'fpl_1_person').update(value: 15_650)
       Policy.find_or_create_by(key: 'fpl_2_person').update(value: 21_150)
@@ -666,31 +666,28 @@ module Admin
       application.save!
 
       # Set up approval records directly for the reconciliation test.
-      application.proof_reviews.create!(
-        admin: @admin,
-        proof_type: :income,
-        status: :approved,
-        reviewed_at: Time.current,
-        submission_method: :paper
-      )
+      create(:proof_review, application: application,
+                            admin: @admin,
+                            proof_type: :income,
+                            status: :approved,
+                            reviewed_at: Time.current,
+                            submission_method: :paper)
       application.update!(income_proof_status: :approved)
 
-      application.proof_reviews.create!(
-        admin: @admin,
-        proof_type: :residency,
-        status: :approved,
-        reviewed_at: Time.current,
-        submission_method: :paper
-      )
+      create(:proof_review, application: application,
+                            admin: @admin,
+                            proof_type: :residency,
+                            status: :approved,
+                            reviewed_at: Time.current,
+                            submission_method: :paper)
       application.update!(residency_proof_status: :approved)
 
-      application.proof_reviews.create!(
-        admin: @admin,
-        proof_type: :id,
-        status: :approved,
-        reviewed_at: Time.current,
-        submission_method: :paper
-      )
+      create(:proof_review, application: application,
+                            admin: @admin,
+                            proof_type: :id,
+                            status: :approved,
+                            reviewed_at: Time.current,
+                            submission_method: :paper)
       application.update!(id_proof_status: :approved)
 
       attach_cleared_proof(application, :disability_certification, filename: 'disability_certification.pdf')
@@ -708,7 +705,7 @@ module Admin
       assert_equal 'approved', application.id_proof_status.to_s
       assert_equal 'approved', application.disability_certification_status.to_s
 
-      visit_admin_application_with_retry(application, user: @admin)
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
       wait_for_turbo
       if page.has_selector?('h1#application-title', wait: 15)
         assert_selector 'h1#application-title'

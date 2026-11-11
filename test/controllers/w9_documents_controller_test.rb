@@ -20,7 +20,7 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
     @vendor.w9_archive.attach(archived)
     reference = Vendors::W9Document.reference(staged, vendor: @vendor)
     scans = [@blob, archived, staged].map { |blob| DocumentScan.find_by!(blob_id: blob.id) }
-    sign_in_as(@admin)
+    sign_in_as(@admin, bypass_mfa_enrollment: true)
 
     %w[pending blocked failed].each do |status|
       scans.each { |scan| scan.update!(status: status) }
@@ -38,7 +38,7 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'own current W9 is streamed privately and another vendor is denied' do
-    sign_in_as(@vendor)
+    sign_in_as(@vendor, bypass_mfa_enrollment: true)
     get vendor_w9_document_path(@vendor, @blob, disposition: :attachment)
     assert_response :success
     assert_equal @blob.download, response.body
@@ -46,13 +46,13 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.headers['Cache-Control'], 'private'
     assert_includes response.headers['Content-Disposition'], 'attachment'
 
-    sign_in_as(create(:vendor))
+    sign_in_as(create(:vendor), bypass_mfa_enrollment: true)
     get vendor_w9_document_path(@vendor, @blob)
     assert_response :not_found
   end
 
   test 'W9 downloads support full and partial byte responses' do
-    sign_in_as(@vendor)
+    sign_in_as(@vendor, bypass_mfa_enrollment: true)
     path = vendor_w9_document_path(@vendor, @blob)
     get path
     assert_response :success
@@ -76,10 +76,10 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
                                  user: @vendor, purpose: :w9, slot: 'w9_form')
     Vendors::ReplaceW9.call(vendor: @vendor, file: replacement)
 
-    sign_in_as(@admin)
+    sign_in_as(@admin, bypass_mfa_enrollment: true)
     get vendor_w9_document_path(@vendor, @blob)
     assert_response :success
-    sign_in_as(@vendor)
+    sign_in_as(@vendor, bypass_mfa_enrollment: true)
     get vendor_w9_document_path(@vendor, @blob)
     assert_response :not_found
     get vendor_w9_document_path(@vendor, @blob, reference: reference)
@@ -89,7 +89,7 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
   test 'ordinary blob and representation URLs refuse a W9 even to its owner' do
     ActiveStorage::VariantWithRecord.any_instance.expects(:processed).never
     ActiveStorage::Preview.any_instance.expects(:processed).never
-    sign_in_as(@vendor)
+    sign_in_as(@vendor, bypass_mfa_enrollment: true)
     get rails_blob_path(@blob)
     assert_response :not_found
     get rails_storage_proxy_path(@blob)
@@ -104,13 +104,13 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
   test 'unattached documents have no ordinary storage download audience' do
     blob = ActiveStorage::Blob.create_and_upload!(io: file_fixture('sample_w9.pdf').open,
                                                   filename: 'unrelated.pdf', content_type: 'application/pdf')
-    sign_in_as(@admin)
+    sign_in_as(@admin, bypass_mfa_enrollment: true)
     get rails_blob_path(blob)
     assert_response :not_found
   end
 
   test 'missing storage and unknown documents have private non-cacheable failures' do
-    sign_in_as(@vendor)
+    sign_in_as(@vendor, bypass_mfa_enrollment: true)
     @blob.service.delete(@blob.key)
     get vendor_w9_document_path(@vendor, @blob)
     assert_response :not_found
@@ -133,7 +133,7 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
   test 'unknown historical document remains labelled unknown instead of showing todays W9' do
     review = create(:w9_review, vendor: @vendor, admin: @admin)
     W9Review.where(id: review.id).update_all(reviewed_blob_id: nil)
-    sign_in_as(@admin)
+    sign_in_as(@admin, bypass_mfa_enrollment: true)
     get admin_vendor_w9_review_path(@vendor, review)
     assert_response :success
     assert_includes response.body, 'Reviewed document unknown.'

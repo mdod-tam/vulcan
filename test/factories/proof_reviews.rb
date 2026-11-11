@@ -10,6 +10,8 @@ FactoryBot.define do
     proof_type { :income }
     status { :approved }
     reviewed_at { Time.current }
+    decision_key { SecureRandom.uuid }
+    decision_fingerprint { SecureRandom.hex(32) }
 
     after(:build) do |proof_review|
       next if proof_review.proof_type.blank? || proof_review.application.document_attachment_for(proof_review.proof_type).attached?
@@ -63,6 +65,10 @@ FactoryBot.define do
       ensure
         Thread.current[:paper_application_context] = original_context
       end
+    end
+
+    after(:build) do |review|
+      review.reviewed_blob_id ||= review.application.document_attachment_for(review.proof_type).blob&.id if review.proof_type.present?
     end
 
     trait :approved do

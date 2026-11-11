@@ -39,7 +39,7 @@ module Letters
 
     test 'admin address edit schedules the same recipient reconciliation' do
       item = queue
-      sign_in_for_controller_test(@admin)
+      sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
       assert_enqueued_with(job: ReconcilePendingJob, args: [{ recipient_id: @recipient.id }]) do
         patch admin_user_path(@recipient), params: { user: { physical_address_1: '200 Changed Street' } }
       end
@@ -53,7 +53,7 @@ module Letters
                                           delivery_owner: @recipient, recipient_channel: :letter)
       item = queue(secure_request_form: form)
       @recipient.update!(first_name: 'Changed')
-      sign_in_for_controller_test(@admin)
+      sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
 
       get admin_application_path(@application)
 

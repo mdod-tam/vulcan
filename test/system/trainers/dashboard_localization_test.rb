@@ -21,7 +21,7 @@ module Trainers
       end
       Event.create!(user: trainer, action: 'training_scheduled', auditable: overdue.first,
                     metadata: { scheduled_for: overdue.first.scheduled_for.iso8601, notes: 'PRIVATE ACTIVITY SENTINEL' })
-      system_test_sign_in(trainer)
+      system_test_sign_in(trainer, bypass_mfa_enrollment: true)
       page.current_window.resize_to(375, 812)
 
       visit trainers_dashboard_path
@@ -63,7 +63,7 @@ module Trainers
 
     test 'Spanish dashboard explains an empty activity history' do
       trainer = create(:trainer, locale: 'es')
-      system_test_sign_in(trainer)
+      system_test_sign_in(trainer, bypass_mfa_enrollment: true)
       page.current_window.resize_to(375, 812)
 
       visit trainers_dashboard_path

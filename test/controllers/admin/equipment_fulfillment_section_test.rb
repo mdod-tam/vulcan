@@ -7,7 +7,7 @@ module Admin
     setup do
       FeatureFlag.disable!(:vouchers_enabled)
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @application = create(:application, :approved, :with_all_proofs)
     end
 

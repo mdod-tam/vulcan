@@ -156,7 +156,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
-    @session_token = nil
 
     assert_difference('SmsCredential.count', 1) do
       post confirm_pending_sms_credential_two_factor_authentication_path, params: {
@@ -175,7 +174,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
       phone_number: '555-123-4567'
     }
     assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
-    @session_token = nil
 
     post confirm_pending_sms_credential_two_factor_authentication_path,
          params: { code: '123456' },
@@ -190,7 +188,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
       phone_number: '555-123-4567'
     }
     assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
-    @session_token = nil
 
     assert_no_difference('SmsCredential.count') do
       post confirm_pending_sms_credential_two_factor_authentication_path, params: {
@@ -205,7 +202,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
 
   test 'SMS enrollment provider failure uses the shared service-error feedback' do
     post create_credential_two_factor_authentication_path(type: 'sms'), params: { phone_number: '555-123-4567' }
-    @session_token = nil
     TwilioVerifyService.expects(:check_verification).returns(success: false)
     assert_no_difference('SmsCredential.count') do
       post confirm_pending_sms_credential_two_factor_authentication_path, params: { code: '123456' }
@@ -225,7 +221,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
       phone_number: '555-123-4567'
     }
     assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
-    @session_token = nil
 
     assert_no_difference('SmsCredential.count') do
       post confirm_pending_sms_credential_two_factor_authentication_path, params: {

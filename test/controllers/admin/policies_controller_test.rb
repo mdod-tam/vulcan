@@ -7,7 +7,7 @@ module Admin
     def setup
       @admin = create(:admin)
       @policy = Policy.find_or_create_by!(key: 'max_training_sessions') { |p| p.value = 3 }
-      sign_in_as(@admin)
+      sign_in_as(@admin, bypass_mfa_enrollment: true)
     end
 
     def test_should_get_index

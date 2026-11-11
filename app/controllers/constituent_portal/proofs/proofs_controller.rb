@@ -58,16 +58,7 @@ module ConstituentPortal
       # rubocop:enable Naming/PredicateMethod
 
       def find_user_application(application_id)
-        application = current_user.applications.find_by(id: application_id)
-        return application unless application.nil?
-
-        # A guardian can also submit proof for a dependent application.
-        dependent_ids = current_user.dependents.pluck(:id)
-        return nil if dependent_ids.empty?
-
-        Application.where(id: application_id)
-                   .where(user_id: dependent_ids)
-                   .first
+        Application.accessible_by(current_user).find_by(id: application_id)
       end
 
       def handle_application_not_found(application_id)

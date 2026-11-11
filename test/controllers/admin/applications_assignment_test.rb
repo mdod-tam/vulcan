@@ -10,7 +10,7 @@ module Admin
 
     setup do
       @admin = create(:admin)
-      sign_in_for_integration_test(@admin)
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @application = create(:application, :completed, :with_all_proofs,
                             user: create(:constituent, speech_disability: true), application_date: Date.current)
     end
@@ -443,7 +443,7 @@ module Admin
     test 'only administrators can reassign a trainer' do
       trainer = current_coverage
       session = create(:training_session, :scheduled, application: @application, trainer: trainer)
-      sign_in_for_integration_test(trainer)
+      sign_in_for_integration_test(trainer, bypass_mfa_enrollment: true)
 
       assert_no_difference -> { Event.where(action: 'trainer_reassigned').count } do
         post reassign_trainer_admin_application_path(@application),

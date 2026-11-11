@@ -13,7 +13,7 @@ module Admin
 
     setup do
       admin = create(:admin)
-      system_test_sign_in(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       setup_paper_application_context
       setup_fpl_policies
 

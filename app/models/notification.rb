@@ -4,8 +4,8 @@ class Notification < ApplicationRecord
   has_many :email_delivery_attempts, dependent: :nullify
 
   # Suffix: true generates methods like `delivered_status?` and scopes like `delivered_status`.
-  # queued and submitted mean the provider has the message, not that the recipient received it;
-  # suppressed means it was intentionally not sent.
+  # queued records a delivery or print queue handoff; submitted records submission to the provider.
+  # Neither confirms receipt. suppressed means it was intentionally not sent.
   enum :delivery_status, {
     queued: 'queued', submitted: 'submitted', delivered: 'delivered', opened: 'opened', error: 'error',
     suppressed: 'suppressed'
@@ -21,6 +21,10 @@ class Notification < ApplicationRecord
   scope :unread_notifications, -> { where(read_at: nil) }
   scope :read_notifications, -> { where.not(read_at: nil) }
   scope :disability_certification_requests, -> { where(action: 'disability_certification_requested') }
+  scope :with_delivery_handoff, lambda {
+    where(delivery_status: %w[queued submitted delivered opened])
+      .where("metadata->>'actual_delivery_channel' IN (?)", %w[email sms letter])
+  }
 
   def self.proof_resubmission_rejected_metadata?(metadata)
     mode = metadata_value(metadata, 'proof_request_display_mode') || metadata_value(metadata, 'display_mode')

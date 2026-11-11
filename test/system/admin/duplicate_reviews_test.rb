@@ -40,7 +40,7 @@ module Admin
         snapshot: {}
       )
 
-      system_test_sign_in(@admin)
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     # The non-merge action records a server-owned keep-separate decision.
@@ -121,8 +121,10 @@ module Admin
       date_of_birth = Date.new(1985, 4, 12)
       @subject.update_columns(created_at: 2.years.ago, last_sign_in_at: 3.days.ago, date_of_birth:)
       @candidate.update_columns(created_at: 1.year.ago, last_sign_in_at: 1.day.ago, date_of_birth:)
-      @subject.update!(physical_address_1: '101 Harbor Street', city: 'Baltimore', state: 'MD', zip_code: '21201')
-      @candidate.update!(physical_address_1: '303 Harbor Street', city: 'Towson', state: 'MD', zip_code: '21204')
+      Current.set(user: @admin) do
+        @subject.update!(physical_address_1: '101 Harbor Street', city: 'Baltimore', state: 'MD', zip_code: '21201')
+        @candidate.update!(physical_address_1: '303 Harbor Street', city: 'Towson', state: 'MD', zip_code: '21204')
+      end
       create(:application, :approved, user: @candidate)
 
       visit admin_duplicate_reviews_path
@@ -220,23 +222,25 @@ module Admin
 
     test 'admin submits differing facts and the selected values survive the merge' do
       date_of_birth = Date.new(1985, 4, 12)
-      @subject.update!(
-        date_of_birth:,
-        physical_address_1: '101 Harbor Street',
-        city: 'Baltimore',
-        state: 'MD',
-        zip_code: '21201',
-        communication_preference: :letter
-      )
-      @candidate.update!(
-        date_of_birth:,
-        physical_address_1: '303 Harbor Street',
-        physical_address_2: 'Suite 4',
-        city: 'Towson',
-        state: 'MD',
-        zip_code: '21204',
-        communication_preference: :email
-      )
+      Current.set(user: @admin) do
+        @subject.update!(
+          date_of_birth:,
+          physical_address_1: '101 Harbor Street',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201',
+          communication_preference: :letter
+        )
+        @candidate.update!(
+          date_of_birth:,
+          physical_address_1: '303 Harbor Street',
+          physical_address_2: 'Suite 4',
+          city: 'Towson',
+          state: 'MD',
+          zip_code: '21204',
+          communication_preference: :email
+        )
+      end
       candidate_application = create(:application, :approved, user: @candidate)
       subject_email = @subject.email
       candidate_phone = @candidate.phone
@@ -281,8 +285,10 @@ module Admin
     end
 
     test 'shared phone type and account history stay with the canonical choices' do
-      @subject.update!(phone: '410-555-0101', phone_type: 'voice')
-      @candidate.update!(phone: '410-555-0103', phone_type: 'voice')
+      Current.set(user: @admin) do
+        @subject.update!(phone: '410-555-0101', phone_type: 'voice')
+        @candidate.update!(phone: '410-555-0103', phone_type: 'voice')
+      end
       @subject.update_columns(created_at: 2.years.ago, last_sign_in_at: 3.days.ago)
       @candidate.update_columns(created_at: 1.year.ago, last_sign_in_at: 1.day.ago)
 
@@ -310,7 +316,7 @@ module Admin
     test 'admin opens and resolves one imported matching pair from the existing queue' do
       first, second = create_unreviewed_pair
 
-      visit admin_duplicate_reviews_path
+      visit admin_duplicate_reviews_path(match_group_id: first.id)
       match_group = find('[data-testid="unreviewed-match-group"]', text: first.full_name)
       within match_group do
         assert_text first.full_name
@@ -346,6 +352,7 @@ module Admin
       assert_current_path admin_duplicate_reviews_path
       assert_text 'Duplicate review case resolved.'
       assert_no_selector '[data-testid="unreviewed-match-group"]', text: first.full_name
+      assert_no_selector "[data-testid='match-group-choice'][href*='match_group_id=#{first.id}']"
       assert_equal 'keep_separate', review_case.reload.resolution_determination
       assert_not first.reload.needs_duplicate_review
       assert_not second.reload.needs_duplicate_review
@@ -355,9 +362,9 @@ module Admin
     test 'stale imported pair entry returns to the queue with a visible refusal and no side effects' do
       first, second = create_unreviewed_pair
 
-      visit admin_duplicate_reviews_path
+      visit admin_duplicate_reviews_path(match_group_id: first.id)
       match_group = find('[data-testid="unreviewed-match-group"]', text: first.full_name)
-      second.update!(last_name: 'Changed after queue render')
+      Current.set(user: @admin) { second.update!(last_name: 'Changed after queue render') }
 
       assert_no_difference ['DuplicateReviewCase.count', 'Event.count'] do
         within match_group do
@@ -375,7 +382,7 @@ module Admin
     test 'admin merges one imported matching pair through the existing merge workflow' do
       first, second = create_unreviewed_pair
 
-      visit admin_duplicate_reviews_path
+      visit admin_duplicate_reviews_path(match_group_id: first.id)
       within('[data-testid="unreviewed-match-group"]', text: first.full_name) do
         click_button 'Compare these two records'
       end
@@ -512,7 +519,7 @@ module Admin
       members = create_unreviewed_group(count: 3)
       selected_ids = members.first(2).map(&:id).sort
 
-      visit admin_duplicate_reviews_path
+      visit admin_duplicate_reviews_path(match_group_id: members.first.id)
       match_group = find('[data-testid="unreviewed-match-group"]', text: members.first.full_name)
 
       within match_group do
@@ -559,6 +566,7 @@ module Admin
 
       click_link 'Back to queue'
       assert_current_path admin_duplicate_reviews_path
+      click_link "#{members.first.full_name} (Constituent ID #{members.first.id})"
       within('[data-testid="duplicate-review-case-row"]', text: members.first.full_name) do
         assert_text 'Post-import reconciliation'
         assert_link 'Continue review'
@@ -588,6 +596,7 @@ module Admin
       end
 
       assert_current_path admin_duplicate_reviews_path
+      click_link "#{members.first.full_name} (Constituent ID #{members.first.id})"
       match_group = find('[data-testid="unreviewed-match-group"]', text: members.first.full_name)
       within match_group do
         assert_text '3 records · 2 comparisons remaining'
@@ -600,6 +609,35 @@ module Admin
                            visible: :all
       end
       take_evidence_screenshot('duplicate-post-import-three-record-one-pair-resolved', full: true, html: true)
+    end
+
+    test 'admin pages through bounded comparisons and opens an exact pair on the next page' do
+      members = create_unreviewed_group(count: 8)
+      expected_pairs = members.map(&:id).sort.combination(2).to_a
+
+      visit admin_duplicate_reviews_path(match_group_id: members.first.id)
+      assert_selector '[data-testid="unreviewed-pair-action"]', count: 20, visible: :all
+      assert_text '28 comparisons remaining'
+      within 'nav[aria-label="Unreviewed comparisons"]' do
+        assert_selector '[aria-current="page"]', text: '1'
+        click_link 'Next'
+      end
+
+      assert_selector '[data-testid="unreviewed-pair-action"]', count: 8, visible: :all
+      within 'nav[aria-label="Unreviewed comparisons"]' do
+        assert_selector '[aria-current="page"]', text: '2'
+      end
+      first_id, second_id = expected_pairs.fetch(20)
+      assert_selector '[data-testid="next-pair-action"]', text: "Constituent IDs #{first_id} and #{second_id}"
+      take_evidence_screenshot('duplicate-bounded-comparisons-second-page', full: true, html: true)
+
+      within '[data-testid="unreviewed-match-group"]' do
+        click_button 'Compare next'
+      end
+
+      review_case = DuplicateReviewCase.where(source: :post_import_reconciliation).order(:id).last
+      assert_current_path admin_duplicate_review_path(review_case)
+      assert_equal [first_id, second_id], review_case.strict_post_import_pair_ids
     end
 
     private

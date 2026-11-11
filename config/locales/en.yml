@@ -896,7 +896,7 @@ en:
         c_upload_pass: "Disability certification successfully uploaded and approved."
     email_delivery:
       heading: "Outgoing communications"
-      intro: "All controls email, printed letters and SMS. Fax is currently unavailable; historical fax callbacks cannot bypass All. Turning a control off permanently cancels matching non-exempt work that has not been handed off. Turning it back on allows only new requests. Previously downloaded letters and provider-accepted messages cannot be recalled."
+      intro: "All controls email, printed letters and SMS. Turning a control off permanently cancels matching non-exempt work that has not been handed off. Turning it back on allows only new requests. Previously downloaded letters and provider-accepted messages cannot be recalled."
       global_label: "All outgoing communications"
       global_help: "Stops ordinary messages, test emails and letter downloads. Sign-in codes for users whose only factor is verified SMS, and recovery messages for all users, bypass All and Account security. Email and SMS channel switches still stop every message on that channel; SMS also stops sign-in codes. Template switches still apply. SMS enrollment follows all controls."
       channels_help: "Each channel keeps its saved setting when All is off. Channel switches stop every message on that channel, including sign-in and recovery. The exceptions to All are described above."

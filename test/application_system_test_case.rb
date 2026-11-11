@@ -427,9 +427,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     clear_pending_network_connections
   end
 
-  # Callers manage sign-out for this helper.
-  def sign_in(user)
-    system_test_sign_in(user)
+  def sign_in(user, **)
+    system_test_sign_in(user, **)
   end
 
   def toggle_password_visibility?(field_id)

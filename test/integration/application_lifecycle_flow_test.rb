@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveJob::TestHelper
 
   setup do
@@ -86,7 +87,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       reviewer = Applications::ProofReviewer.new(application, admin)
 
       assert_difference -> { application.proof_reviews.where(proof_type: :residency, status: :approved).count }, 1 do
-        reviewer.review(proof_type: :residency, status: :approved)
+        reviewer.review(**proof_decision_params(application, :residency), proof_type: :residency, status: :approved)
       end
 
       application.reload
@@ -123,7 +124,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
           perform_enqueued_jobs(only: IssueInitialVoucherJob) do
             assert_difference -> { application.proof_reviews.where(proof_type: :residency, status: :approved).count }, 1 do
               assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
-                reviewer.review(proof_type: :residency, status: :approved)
+                reviewer.review(**proof_decision_params(application, :residency), proof_type: :residency, status: :approved)
               end
             end
           end
@@ -171,12 +172,10 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_difference -> { Voucher.where(application: application).count }, 1 do
         assert_difference -> { Event.where(action: 'voucher_assigned', auditable_type: 'Voucher').count }, 1 do
           perform_enqueued_jobs(only: IssueInitialVoucherJob) do
-            result = DisabilityCertificationAttachmentService.update_certification_status(
-              application: application,
-              status: :approved,
-              admin: admin,
-              submission_method: :admin_review
-            )
+            result = DisabilityCertificationAttachmentService.update_certification_status(**proof_decision_params(application, :disability_certification), application: application,
+                                                                                                                                                           status: :approved,
+                                                                                                                                                           admin: admin,
+                                                                                                                                                           submission_method: :admin_review)
 
             assert result[:success], 'Certification approval should succeed'
           end
@@ -225,7 +224,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       )
 
       reviewer = Applications::ProofReviewer.new(application, admin)
-      reviewer.review(proof_type: :residency, status: :approved)
+      reviewer.review(**proof_decision_params(application, :residency), proof_type: :residency, status: :approved)
 
       application.reload
 

@@ -10,7 +10,7 @@ module Admin
       @vendor = create(:vendor, :approved, business_name: 'Ray Supply')
       @invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor,
                                                                 transaction_count: 2, amount_per_transaction: 50)
-      sign_in(@admin)
+      sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
     test 'staff approve an invoice and record a check payment' do

@@ -3,6 +3,7 @@
 require 'test_helper'
 
 class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
+  include ProofResubmissionTestHelper
   include ActiveJob::TestHelper
 
   setup do
@@ -76,11 +77,9 @@ class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
     ApplicationNotificationsMailer.unstub(:proof_rejected)
 
     assert_difference('PrintQueueItem.count', 1) do
-      Applications::ProofReviewer.new(application, @admin).review(
-        proof_type: :income,
-        status: :rejected,
-        rejection_reason: 'Document is not acceptable'
-      )
+      Applications::ProofReviewer.new(application, @admin).review(**proof_decision_params(application, :income), proof_type: :income,
+                                                                                                                 status: :rejected,
+                                                                                                                 rejection_reason: 'Document is not acceptable')
     end
 
     print_item = PrintQueueItem.last

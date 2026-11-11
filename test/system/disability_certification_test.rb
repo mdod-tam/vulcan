@@ -17,7 +17,7 @@ class DisabilityCertificationTest < ApplicationSystemTestCase
   end
 
   test 'admin can view disability certification section' do
-    system_test_sign_in(@admin)
+    system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     wait_for_turbo
 
     visit admin_application_path(@application)
@@ -34,7 +34,7 @@ class DisabilityCertificationTest < ApplicationSystemTestCase
   end
 
   test 'admin can send disability certification request' do
-    system_test_sign_in(@admin)
+    system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     wait_for_turbo
 
     visit admin_application_path(@application)
@@ -115,7 +115,7 @@ class DisabilityCertificationTest < ApplicationSystemTestCase
     # Bypass validation to exercise the missing-email state.
     @application.update_columns(certifying_professional_email: nil)
 
-    system_test_sign_in(@admin)
+    system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     wait_for_turbo
 
     visit admin_application_path(@application)
