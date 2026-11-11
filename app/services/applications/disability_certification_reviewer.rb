@@ -49,7 +49,7 @@ module Applications
                               provider_delivery: { success: false, outcome: :deferred }, warnings: warnings })
       result.message = rejection_message(result.data)
 
-      schedule_provider_follow_up(result, service_result, rejection_reason)
+      schedule_provider_follow_up(result, service_result)
       result
     rescue ReviewCommit::Unconfirmed => e
       failure(e.message, { commit_state: :unknown })
@@ -60,9 +60,10 @@ module Applications
     private
 
     # Paper intake may own an outer transaction. Rollback discards this provider attempt.
-    def schedule_provider_follow_up(result, service_result, rejection_reason)
+    def schedule_provider_follow_up(result, service_result)
+      proof_review = service_result.fetch(:proof_review)
       ActiveRecord.after_all_transactions_commit do
-        request_result = request_secure_certification_upload(service_result[:proof_review])
+        request_result = request_secure_certification_upload(proof_review)
         result.data[:secure_upload_request] = {
           success: request_result.success?, message: request_result.message,
           superseded_review: request_result.data&.dig(:superseded_review)
@@ -72,7 +73,7 @@ module Applications
         else
           result.data[:provider_delivery].replace(
             notify_certifying_professional(
-              service_result[:proof_review]&.rejection_reason || rejection_reason, service_result[:notification_id],
+              proof_review.rejection_reason, service_result[:notification_id],
               secure_upload_url: request_result.data&.dig(:secure_upload_url)
             )
           )

@@ -592,7 +592,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   def test_should_redirect_required_role_without_mfa_to_setup_after_password_update
     sign_out
     admin = create(:admin, password: 'password1234', password_confirmation: 'password1234')
-    sign_in_for_integration_test(admin, bypass_mfa_enrollment: true)
+    sign_in_for_integration_test(admin)
 
     patch password_path, params: {
       password_challenge: 'password1234',

@@ -34,12 +34,12 @@ class CrossGrantedStaffTest < ActionDispatch::IntegrationTest
 
   test 'staff without the grant, constituents, and inactive grantees stay out' do
     {
-      'an evaluator without training' => [create(:evaluator), trainers_dashboard_path],
-      'a trainer without evaluation' => [create(:trainer), evaluators_dashboard_path],
-      'a constituent for trainers' => [create(:constituent), trainers_dashboard_path],
-      'a constituent for evaluators' => [create(:constituent), evaluators_dashboard_path]
-    }.each do |name, (user, path)|
-      sign_in_for_integration_test(user, bypass_mfa_enrollment: true)
+      'an evaluator without training' => [create(:evaluator), trainers_dashboard_path, true],
+      'a trainer without evaluation' => [create(:trainer), evaluators_dashboard_path, true],
+      'a constituent for trainers' => [create(:constituent), trainers_dashboard_path, false],
+      'a constituent for evaluators' => [create(:constituent), evaluators_dashboard_path, false]
+    }.each do |name, (user, path, bypass_mfa_enrollment)|
+      sign_in_for_integration_test(user, bypass_mfa_enrollment:)
       get path
       assert_redirected_to root_path, name
     end
