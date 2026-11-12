@@ -35,6 +35,41 @@ class EventTest < ActiveSupport::TestCase
     end
   end
 
+  test 'metadata constraint validation is separate and reversibly restores the unvalidated state' do
+    require Rails.root.join('db/migrate/20261111200000_add_event_metadata_constraint')
+    require Rails.root.join('db/migrate/20261111200200_validate_event_metadata')
+
+    connection = Event.connection
+    connection.execute('CREATE TEMP TABLE events (metadata jsonb NOT NULL)')
+    connection.execute("INSERT INTO events VALUES ('{}'), ('[]')")
+    validated = lambda do
+      connection.select_value(<<~SQL.squish)
+        SELECT convalidated FROM pg_constraint
+        WHERE conrelid = 'pg_temp.events'::regclass AND conname = 'events_metadata_object'
+      SQL
+    end
+
+    addition = AddEventMetadataConstraint.new
+    validation = ValidateEventMetadata.new
+    addition.migrate(:up)
+    assert_equal false, validated.call
+    error = assert_raises(ActiveRecord::StatementInvalid) do
+      Event.transaction(requires_new: true) { connection.execute("INSERT INTO events VALUES ('[]')") }
+    end
+    assert_instance_of PG::CheckViolation, error.cause
+    assert_equal 2, connection.select_value('SELECT COUNT(*) FROM pg_temp.events')
+
+    connection.execute("DELETE FROM pg_temp.events WHERE metadata = '[]'::jsonb")
+    validation.migrate(:up)
+    assert_equal true, validated.call
+    validation.migrate(:down)
+    assert_equal false, validated.call
+    validation.migrate(:up)
+    assert_equal true, validated.call
+    addition.migrate(:down)
+    assert_nil validated.call
+  end
+
   test 'optional metadata stays flexible while changes must support field history readers' do
     event = Event.new(user: @actor, action: 'new_event_action', metadata: { extra: ['context'], changes: nil })
     assert event.valid?

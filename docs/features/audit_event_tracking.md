@@ -70,6 +70,8 @@ Action names are an interface: displays and reports match on them, so renaming o
 ## Actors and metadata
 
 Metadata must be a JSON object; both the model and a database check enforce this. The database default is `{}`.
+The check is added without validating existing rows, then validated in a separate migration so the table scan
+does not hold the addition's exclusive lock. New writes are checked as soon as the constraint is added.
 When present and non-null, `changes` must also be an object so field-history readers can iterate its entries.
 Individual change values retain their existing array, old/new, or from/to formats. Feature-flag toggle events require
 a nonblank string `flag_name` and boolean `old_value` and `new_value`; `false` is valid. Other keys remain optional
