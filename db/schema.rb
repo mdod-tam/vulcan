@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_11_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_200100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -477,12 +477,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_110000) do
     t.string "user_agent"
     t.bigint "user_id", null: false
     t.text "change_values"
+    t.index "((metadata ->> 'application_id'::text))", name: "index_events_on_metadata_application_id", where: "((metadata ->> 'application_id'::text) IS NOT NULL)"
+    t.index "((metadata ->> 'evaluation_id'::text))", name: "index_events_on_metadata_evaluation_id", where: "((metadata ->> 'evaluation_id'::text) IS NOT NULL)"
+    t.index "((metadata ->> 'training_session_id'::text))", name: "index_events_on_metadata_training_session_id", where: "((metadata ->> 'training_session_id'::text) IS NOT NULL)"
     t.index "action, ((metadata ->> 'operation_id'::text))", name: "index_events_on_legacy_mail_removal_operation", unique: true, where: "(((action)::text = ANY (ARRAY[('email_delivery_legacy_job_removal_requested'::character varying)::text, ('email_delivery_legacy_job_removed'::character varying)::text])) AND (NULLIF(btrim((metadata ->> 'operation_id'::text)), ''::text) IS NOT NULL))"
     t.index "action, ((metadata ->> 'request_id'::text))", name: "index_events_on_delivery_outcome_request", unique: true, where: "(((action)::text = ANY (ARRAY[('email_delivery_suppressed'::character varying)::text, ('email_delivery_configuration_error'::character varying)::text, ('email_delivery_enqueue_failed'::character varying)::text, ('essential_communication_submitted'::character varying)::text])) AND (NULLIF(btrim((metadata ->> 'request_id'::text)), ''::text) IS NOT NULL))"
     t.index ["action", "auditable_type", "auditable_id"], name: "index_events_on_action_and_auditable"
     t.index ["auditable_type", "auditable_id"], name: "index_events_on_auditable"
     t.index ["metadata"], name: "index_events_on_metadata", using: :gin
     t.index ["user_id"], name: "index_events_on_user_id"
+    t.check_constraint "jsonb_typeof(metadata) = 'object'::text", name: "events_metadata_object"
   end
 
   create_table "feature_flags", force: :cascade do |t|

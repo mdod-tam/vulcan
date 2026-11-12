@@ -69,6 +69,17 @@ Action names are an interface: displays and reports match on them, so renaming o
 
 ## Actors and metadata
 
+Metadata must be a JSON object; both the model and a database check enforce this. The database default is `{}`.
+When present and non-null, `changes` must also be an object so field-history readers can iterate its entries.
+Individual change values retain their existing array, old/new, or from/to formats. Feature-flag toggle events require
+a nonblank string `flag_name` and boolean `old_value` and `new_value`; `false` is valid. Other keys remain optional
+unless their workflow requires them, and additional metadata keys are allowed.
+
+`auditable` identifies the event's subject. Related `application_id`, `evaluation_id`, and `training_session_id`
+values stay in metadata and have partial expression indexes for history lookups. These indexes use text extraction,
+matching existing queries for both numeric and string JSON IDs. Multi-application events retain `application_ids`.
+The whole-metadata GIN index continues to support containment queries.
+
 Personal-value masking has one owner, [AuditMetadataPrivacy](../../app/services/audit_metadata_privacy.rb), called before the audit service logs or persists metadata. Personal changes store their masks directly in metadata; only device history uses the encrypted change-value cell. Readers display the stored values without a second privacy transformation. The [PII guide](../security/pii_encryption.md#audit-events) describes the field masks and device-history storage. Profile and contact writes without an operation ID bypass the five-second creation deduplication window, and their timelines retain stored mutations by event identity. An explicit operation ID suppresses retries of the same operation within five seconds. Eligible structural actions retain their action-specific five-second fingerprints; masked-value equality does not prove a retry or a reversion.
 
 Masking follows personal fields through nested hashes and collections and also applies to values wrapped in a secret or withheld field. Metadata name snapshots, including staff assignment and completion names, retain initials. The exact actor ID and any role metadata are preserved. `Event#user` remains the account association for authorized screens to resolve the actor's current identity, so a masked name snapshot does not remove attribution.
