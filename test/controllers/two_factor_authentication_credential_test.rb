@@ -25,6 +25,7 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
   end
 
   test 'disabled SMS setup retains the phone form without creating a credential or successful challenge' do
+    ensure_system_audit_actor!
     admin = create(:admin)
     EmailDelivery::ControlWriter.set(name: EmailDelivery::CHANNEL_CONTROLS['sms'], enabled: false, actor: admin, operation_id: SecureRandom.uuid)
     TwilioVerifyService.expects(:client).never
@@ -148,25 +149,43 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_select 'h1', text: 'Set up Text Message Verification'
   end
 
-  test 'successful SMS setup confirmation persists credential only after approval' do
-    assert_no_difference('SmsCredential.count') do
-      post create_credential_two_factor_authentication_path(type: 'sms'), params: {
-        phone_number: '555-123-4567'
-      }
-    end
+  test 'SMS enrollment renders its challenge, respects resend cooldown, and persists only after approval' do
+    get new_credential_two_factor_authentication_path(type: 'sms')
+    assert_response :success
+    assert_select 'form[action=?] input[name=phone_number]', create_credential_two_factor_authentication_path(type: 'sms')
 
+    assert_no_difference('SmsCredential.count') do
+      post create_credential_two_factor_authentication_path(type: 'sms'), params: { phone_number: '555-123-4567' }
+    end
     assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    follow_redirect!
+    assert_response :success
+    assert_select 'form[action=?] input[name=code]', confirm_pending_sms_credential_two_factor_authentication_path
+
+    TwilioVerifyService.stub(:send_verification, ->(*) { flunk 'The resend cooldown must not contact the provider' }) do
+      post resend_pending_sms_code_two_factor_authentication_path
+    end
+    assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    assert_match(/wait/i, flash[:alert])
+
+    travel 31.seconds
+    post resend_pending_sms_code_two_factor_authentication_path
+    assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
+    assert_equal 'A new verification code has been sent', flash[:notice]
 
     assert_difference('SmsCredential.count', 1) do
-      post confirm_pending_sms_credential_two_factor_authentication_path, params: {
-        code: '123456'
-      }
+      assert_difference -> { @user.reload.security_version }, 1 do
+        post confirm_pending_sms_credential_two_factor_authentication_path, params: { code: '123456' }
+      end
     end
-
     assert_redirected_to credential_success_two_factor_authentication_path(type: 'sms')
-    credential = @user.reload.sms_credentials.first
+    credential = @user.reload.sms_credentials.sole
     assert_equal '555-123-4567', credential.phone_number
-    assert credential.verified_at.present?
+    assert_predicate credential, :verified?
+    follow_redirect!
+    assert_response :success
+    assert_select 'h1', 'Setup Complete!'
+    assert_includes response.body, 'Your Text Message Verification has been successfully set up.'
   end
 
   test 'successful SMS setup confirmation redirects Turbo requests to success page' do
@@ -183,21 +202,25 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_response :see_other
   end
 
-  test 'invalid SMS setup confirmation does not create credential' do
-    post create_credential_two_factor_authentication_path(type: 'sms'), params: {
-      phone_number: '555-123-4567'
-    }
+  test 'invalid and terminal SMS setup confirmations cannot create a credential or replay a cleared challenge' do
+    post create_credential_two_factor_authentication_path(type: 'sms'), params: { phone_number: '555-123-4567' }
     assert_redirected_to verify_pending_sms_credential_two_factor_authentication_path
 
     assert_no_difference('SmsCredential.count') do
-      post confirm_pending_sms_credential_two_factor_authentication_path, params: {
-        code: '000000'
-      }
+      post confirm_pending_sms_credential_two_factor_authentication_path, params: { code: '000000' }
     end
-
     assert_response :unprocessable_content
     assert_select 'h1', text: 'Text Message Verification'
     assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code')
+
+    TwilioVerifyService.expects(:check_verification).once.returns(success: true, status: 'expired', valid: false)
+    assert_no_difference ['SmsCredential.count', 'Event.count', -> { @user.reload.security_version }] do
+      post confirm_pending_sms_credential_two_factor_authentication_path, params: { code: '123456' }
+      assert_redirected_to new_credential_two_factor_authentication_path(type: 'sms')
+      assert_nil session[TwoFactorAuth::SESSION_KEYS[:challenge]]
+      post confirm_pending_sms_credential_two_factor_authentication_path, params: { code: '123456' }
+      assert_redirected_to new_credential_two_factor_authentication_path(type: 'sms')
+    end
   end
 
   test 'SMS enrollment provider failure uses the shared service-error feedback' do
@@ -232,11 +255,49 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert credential.verified_at.present?
   end
 
-  test 'should handle invalid attestation' do
-    skip 'WebAuthn creation tests should focus on higher-level interactions per documentation'
+  test 'WebAuthn enrollment rejects another challenge before saving the actual key and consuming its server challenge' do
+    original_origins = WebAuthn.configuration.allowed_origins
+    original_rp_id = WebAuthn.configuration.rp_id
+    WebAuthn.configuration.allowed_origins = ['https://example.com']
+    WebAuthn.configuration.rp_id = 'example.com'
+    client = WebAuthn::FakeClient.new('https://example.com')
 
-    post webauthn_creation_options_two_factor_authentication_path, xhr: true
+    post webauthn_creation_options_two_factor_authentication_path, as: :json
     assert_response :success
+    challenge = response.parsed_body.fetch('challenge')
+    wrong_registration = client.create(challenge: SecureRandom.urlsafe_base64(32), rp_id: 'example.com')
+    assert_no_difference ['WebauthnCredential.count', 'Event.count', -> { @user.reload.security_version }] do
+      post create_credential_two_factor_authentication_path(type: 'webauthn'),
+           params: { two_factor_credential: wrong_registration, credential_nickname: 'Office key' }, as: :json
+    end
+    assert_response :unprocessable_content
+    assert_equal 'verification_failed', response.parsed_body['error_code']
+    assert_equal challenge, session[TwoFactorAuth::SESSION_KEYS[:challenge]]
+
+    registration = client.create(challenge: challenge, rp_id: 'example.com')
+    parsed = WebAuthn::Credential.from_create(registration)
+    assert_difference('WebauthnCredential.count', 1) do
+      assert_difference -> { @user.reload.security_version }, 1 do
+        assert_difference -> { @user.events.where(action: 'mfa_credential_added').count }, 1 do
+          post create_credential_two_factor_authentication_path(type: 'webauthn'),
+               params: { two_factor_credential: registration, credential_nickname: 'Office key' }, as: :json
+        end
+      end
+    end
+    assert_response :success
+    credential = @user.reload.webauthn_credentials.sole
+    assert_equal [parsed.id, parsed.public_key, 'Office key'], credential.attributes.values_at('external_id', 'public_key', 'nickname')
+    assert_equal({ 'status' => 'ok', 'redirect_url' => credential_success_two_factor_authentication_path(type: 'webauthn') },
+                 response.parsed_body.slice('status', 'redirect_url'))
+    assert_equal credential.id, response.parsed_body.dig('credential', 'id')
+    event = @user.events.where(action: 'mfa_credential_added').sole
+    assert_equal @user, event.auditable
+    assert_equal({ '__service_generated' => true, 'credential_type' => 'webauthn', 'credential_id' => credential.id }, event.metadata)
+    assert_equal @user.id, event.user_id
+    assert_nil session[TwoFactorAuth::SESSION_KEYS[:challenge]]
+  ensure
+    WebAuthn.configuration.allowed_origins = original_origins
+    WebAuthn.configuration.rp_id = original_rp_id
   end
 
   { verification: WebAuthn::Error, creation: StandardError }.each do |failure_type, error_class|
@@ -285,35 +346,69 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_response :unauthorized, "Credential creation should require authentication, but got status #{response.status}"
   end
 
-  test 'should destroy credential' do
-    credential = create(:webauthn_credential,
-                        user: @user,
-                        nickname: 'Deletable Key')
-
-    assert_difference('WebauthnCredential.count', -1) do
-      delete destroy_credential_two_factor_authentication_path(type: 'webauthn', id: credential.id)
+  test 'credential removal deletes the selected factor and records its actor and security generation for HTML and Turbo' do
+    examples = credential_examples(@user)
+    %w[sms webauthn totp].each_with_index do |type, index|
+      credential, name = examples.fetch(type)
+      if index.positive?
+        travel 31.seconds
+        post reauthentication_path, params: {
+          password: 'password1234', factor_type: 'totp', code: ROTP::TOTP.new(examples.fetch('totp').first.secret).now
+        }
+        assert_redirected_to edit_profile_path
+      end
+      headers = type == 'webauthn' ? {} : { 'Accept' => Mime[:turbo_stream].to_s }
+      assert_difference -> { credential.class.count }, -1 do
+        assert_difference -> { @user.reload.security_version }, 1 do
+          assert_difference -> { @user.events.where(action: 'mfa_credential_removed').count }, 1 do
+            delete destroy_credential_two_factor_authentication_path(type: type, id: credential.id), headers: headers
+          end
+        end
+      end
+      if type == 'webauthn'
+        assert_redirected_to edit_profile_path
+        assert_equal "#{name} removed successfully", flash[:notice]
+      else
+        assert_response :success
+        assert_select 'turbo-stream[action=remove][target=?]', ActionView::RecordIdentifier.dom_id(credential)
+        assert_select 'turbo-stream[action=update][target=flash]', text: /#{Regexp.escape(name)} removed successfully/
+      end
+      event = @user.events.where(action: 'mfa_credential_removed').order(:id).last
+      assert_equal @user, event.auditable
+      assert_equal [@user.id, type, credential.id], [event.user_id, *event.metadata.values_at('credential_type', 'credential_id')]
     end
-
-    assert_redirected_to edit_profile_path, 'Should redirect to profile after successful deletion'
-    assert_equal 'Security key removed successfully', flash[:notice], 'Should show success message'
   end
 
-  test 'cannot destroy another user credential' do
-    other_user = create(:constituent, email: "other-user-#{SecureRandom.hex(4)}@example.com")
+  test 'credential removal hides foreign and missing factor IDs and rejects unknown factor types without changing authority' do
+    other_user = create(:constituent)
     other_user.update_column(:webauthn_id, WebAuthn.generate_user_id)
-
-    other_credential = create(:webauthn_credential,
-                              user: other_user,
-                              nickname: 'Other User Key')
-
-    assert_no_difference('WebauthnCredential.count') do
-      delete destroy_credential_two_factor_authentication_path(type: 'webauthn', id: other_credential.id)
+    credential_examples(other_user).each do |type, (credential, name)|
+      [credential.id, 0].each do |id|
+        assert_no_difference ['WebauthnCredential.count', 'TotpCredential.count', 'SmsCredential.count', 'Event.count',
+                              -> { @user.reload.security_version }, -> { other_user.reload.security_version }] do
+          delete destroy_credential_two_factor_authentication_path(type: type, id: id)
+        end
+        assert_redirected_to edit_profile_path
+        assert_equal "#{name} not found", flash[:alert]
+      end
+      assert credential.class.exists?(credential.id), "#{type} must remain owned by the other account"
     end
 
-    # The response hides whether another user owns the credential.
-    assert_redirected_to edit_profile_path, 'Should redirect back to profile'
-    assert_equal 'Security key not found', flash[:alert], 'Should show not found message'
+    assert_no_difference ['WebauthnCredential.count', 'TotpCredential.count', 'SmsCredential.count', 'Event.count',
+                          -> { @user.reload.security_version }] do
+      delete destroy_credential_two_factor_authentication_path(type: 'unknown', id: other_user.id)
+    end
+    assert_redirected_to edit_profile_path
+    assert_equal 'Invalid credential type', flash[:alert]
+  end
 
-    assert WebauthnCredential.exists?(other_credential.id), "Other user's credential should not be deleted"
+  private
+
+  def credential_examples(user)
+    {
+      'webauthn' => [create(:webauthn_credential, user: user, nickname: 'Security key'), 'Security key'],
+      'totp' => [user.totp_credentials.create!(secret: ROTP::Base32.random, nickname: 'Authenticator app'), 'Authenticator app'],
+      'sms' => [user.sms_credentials.create!(phone_number: '555-123-4567', verified_at: Time.current), 'SMS verification']
+    }
   end
 end

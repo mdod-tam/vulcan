@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module ConstituentPortal
   class ApplicationTypeTest < ApplicationSystemTestCase
+    include OnlineApplicationTestHelpers
+
     setup do
       @constituent = create(:constituent)
       system_test_sign_in(@constituent)
@@ -17,29 +19,12 @@ module ConstituentPortal
       visit new_constituent_portal_application_path
       wait_for_turbo
 
-      # set('') before each value prevents concatenation with prefilled values.
-      check 'I certify that I am a resident of Maryland'
-      safe_fill_household_and_income(3, 45_999)
-
-      find('input[name*="physical_address_1"]').set('').set('123 Test St')
-      find('input[name*="city"]').set('').set('Baltimore')
-      select 'Maryland', from: 'State'
-      find('input[name*="zip_code"]').set('').set('21201')
-
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-      check 'Hearing'
-
-      within '#certifying-professional-fields' do
-        find('input[name="application[certifying_professional_attributes][name]"]').set('').set('Dr. Test Provider')
-        find('input[name="application[certifying_professional_attributes][phone]"]').set('').set('2025551234')
-        find('input[name="application[certifying_professional_attributes][email]"]').set('').set('test@example.com')
-      end
-
-      check 'I authorize the release and sharing of my disability-related information as described above'
-
-      find('input[type="submit"][name="save_draft"]').click
-
-      assert_application_saved_as_draft(wait: 10)
+      fill_in_online_application_fields(
+        household_size: 3, annual_income: 45_999,
+        provider: { name: 'Dr. Test Provider', phone: '2025551234', email: 'test@example.com' },
+        address: { physical_address_1: '123 Test St', city: 'Baltimore', state: 'Maryland', zip_code: '21201' }
+      )
+      save_online_application_draft
 
       current_url =~ %r{/applications/(\d+)}
       application_id = ::Regexp.last_match(1)
@@ -68,32 +53,12 @@ module ConstituentPortal
       visit new_constituent_portal_application_path
       wait_for_turbo
 
-      check 'I certify that I am a resident of Maryland'
-      safe_fill_household_and_income(3, 45_999)
-
-      find('input[name*="physical_address_1"]').set('').set('123 Test St')
-      find('input[name*="city"]').set('').set('Baltimore')
-      select 'Maryland', from: 'State'
-      find('input[name*="zip_code"]').set('').set('21201')
-
-      within 'section', text: 'Disability Information' do
-        check_box = find('label', text: /I certify that I have a disability/).find(:xpath, '..//input[@type="checkbox"]')
-        check_box.check
-
-        find('label', text: 'Hearing').find(:xpath, '..//input[@type="checkbox"]').check
-      end
-
-      within '#certifying-professional-fields' do
-        find('input[name="application[certifying_professional_attributes][name]"]').set('').set('Dr. Test Provider')
-        find('input[name="application[certifying_professional_attributes][phone]"]').set('').set('2025551234')
-        find('input[name="application[certifying_professional_attributes][email]"]').set('').set('test@example.com')
-      end
-
-      check 'I authorize the release and sharing of my disability-related information as described above'
-
-      find('input[type="submit"][name="save_draft"]').click
-
-      assert_application_saved_as_draft(wait: 10)
+      fill_in_online_application_fields(
+        household_size: 3, annual_income: 45_999,
+        provider: { name: 'Dr. Test Provider', phone: '2025551234', email: 'test@example.com' },
+        address: { physical_address_1: '123 Test St', city: 'Baltimore', state: 'Maryland', zip_code: '21201' }
+      )
+      save_online_application_draft
 
       current_url =~ %r{/applications/(\d+)}
       application_id = ::Regexp.last_match(1)

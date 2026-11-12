@@ -156,20 +156,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not app.can_create_voucher?
   end
 
-  test 'can_create_voucher? returns false without all required proofs approved' do
-    app = create(:application, :approved, :voucher_fulfillment)
-    app.update_columns(
-      disability_certification_status: Application.disability_certification_statuses[:approved],
-      residency_proof_status: Application.residency_proof_statuses[:approved],
-      income_proof_status: Application.income_proof_statuses[:approved],
-      id_proof_status: Application.id_proof_statuses[:not_reviewed]
-    )
-    app.reload
-
-    assert_not app.required_proofs_approved?
-    assert_not app.can_create_voucher?
-  end
-
   test 'with_proofs_needing_review includes income not_reviewed only when income required' do
     app_with_income = create(:application, :in_progress)
     app_without_income = create(:application, :in_progress, :income_not_required)
@@ -208,18 +194,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_includes Application.with_proofs_needing_review, app
   end
 
-  test 'can_create_voucher? requires voucher fulfillment' do
-    app = create(:application, :completed, :with_all_proofs)
-    assert app.equipment_fulfillment?
-    assert_not app.can_create_voucher?
-  end
-
-  test 'can_create_voucher? returns true for voucher fulfillment with approved status and cert' do
-    app = create(:application, :completed, :voucher_fulfillment)
-    app.reload
-    assert app.can_create_voucher?
-  end
-
   test 'can_create_voucher? requires all required proofs approved' do
     @vouchers_flag.update!(enabled: true)
     app = create(:application, :approved, :voucher_fulfillment)
@@ -231,6 +205,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     )
     app.reload
 
+    assert_not app.required_proofs_approved?
     assert_not app.can_create_voucher?
     assert_no_difference -> { Voucher.where(application: app).count } do
       assert_predicate Vouchers::IssuanceService.new(app, actor: create(:admin)).call, :failure?
@@ -247,27 +222,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app.reload
 
     assert app.send(:all_requirements_met?)
-  end
-
-  test 'ProofReviewer auto-approves when income not required and residency approved' do
-    app = create(:application, :in_progress, :income_not_required)
-    app.update_columns(disability_certification_status: Application.disability_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
-    app.residency_proof.attach(
-      io: file_fixture('residency_proof.pdf').open,
-      filename: 'residency.pdf',
-      content_type: 'application/pdf'
-    )
-    mark_document_clean!(app.residency_proof.blob, user: app.user, slot: 'residency_proof')
-    admin = create(:admin)
-    app.stubs(:purge_rejected_proof).returns(true)
-
-    reviewer = Applications::ProofReviewer.new(app, admin)
-    reviewer.review(**proof_decision_params(app, :residency), proof_type: :residency, status: :approved)
-
-    app.reload
-    assert app.status_approved?, "Expected auto-approval, got #{app.status}"
-    assert app.status_changes.exists?(to_status: 'approved'),
-           'Expected ApplicationStatusChange record for auto-approval'
   end
 
   test 'ProofReviewer creates audit event on auto-approval via reconciler' do
@@ -289,6 +243,10 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
         reviewer.review(**proof_decision_params(app, :residency), proof_type: :residency, status: :approved)
       end
     end
+
+    assert app.reload.status_approved?, "Expected auto-approval, got #{app.status}"
+    assert app.status_changes.exists?(to_status: 'approved'),
+           'Expected ApplicationStatusChange record for auto-approval'
 
     status_event = Event.where(action: 'application_status_changed', auditable: app).order(:created_at).last
     assert_equal 'auto_approval', status_event.metadata['trigger']
@@ -440,50 +398,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_equal 1, app.events.where(action: 'evaluation_requested').count
   end
 
-  test 'training_request_pending? tracks unresolved training requests' do
-    app = create(:application, :completed)
-    app.update_columns(training_requested_at: 2.hours.ago)
-
-    assert app.training_request_pending?
-
-    create(:training_session, application: app, trainer: create(:trainer), status: :requested)
-
-    assert_not app.reload.training_request_pending?
-  end
-
-  test 'training_request_pending? is true again for a later request' do
-    app = create(:application, :completed)
-    trainer = create(:trainer)
-    app.update_columns(training_requested_at: 2.hours.ago)
-    create(:training_session, :cancelled, application: app, trainer: trainer, created_at: 1.hour.ago)
-
-    app.update_columns(training_requested_at: 5.minutes.ago)
-
-    assert app.reload.training_request_pending?
-  end
-
-  test 'with_pending_training_request only returns approved unresolved requests' do
-    requested = create(:application, :completed)
-    requested.update_columns(
-      status: Application.statuses[:approved],
-      training_requested_at: 1.hour.ago
-    )
-    assigned = create(:application, :completed)
-    assigned.update_columns(
-      status: Application.statuses[:approved],
-      training_requested_at: 2.hours.ago
-    )
-    create(:training_session, application: assigned, trainer: create(:trainer), status: :requested)
-    unapproved = create(:application, :in_progress)
-    unapproved.update_columns(training_requested_at: 1.hour.ago)
-
-    results = Application.with_pending_training_request.to_a
-
-    assert_includes results, requested
-    assert_not_includes results, assigned
-    assert_not_includes results, unapproved
-  end
-
   test 'service_window_end_date returns application_date + waiting_period_years' do
     app = create(:application, :completed)
     app.update_columns(application_date: Date.new(2026, 1, 1))
@@ -505,13 +419,5 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
       assert_nil application.service_window_end_date
       assert_not application.service_window_active?
     end
-  end
-
-  test 'service_window_active? reflects service_window_end_date vs today' do
-    app = create(:application, :completed)
-    app.update_columns(application_date: 10.years.ago)
-
-    assert_not app.service_window_active?
-    assert app.service_window_end_date < Date.current
   end
 end

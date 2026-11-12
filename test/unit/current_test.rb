@@ -61,7 +61,11 @@ class CurrentTest < ActiveSupport::TestCase
         Current.set(paper_context: false) { assert_not Current.paper_context }
         assert Current.paper_context
       end
-      assert_equal outer, Current.paper_context
+      if outer.nil?
+        assert_nil Current.paper_context
+      else
+        assert_equal outer, Current.paper_context
+      end
     end
   end
 

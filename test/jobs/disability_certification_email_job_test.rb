@@ -108,6 +108,7 @@ class DisabilityCertificationEmailJobTest < ActiveJob::TestCase
     end
   end
   test 'a certification email queued before an off and on interval is suppressed, not retried' do
+    ensure_system_audit_actor!
     notification = Notification.create!(
       recipient: @constituent, actor: @admin, action: 'disability_certification_requested',
       notifiable: @application, metadata: { 'channel' => 'email' }

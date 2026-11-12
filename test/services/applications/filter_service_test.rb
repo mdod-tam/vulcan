@@ -487,11 +487,13 @@ module Applications
         assert service_result.success?, 'Expected service call to be successful'
         result_data = service_result.data
 
-        puts "Guardian ID: #{@guardian.id}"
-        puts "Dependent ID: #{@dependent.id}"
-        puts "Found guardian relationships: #{GuardianRelationship.where(guardian_id: @guardian.id).count}"
-        puts "Active app ID: #{@active_app.id}, user_id: #{@active_app.user_id}"
-        puts "Dependent app ID: #{@dependent_app.id}, user_id: #{@dependent_app.user_id}"
+        if TestOutput.verbose?
+          puts "Guardian ID: #{@guardian.id}"
+          puts "Dependent ID: #{@dependent.id}"
+          puts "Found guardian relationships: #{GuardianRelationship.where(guardian_id: @guardian.id).count}"
+          puts "Active app ID: #{@active_app.id}, user_id: #{@active_app.user_id}"
+          puts "Dependent app ID: #{@dependent_app.id}, user_id: #{@dependent_app.user_id}"
+        end
 
         assert_not_includes result_data, @active_app
         assert_includes result_data, @dependent_app

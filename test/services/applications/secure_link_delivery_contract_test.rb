@@ -69,18 +69,34 @@ module Applications
     end
 
     test 'a proof rejection whose link cannot be issued leaves a durable record' do
-      application = create(:application, :in_progress)
-      RequestProofResubmission.any_instance.stubs(:call).returns(
-        BaseService::Result.new(success: false, message: 'No usable contact path is available for this recipient.', data: nil)
-      )
+      failure_message = 'No usable contact path is available for this recipient.'
+      private_details = 'private-recipient@example.test token=private-request-token'
+      [false, true].each do |unexpected_exception|
+        application = create(:application, :in_progress)
+        request = RequestProofResubmission.any_instance.stubs(:call)
+        if unexpected_exception
+          request.raises(StandardError, private_details)
+        else
+          request.returns(BaseService::Result.new(success: false, message: failure_message, data: nil))
+        end
 
-      review = create(:proof_review, :rejected, application: application, admin: @admin, proof_type: :income)
-      ProofDecisionFollowUp.new(review).call
+        review = create(:proof_review, :rejected, application: application, admin: @admin, proof_type: :income)
+        log_output = StringIO.new
+        Rails.stub :logger, ActiveSupport::Logger.new(log_output) do
+          assert_no_difference ['SecureRequestForm.count', 'Notification.count'] do
+            ProofDecisionFollowUp.new(review).call
+          end
+        end
 
-      event = Event.find_by!(action: 'proof_resubmission_request_failed', auditable: application)
-      assert_equal review.id, event.metadata['proof_review_id']
-      assert_equal 'income', event.metadata['proof_type']
-      assert_equal 'No usable contact path is available for this recipient.', event.metadata['reason']
+        assert_predicate review.reload, :status_rejected?
+        event = Event.find_by!(action: 'proof_resubmission_request_failed', auditable: application)
+        assert_equal review.id, event.metadata['proof_review_id']
+        assert_equal 'income', event.metadata['proof_type']
+        expected_reason = unexpected_exception ? 'StandardError' : failure_message
+        assert_equal expected_reason, event.metadata['reason']
+        assert_includes log_output.string, expected_reason
+        assert_not_includes log_output.string, private_details
+      end
     end
   end
 end

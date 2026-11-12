@@ -41,7 +41,7 @@ module AuthenticationCore
 
   # DEBUG_AUTH or VERBOSE_TESTS enables these messages.
   def debug_auth(msg)
-    return unless ENV['DEBUG_AUTH'] == 'true' || ENV['VERBOSE_TESTS'] == 'true'
+    return unless ENV['DEBUG_AUTH'] == 'true' || TestOutput.verbose?
 
     if defined?(Rails) && Rails.respond_to?(:logger) && Rails.logger
       Rails.logger.debug { "[AuthTest] #{msg}" }

@@ -2,7 +2,7 @@
 
 require 'application_system_test_case'
 
-class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
+class VendorLifecycleTest < ApplicationSystemTestCase
   setup do
     FeatureFlag.enable!(:vouchers_enabled)
     ensure_system_audit_actor!
@@ -27,7 +27,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     assert_not @vendor.w9_form.attached?
     assert_nil @vendor.terms_accepted_at
     assert_empty @vendor.voucher_transactions
-    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
+    system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
 
     click_link 'Upload W9 on your profile'
     complete_required_profile_address
@@ -39,16 +39,14 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     assert_text 'Website url must be a valid URL'
     assert_checked_field I18n.t('vendor_onboarding.terms.acceptance_label')
     assert_nil @vendor.reload.terms_accepted_at
-    take_screenshot('vendor-profile-retained-upload-checked-terms-error', html: true, full: true)
     fill_in 'Website URL', with: 'https://example.test'
     click_button 'Save Changes'
     assert_text 'Your W9 is awaiting review'
     assert @vendor.reload.w9_status_pending_review?
     assert @vendor.vendor_pending?
     submitted_blob = @vendor.w9_form.blob
-    take_screenshot('vendor-onboarding-awaiting-review', html: true, full: true)
 
-    sign_in_actor(@admin, bypass_mfa_enrollment: true)
+    system_test_switch_user(@admin, bypass_mfa_enrollment: true)
     visit admin_vendor_path(@vendor)
     click_link 'Review W9'
     assert_field 'w9_review_reviewed_blob_id', with: submitted_blob.id.to_s, type: 'hidden'
@@ -60,19 +58,41 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     assert @vendor.vendor_pending?, 'document approval must not authorize the vendor account'
     assert_equal submitted_blob.id, @vendor.w9_reviews.sole.reviewed_blob_id
 
-    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
+    system_test_switch_user(@vendor, bypass_mfa_enrollment: true)
     assert_text 'W9 approved; vendor authorization is still pending'
     assert_no_link 'Process Voucher'
-    take_screenshot('vendor-onboarding-awaiting-authorization', html: true, full: true)
 
-    sign_in_actor(@admin, bypass_mfa_enrollment: true)
+    system_test_switch_user(@admin, bypass_mfa_enrollment: true)
     visit edit_admin_vendor_path(@vendor)
     select 'Approved', from: 'Vendor approval'
     click_button 'Update Vendor'
     assert @vendor.reload.vendor_approved?
 
-    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
-    open_redemption(@voucher, @constituent.date_of_birth)
+    system_test_switch_user(@vendor, bypass_mfa_enrollment: true)
+    assert_selector 'h2#monthly-totals-heading'
+    assert_selector "table#monthly-totals-table[aria-labelledby='monthly-totals-heading']"
+    assert_selector 'table#monthly-totals-table caption.sr-only'
+    assert_selector '#chart-description.sr-only'
+    assert_selector "button[data-chart-toggle-target='button']"
+    assert_selector '#monthly-totals-chart', visible: :all
+    accepted_at = @vendor.terms_accepted_at
+    tax_id = @vendor.business_tax_id
+    phone = @vendor.phone
+    visit edit_vendor_portal_profile_path
+    assert_field 'users_vendor_business_tax_id', with: ''
+    assert_no_field 'users_vendor_terms_accepted'
+    assert_no_field 'Phone'
+    assert_link I18n.t('contact_changes.title'), href: new_contact_change_path
+    fill_in 'Website URL', with: 'https://example.test/contact'
+    click_button 'Save Changes'
+    assert_text 'Profile updated successfully'
+    assert_current_path vendor_portal_dashboard_path
+    assert_equal accepted_at, @vendor.reload.terms_accepted_at
+    assert_equal tax_id, @vendor.business_tax_id
+    assert_equal phone, @vendor.phone
+    assert_equal 'https://example.test/contact', @vendor.website_url
+    click_link 'Process a voucher'
+    open_voucher_redemption(@voucher, date_of_birth: @constituent.date_of_birth)
     assert_button 'Process Redemption', disabled: true
     page.current_window.resize_to(390, 844)
     select_product_by_keyboard
@@ -100,11 +120,11 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     assert_equal 50, @voucher.reload.remaining_value
     assert_equal [@product.id], purchase.products.pluck(:id)
     assert_empty purchase.shipments
-    assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=, page.evaluate_script('window.innerWidth')
-    take_screenshot('vendor-redemption-dashboard-narrow', html: true, full: true)
+    assert_no_horizontal_overflow
     page.current_window.resize_to(1200, 800)
 
-    open_redemption(@guardian_voucher, @dependent.date_of_birth)
+    click_link 'Process a voucher'
+    open_voucher_redemption(@guardian_voucher, date_of_birth: @dependent.date_of_birth)
     assert_button 'Process Redemption', disabled: true
     check "product_#{@product.id}"
     fill_in 'Redemption Amount', with: '50.00'
@@ -119,7 +139,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
 
     # Invoice runs cover redemptions before the run day. Advance time through that boundary.
     travel 1.day do
-      sign_in_actor(@admin, bypass_mfa_enrollment: true)
+      system_test_switch_user(@admin, bypass_mfa_enrollment: true)
       visit admin_invoices_path
       within('section', text: 'Not yet invoiced') do
         assert_text 'Connected Vendor Updated'
@@ -141,14 +161,14 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
       assert_text 'Payment recorded.'
       assert invoice.reload.status_invoice_paid?
 
-      sign_in_actor(@vendor, bypass_mfa_enrollment: true)
+      system_test_switch_user(@vendor, bypass_mfa_enrollment: true)
       click_link 'Invoices'
       click_link "Invoice #{invoice.invoice_number}"
       assert_text 'Paid'
       assert_text 'CONNECTED-CHECK'
       take_screenshot('vendor-connected-paid-invoice', html: true, full: true)
-      [[purchase, 'CONNECTED-TRACKING-123', 'vendor-connected-purchase-tracking'],
-       [guardian_purchase, 'CONNECTED-GUARDIAN-456', 'vendor-connected-guardian-purchase-tracking']].each do |order, tracking_number, screenshot_name|
+      [[purchase, 'CONNECTED-TRACKING-123'],
+       [guardian_purchase, 'CONNECTED-GUARDIAN-456']].each do |order, tracking_number|
         click_link 'Transactions'
         click_link "View purchase #{order.reference_number}"
         assert_text 'Waiting for shipping details'
@@ -156,25 +176,24 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
         click_button 'Save tracking number'
         assert_text 'Tracking number saved'
         assert_equal tracking_number, order.shipments.sole.tracking_number
-        take_screenshot(screenshot_name, html: true, full: true)
       end
 
-      [[@constituent, @application, 'CONNECTED-TRACKING-123', 'constituent'],
-       [@guardian, @guardian_application, 'CONNECTED-GUARDIAN-456', 'guardian']].each do |viewer, application, tracking_number, viewer_role|
-        sign_in_actor(viewer)
+      [[@constituent, @application, 'CONNECTED-TRACKING-123'],
+       [@guardian, @guardian_application, 'CONNECTED-GUARDIAN-456']].each do |viewer, application, tracking_number|
+        system_test_switch_user(viewer)
         visit constituent_portal_application_path(application)
         within('#orders-and-shipping') do
           assert_text 'Connected Vendor Updated'
           assert_text tracking_number
           assert_text '$50.00'
         end
-        take_screenshot("vendor-connected-purchase-#{viewer_role}", html: true, full: true)
       end
+      take_screenshot('vendor-lifecycle-guardian-fulfillment', html: true, full: true)
     end
   end
 
   test 'production-style unpublished terms block new browser acceptance without blocking profile work' do
-    sign_in_actor(@vendor, bypass_mfa_enrollment: true)
+    system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
     click_link 'Upload W9 on your profile'
     assert_text I18n.t('vendor_onboarding.terms.unavailable')
     assert_no_field 'users_vendor_terms_accepted'
@@ -191,16 +210,6 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
   end
 
   private
-
-  def open_redemption(voucher, date_of_birth)
-    click_link 'Process a voucher'
-    fill_in 'Voucher Code', with: voucher.code
-    click_button 'Verify Voucher'
-    assert_text 'Identity Verification'
-    fill_in 'date_of_birth', with: date_of_birth.strftime('%m/%d/%Y')
-    click_button 'Verify Identity'
-    assert_text 'Voucher Redemption'
-  end
 
   def select_product_by_keyboard
     # Cuprite Node#send_keys clicks a checkbox before typing, which would toggle it twice.
@@ -219,11 +228,5 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     fill_in 'City', with: 'Baltimore'
     fill_in 'State', with: 'MD'
     fill_in 'Zip Code', with: '21201'
-  end
-
-  def sign_in_actor(actor, bypass_mfa_enrollment: false)
-    Capybara.reset_sessions!
-    install_stimulus_error_reporting
-    system_test_sign_in(actor, bypass_mfa_enrollment:)
   end
 end

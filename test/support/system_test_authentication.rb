@@ -162,6 +162,12 @@ module SystemTestAuthentication
     end
   end
 
+  def system_test_switch_user(user, bypass_mfa_enrollment: false)
+    system_test_sign_out
+    install_stimulus_error_reporting
+    system_test_sign_in(user, bypass_mfa_enrollment:)
+  end
+
   def system_test_sign_out
     if page.has_link?('Sign Out', wait: 1)
       click_link 'Sign Out'
@@ -250,13 +256,13 @@ module SystemTestAuthentication
   end
 
   def debug_puts(msg)
-    puts msg if ENV['VERBOSE_TESTS']
+    puts msg if TestOutput.verbose?
   end
 
   # Diagnostics must not interrupt authentication.
 
   def debug_authentication_state(_context, _user)
-    return unless ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+    return unless TestOutput.verbose? || ENV['DEBUG_BROWSER']
 
     begin
       if defined?(page) && page
@@ -287,7 +293,7 @@ module SystemTestAuthentication
   end
 
   def debug_authentication_corruption(_context, _error, _user)
-    return unless ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+    return unless TestOutput.verbose? || ENV['DEBUG_BROWSER']
 
     begin
       if defined?(page) && page

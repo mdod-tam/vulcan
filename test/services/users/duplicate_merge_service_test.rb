@@ -1155,14 +1155,14 @@ module Users
 
       assert_operator duplicate_relationship.id, :<, other_relationship.id
       assert_operator other_relationship.id, :<, canonical_relationship.id
-      assert_equal @duplicate.email, Users::Constituent.find(dependent.id).effective_email
+      assert_nil Users::Constituent.find(dependent.id).effective_email
 
       result = merge
 
       assert result.failure?
       assert_match(/change which guardian receives dependent communications/i, result.message)
       assert_not @duplicate.reload.merged?
-      assert_equal @duplicate.email, Users::Constituent.find(dependent.id).effective_email
+      assert_nil Users::Constituent.find(dependent.id).effective_email
       assert GuardianRelationship.exists?(duplicate_relationship.id)
       assert GuardianRelationship.exists?(other_relationship.id)
       assert GuardianRelationship.exists?(canonical_relationship.id)

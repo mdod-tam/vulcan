@@ -25,13 +25,12 @@ module Applications
 
       setup_fpl_policies
 
-      @timestamp = Time.now.to_i
       @constituent_params = {
         first_name: 'Test',
         last_name: 'User',
         date_of_birth: '01/15/1980',
-        email: "test-#{@timestamp}@example.com",
-        phone: "202555#{@timestamp.to_s[-4..]}",
+        email: generate(:email),
+        phone: unique_paper_phone,
         physical_address_1: '123 Test St',
         city: 'Baltimore',
         state: 'MD',
@@ -52,21 +51,10 @@ module Applications
         certifying_professional_phone: '2025559876',
         certifying_professional_email: 'drsmith@example.com'
       }
-
-      @pdf_file = uploaded_pdf
-
-      @invalid_file = fixture_file_upload(
-        Rails.root.join('test/fixtures/files/invalid.exe'),
-        'application/octet-stream'
-      )
     end
 
     teardown do
       teardown_paper_application_context
-    end
-
-    def create_test_constituent(email)
-      create(:constituent, email: email)
     end
 
     def uploaded_pdf(filename = 'income_proof.pdf')
@@ -83,14 +71,14 @@ module Applications
     end
 
     test 'creates application with accepted income proof' do
-      test_timestamp = Time.now.to_i
-      service_email = "test-service-#{test_timestamp}@example.com"
-      service_phone = "202556#{test_timestamp.to_s[-4..]}"
+      pdf_file = uploaded_pdf
+      service_email = generate(:email)
+      service_phone = unique_paper_phone
       service_params = {
         constituent: @constituent_params.merge(email: service_email, phone: service_phone),
         application: @application_params,
         income_proof_action: 'accept',
-        income_proof: @pdf_file
+        income_proof: pdf_file
       }
 
       ProofAttachmentService.expects(:attach_proof).with(
@@ -100,7 +88,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
       assert result, "Service creation failed: #{service.errors.inspect}"
 
@@ -122,7 +110,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
 
       assert_equal Date.new(1980, 1, 15), Users::Constituent.find_by!(email: unique_email).date_of_birth
@@ -134,7 +122,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
       assert_not service.create
       assert service.errors.any? { |error| error.include?('Date of birth is not a valid date') },
              "Expected DOB format error, got: #{service.errors.inspect}"
@@ -154,16 +142,7 @@ module Applications
         disability_certification: uploaded_pdf('disability_certification_valid.pdf')
       }
 
-      %i[income residency id].each do |proof_type|
-        ProofAttachmentService.expects(:attach_proof).with(
-          has_entries(
-            proof_type: proof_type,
-            status: :not_reviewed,
-            admin: @admin,
-            submission_method: :paper
-          )
-        ).returns({ success: true })
-      end
+      expect_proofs_uploaded_for_review
       DisabilityCertificationAttachmentService.expects(:attach_certification).with(
         has_entries(
           status: :received,
@@ -172,7 +151,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_predicate service.application, :persisted?
     end
@@ -189,18 +168,9 @@ module Applications
         id_proof: uploaded_pdf('id_proof.pdf')
       }
 
-      %i[income residency id].each do |proof_type|
-        ProofAttachmentService.expects(:attach_proof).with(
-          has_entries(
-            proof_type: proof_type,
-            status: :not_reviewed,
-            admin: @admin,
-            submission_method: :paper
-          )
-        ).returns({ success: true })
-      end
+      expect_proofs_uploaded_for_review
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_nil service.application.household_size
       assert_nil service.application.annual_income
@@ -215,7 +185,7 @@ module Applications
 
       ProofAttachmentService.expects(:attach_proof).never
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       assert_not service.create
       assert_includes service.errors, 'Please upload a file for income proof before sending it for review'
     end
@@ -229,7 +199,7 @@ module Applications
 
       DisabilityCertificationAttachmentService.expects(:attach_certification).never
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       assert_not service.create
       assert_includes service.errors, 'Please upload a file for disability certification before sending it for review'
     end
@@ -242,7 +212,7 @@ module Applications
         constituent: { email: 'paper-replacement@example.test', phone: '202-555-5678' },
         application: @application_params
       }
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
 
       assert service.create, service.errors.inspect
 
@@ -343,7 +313,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
 
       assert result, "Failed to create application for existing self applicant: #{service.errors.inspect}"
@@ -375,7 +345,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
 
       assert result, "Failed to create application for existing dependent: #{service.errors.inspect}"
@@ -385,48 +355,31 @@ module Applications
     end
 
     test 'existing dependent with a blocking application is refused before writes' do
-      guardian = create(:constituent)
-      dependent = create(:constituent)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
-                                     relationship_type: 'Parent')
-      create(:application, :in_progress, user: dependent, application_date: 8.years.ago)
-      original_dependent = dependent.attributes.deep_dup
-      service = PaperApplicationService.new(
-        params: existing_dependent_service_params(guardian, dependent),
-        admin: @admin,
-        skip_proof_processing: true
-      )
+      { in_progress: 8.years.ago, approved: 1.day.ago }.each do |status, date|
+        guardian = create(:constituent)
+        dependent = create(:constituent)
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
+                                       relationship_type: 'Parent')
+        create(:application, user: dependent, status: status, application_date: date)
+        original_dependent = dependent.attributes.deep_dup
+        service = PaperApplicationService.new(
+          params: existing_dependent_service_params(guardian, dependent),
+          admin: @admin,
+          skip_proof_processing: true
+        )
 
-      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
-                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
-        assert_not service.create
+        assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
+                              'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
+          assert_not service.create
+        end
+        assert_includes service.errors, 'This dependent already has an active or pending application.'
+        assert_equal original_dependent, dependent.reload.attributes
       end
-      assert_includes service.errors, 'This dependent already has an active or pending application.'
-      assert_equal original_dependent, dependent.reload.attributes
-    end
-
-    test 'existing dependent with recent approved history is refused before writes' do
-      guardian = create(:constituent)
-      dependent = create(:constituent)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      create(:application, :approved, user: dependent, application_date: 1.day.ago)
-      original_dependent = dependent.attributes.deep_dup
-      service = PaperApplicationService.new(
-        params: existing_dependent_service_params(guardian, dependent), admin: @admin, skip_proof_processing: true
-      )
-
-      assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
-                            'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
-        assert_not service.create
-      end
-      assert_includes service.errors, 'This dependent already has an active or pending application.'
-      assert_equal original_dependent, dependent.reload.attributes
     end
 
     test 'creates application with rejected income proof' do
-      test_timestamp = Time.now.to_i
-      unique_email = "test-rejected-#{test_timestamp}@example.com"
-      unique_phone = "202557#{test_timestamp.to_s[-4..]}"
+      unique_email = generate(:email)
+      unique_phone = unique_paper_phone
 
       service_params = {
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
@@ -443,7 +396,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
       assert result, "Failed to create application with rejected proof: #{service.errors.inspect}"
 
@@ -457,15 +410,15 @@ module Applications
     end
 
     test 'paper submission moves to awaiting_dcf without requesting certification once required proofs are approved' do
-      test_timestamp = Time.now.to_i
-      unique_email = "test-paper-dcf-#{test_timestamp}@example.com"
-      unique_phone = "202571#{test_timestamp.to_s[-4..]}"
+      pdf_file = uploaded_pdf
+      unique_email = generate(:email)
+      unique_phone = unique_paper_phone
 
       service_params = {
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
         application: @application_params,
         income_proof_action: 'accept',
-        income_proof: @pdf_file,
+        income_proof: pdf_file,
         residency_proof_action: 'accept',
         residency_proof: uploaded_pdf('residency_proof.pdf'),
         id_proof_action: 'accept',
@@ -477,7 +430,7 @@ module Applications
 
       CertifyingProfessionalMailer.expects(:request_certification).never
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
 
       assert result, "Failed to create paper application that should await certification: #{service.errors.inspect}"
@@ -492,8 +445,8 @@ module Applications
 
     test 'uses Other custom rejection reason text as income rejection reason' do
       test_timestamp = Time.now.to_i
-      unique_email = "test-rejected-existing-#{test_timestamp}@example.com"
-      unique_phone = "202567#{test_timestamp.to_s[-4..]}"
+      unique_email = generate(:email)
+      unique_phone = unique_paper_phone
       matching_note = "Please provide a document with your full legal name clearly visible. [#{test_timestamp}]"
 
       service_params = {
@@ -511,15 +464,15 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
       assert result, "Failed to create application with custom rejection reason: #{service.errors.inspect}"
     end
 
     test 'uses Other custom rejection reason text as disability certification rejection reason' do
       test_timestamp = Time.now.to_i
-      unique_email = "test-disability-certification-other-#{test_timestamp}@example.com"
-      unique_phone = "202568#{test_timestamp.to_s[-4..]}"
+      unique_email = generate(:email)
+      unique_phone = unique_paper_phone
       custom_note = "Provider noted additional details not covered by predefined reasons. [#{test_timestamp}]"
 
       service_params = {
@@ -538,7 +491,7 @@ module Applications
         rejection_reason_code: nil
       ).returns(reviewer_result)
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
       assert result, "Failed to create application with disability certification custom rejection reason: #{service.errors.inspect}"
     end
@@ -550,7 +503,7 @@ module Applications
         )
         service_params[:constituent][:locale] = locale
         Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).never
-        service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+        service = confirmed_paper_service(service_params)
 
         assert service.create, service.errors.inspect
         application = service.application.reload
@@ -589,9 +542,8 @@ module Applications
     end
 
     test 'paper intake without provider info creates application and sends provider info request' do
-      test_timestamp = Time.now.to_i
-      unique_email = "test-paper-missing-provider-#{test_timestamp}@example.com"
-      unique_phone = "202570#{test_timestamp.to_s[-4..]}"
+      unique_email = generate(:email)
+      unique_phone = unique_paper_phone
 
       service_params = {
         no_certifying_professional_information: true,
@@ -606,7 +558,7 @@ module Applications
         .with(application: kind_of(Application), actor: @admin)
         .returns(request_service)
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
 
       assert result, "Failed to create paper application without provider info: #{service.errors.inspect}"
@@ -637,7 +589,7 @@ module Applications
       NotificationService.stubs(:create_and_deliver!).returns(true)
       Applications::RequestProviderInfo.expects(:new).never
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
 
       assert result, "Failed to create auto-approvable paper application: #{service.errors.inspect}"
@@ -685,18 +637,18 @@ module Applications
     end
 
     test 'application creation fails when income exceeds threshold' do
-      test_timestamp = Time.now.to_i
-      unique_email = "test-high-income-#{test_timestamp}@example.com"
-      unique_phone = "202558#{test_timestamp.to_s[-4..]}"
+      pdf_file = uploaded_pdf
+      unique_email = generate(:email)
+      unique_phone = unique_paper_phone
 
       service_params = {
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
         application: @application_params.merge(annual_income: '200000'),
         income_proof_action: 'accept',
-        income_proof: @pdf_file
+        income_proof: pdf_file
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
 
       result = service.create
 
@@ -714,7 +666,7 @@ module Applications
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone)
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
 
       assert_no_difference ['User.count', 'Application.count'] do
         assert_not service.create
@@ -726,15 +678,15 @@ module Applications
     end
 
     test 'handles multiple proof types together' do
-      test_timestamp = Time.now.to_i
-      unique_email = "test-multiple-#{test_timestamp}@example.com"
-      unique_phone = "202559#{test_timestamp.to_s[-4..]}"
+      pdf_file = uploaded_pdf
+      unique_email = generate(:email)
+      unique_phone = unique_paper_phone
 
       service_params = {
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
         application: @application_params,
         income_proof_action: 'accept',
-        income_proof: @pdf_file,
+        income_proof: pdf_file,
         residency_proof_action: 'reject',
         residency_proof_rejection_reason: 'address_mismatch'
       }
@@ -750,7 +702,7 @@ module Applications
         )
       ).returns({ success: true })
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       result = service.create
       assert result, "Failed to create application with multiple proof types: #{service.errors.inspect}"
 
@@ -764,8 +716,8 @@ module Applications
     end
 
     test 'updates existing dependent locale and communication preferences' do
-      guardian = create(:constituent, email: "guardian-#{@timestamp}@example.com", phone: "301555#{@timestamp.to_s[-4..]}")
-      dependent = create(:constituent, email: "dependent-#{@timestamp}@example.com", phone: "302555#{@timestamp.to_s[-4..]}")
+      guardian = create(:constituent, email: generate(:email), phone: unique_paper_phone)
+      dependent = create(:constituent, email: generate(:email), phone: unique_paper_phone)
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'parent')
 
       service_params = {
@@ -810,7 +762,7 @@ module Applications
       NotificationService.stubs(:create_and_deliver!).returns(true)
       NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_predicate service.application, :fulfillment_type_equipment?
     end
@@ -829,7 +781,7 @@ module Applications
       NotificationService.stubs(:create_and_deliver!).returns(true)
       NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).at_least_once
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+      service = confirmed_paper_service(service_params)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
       assert_predicate service.application, :fulfillment_type_voucher?
     ensure
@@ -888,7 +840,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
       assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count',
                             'DuplicateReviewCaseCandidate.count', 'Event.count'] do
         assert_not service.create
@@ -972,7 +924,7 @@ module Applications
         application: @application_params
       }
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
       assert_not service.create
       assert(service.errors.any? { |error| error.match?(/phone|taken|create user/i) })
 
@@ -995,21 +947,11 @@ module Applications
              dependent_user: dependent,
              relationship_type: 'Parent')
 
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'guardian',
-        phone_strategy: 'guardian',
-        constituent: {
-          locale: 'en',
-          communication_preference: 'email'
-        },
-        application: @application_params
-      }
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'en', communication_preference: 'email' }
+      )
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
 
       dependent.reload
@@ -1023,16 +965,9 @@ module Applications
       guardian = create(:constituent, email: "guardian-unrelated-#{SecureRandom.hex(4)}@example.com")
       dependent = create(:constituent, email: "dependent-unrelated-#{SecureRandom.hex(4)}@example.com")
       original_dependent = dependent.attributes.deep_dup
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'guardian',
-        phone_strategy: 'guardian',
-        constituent: { locale: 'es', communication_preference: 'letter', hearing_disability: true },
-        application: @application_params
-      }
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'es', communication_preference: 'letter', hearing_disability: true }
+      )
       service = PaperApplicationService.new(params: service_params, admin: @admin, skip_proof_processing: true)
 
       assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
@@ -1062,18 +997,11 @@ module Applications
              dependent_user: dependent,
              relationship_type: 'Parent')
 
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'guardian',
-        phone_strategy: 'guardian',
-        constituent: { locale: 'en' },
-        application: @application_params
-      }
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'en' }
+      )
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
 
       dependent.reload
@@ -1092,20 +1020,12 @@ module Applications
       create(:guardian_relationship,
              guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
 
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'dependent',
-        phone_strategy: 'guardian',
-        # An explicit blank requests a clear. An absent key does not.
-        constituent: { locale: 'en', dependent_email: '' },
-        application: @application_params
-      }
+      # An explicit blank requests a clear. An absent key does not.
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'en', dependent_email: '' }, email_strategy: 'dependent'
+      )
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
-                                            admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
 
       assert_not service.create, 'a contradictory contact instruction must not be resolved silently'
       assert_includes service.errors, "Enter the dependent's email or choose the guardian's email address."
@@ -1124,19 +1044,11 @@ module Applications
       create(:guardian_relationship,
              guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
 
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'guardian',
-        phone_strategy: 'dependent',
-        constituent: { locale: 'en', dependent_phone: '' },
-        application: @application_params
-      }
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'en', dependent_phone: '' }, phone_strategy: 'dependent'
+      )
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
-                                            admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
 
       assert_not service.create
       assert_includes service.errors, "Enter the dependent's phone or choose the guardian's phone number."
@@ -1152,19 +1064,11 @@ module Applications
       create(:guardian_relationship,
              guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
 
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'guardian',
-        phone_strategy: 'guardian',
-        constituent: { locale: 'en' },
-        application: @application_params
-      }
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'en' }
+      )
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
-                                            admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
 
       assert service.create, "guardian contact must remain supported: #{service.errors.inspect}"
       assert_equal guardian.email, dependent.reload.dependent_email
@@ -1180,19 +1084,11 @@ module Applications
       create(:guardian_relationship,
              guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
 
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'guardian',
-        phone_strategy: 'guardian',
-        constituent: { locale: 'en', dependent_email: '', dependent_phone: '' },
-        application: @application_params
-      }
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'en', dependent_email: '', dependent_phone: '' }
+      )
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
-                                            admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
 
       assert service.create, "a blank field is fine when guardian contact is chosen: #{service.errors.inspect}"
       assert_equal guardian.email, dependent.reload.dependent_email
@@ -1208,19 +1104,11 @@ module Applications
       create(:guardian_relationship,
              guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
 
-      service_params = {
-        applicant_type: 'dependent',
-        guardian_id: guardian.id,
-        dependent_id: dependent.id,
-        relationship_type: 'Parent',
-        email_strategy: 'dependent',
-        phone_strategy: 'guardian',
-        constituent: { locale: 'en' },
-        application: @application_params
-      }
+      service_params = existing_dependent_service_params(
+        guardian, dependent, address_strategy: nil, constituent: { locale: 'en' }, email_strategy: 'dependent'
+      )
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin),
-                                            admin: @admin, skip_proof_processing: true)
+      service = confirmed_paper_service(service_params, skip_proof_processing: true)
 
       assert service.create, "an absent field is not a cleared one: #{service.errors.inspect}"
       assert_equal on_file, dependent.reload.dependent_email
@@ -1571,7 +1459,11 @@ module Applications
         assert_equal({ call: true, record_identity_decision!: outer }, intake_context)
         assert_equal({ create_application: true, documents: true, follow_up: outer,
                        reconcile_after_paper_write: outer }, seen)
-        assert_equal outer, Current.paper_context
+        if outer.nil?
+          assert_nil Current.paper_context
+        else
+          assert_equal outer, Current.paper_context
+        end
       end
     end
 
@@ -1947,6 +1839,18 @@ module Applications
                                 quick_created_portal_user_ids: quick.map(&:to_s), warnings: [])
     end
 
+    def expect_proofs_uploaded_for_review
+      %i[income residency id].each do |proof_type|
+        ProofAttachmentService.expects(:attach_proof).with(
+          has_entries(proof_type: proof_type, status: :not_reviewed, admin: @admin, submission_method: :paper)
+        ).returns({ success: true })
+      end
+    end
+
+    def confirmed_paper_service(params, **)
+      PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin, **)
+    end
+
     def paper_service(params)
       PaperApplicationService.new(params: params, admin: @admin, skip_proof_processing: true)
     end
@@ -1963,7 +1867,7 @@ module Applications
 
     def base_paper_params
       { constituent: @constituent_params.merge(email: "paper-#{SecureRandom.hex(4)}@example.com",
-                                               phone: "202555#{rand(1000..9999)}"),
+                                               phone: unique_paper_phone),
         application: @application_params }
     end
 
@@ -1978,18 +1882,20 @@ module Applications
       params
     end
 
-    def existing_dependent_service_params(guardian, dependent)
-      {
+    def existing_dependent_service_params(guardian, dependent, address_strategy: 'guardian', **overrides)
+      params = {
         applicant_type: 'dependent',
         guardian_id: guardian.id,
         dependent_id: dependent.id,
         relationship_type: 'Parent',
         email_strategy: 'guardian',
         phone_strategy: 'guardian',
-        address_strategy: 'guardian',
+        address_strategy: address_strategy,
         constituent: { hearing_disability: true },
         application: @application_params
-      }
+      }.merge(overrides)
+      params.delete(:address_strategy) if address_strategy.nil?
+      params
     end
   end
 end

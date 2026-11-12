@@ -6,7 +6,6 @@ module AdminTests
   class GuardianProofReviewTest < ApplicationSystemTestCase
     setup do
       @admin = create(:admin)
-      @application = create(:application, :in_progress_with_pending_proofs, :submitted_by_guardian, :old_enough_for_new_application)
     end
 
     teardown do
@@ -14,43 +13,23 @@ module AdminTests
       Capybara.reset_sessions!
     end
 
-    test 'displays guardian alert in income proof review modal' do
+    test 'guardian alert remains visible when reviewing income and residency in sequence' do
+      application = create(:application, :in_progress_with_pending_proofs, :submitted_by_guardian, :old_enough_for_new_application)
       system_test_sign_in(@admin, bypass_mfa_enrollment: true)
-      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
-      assert_text(/Application Details|Application #/i, wait: 30)
-
-      assert_selector '#attachments-section', wait: 15
+      visit_admin_application_with_retry(application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', text: 'Income Proof'
       assert_selector '#attachments-section', text: 'Residency Proof'
 
-      click_review_proof_and_wait('income', timeout: 15)
-
-      assert_selector '#incomeProofReviewModal', text: 'Guardian Application', wait: 15
-      assert_selector '#incomeProofReviewModal', text: 'This application was submitted by a Guardian User (parent) on behalf of a dependent', wait: 15
-      assert_selector '#incomeProofReviewModal', text: 'Please verify this relationship when reviewing these proof documents', wait: 15
-
-      within('#incomeProofReviewModal') do
-        find('button', text: 'Close', visible: :all, wait: 10).trigger('click')
-      end
-    end
-
-    test 'displays guardian alert in residency proof review modal' do
-      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
-      visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
-      assert_text(/Application Details|Application #/i, wait: 30)
-
-      assert_selector '#attachments-section', wait: 15
-      assert_selector '#attachments-section', text: 'Income Proof'
-      assert_selector '#attachments-section', text: 'Residency Proof'
-
-      click_review_proof_and_wait('residency', timeout: 15)
-
-      assert_selector '#residencyProofReviewModal', text: 'Guardian Application', wait: 15
-      assert_selector '#residencyProofReviewModal', text: 'This application was submitted by a Guardian User (parent) on behalf of a dependent', wait: 15
-      assert_selector '#residencyProofReviewModal', text: 'Please verify this relationship when reviewing these proof documents', wait: 15
-
-      within('#residencyProofReviewModal') do
-        find('button', text: 'Close', visible: :all, wait: 10).trigger('click')
+      %w[income residency].each do |proof_type|
+        click_review_proof_and_wait(proof_type, timeout: 15)
+        modal = "##{proof_type}ProofReviewModal"
+        within modal do
+          assert_text 'Guardian Application'
+          assert_text 'This application was submitted by a Guardian User (parent) on behalf of a dependent'
+          assert_text 'Please verify this relationship when reviewing these proof documents'
+          click_button 'Close'
+        end
+        assert_no_selector "#{modal}[open]"
       end
     end
 

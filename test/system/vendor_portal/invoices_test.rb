@@ -10,7 +10,7 @@ module VendorPortal
       system_test_sign_in(@vendor_user, bypass_mfa_enrollment: true)
     end
 
-    test 'the dashboard shows what is not yet invoiced apart from what is invoiced and awaiting payment' do
+    test 'vendor follows an outstanding invoice from the dashboard through recorded payment' do
       create(:voucher_transaction, vendor: @vendor_user, amount: 30)
       invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor_user, transaction_count: 1, amount_per_transaction: 70)
 
@@ -25,16 +25,13 @@ module VendorPortal
       click_on "Invoice #{invoice.invoice_number}"
       assert_text 'Awaiting approval'
       assert_text '$70.00'
-    end
 
-    test 'a paid invoice shows its payment details' do
-      invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor_user, transaction_count: 1, amount_per_transaction: 99.99)
       pay_invoice!(invoice, payment_method: 'direct_deposit', payment_reference: 'DD-3141', gad_invoice_reference: 'GAD-TEST-REF')
 
       visit vendor_portal_invoice_path(invoice)
 
       assert_text invoice.invoice_number
-      assert_text '$99.99'
+      assert_text '$70.00'
       assert_text 'Paid'
       assert_text 'Direct deposit'
       assert_text 'DD-3141'

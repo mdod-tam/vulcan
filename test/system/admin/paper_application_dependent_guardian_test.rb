@@ -2,7 +2,6 @@
 
 require 'application_system_test_case'
 require Rails.root.join('test/support/system_test_evidence')
-require_relative 'paper_applications_test_helper'
 
 module Admin
   class PaperApplicationDependentGuardianTest < ApplicationSystemTestCase
@@ -10,10 +9,12 @@ module Admin
     include PaperApplicationsTestHelper
 
     test 'complete guardian creation and application workflow' do
+      setup_fpl_policies
       perform_complete_guardian_creation_workflow
     end
 
     test 'existing guardian selection and workflow' do
+      setup_fpl_policies
       perform_existing_guardian_selection_workflow
     end
 

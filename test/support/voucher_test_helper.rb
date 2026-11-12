@@ -1,6 +1,17 @@
 # frozen_string_literal: true
 
 module VoucherTestHelper
+  # Starts from the vendor's voucher-code form.
+  def open_voucher_redemption(voucher, date_of_birth:)
+    fill_in 'Voucher Code', with: voucher.code
+    click_button 'Verify Voucher'
+    assert_current_path verify_vendor_portal_voucher_path(voucher.code)
+    assert_text 'Identity Verification'
+    fill_in 'date_of_birth', with: date_of_birth.strftime('%m/%d/%Y')
+    click_button 'Verify Identity'
+    assert_text 'Voucher Redemption'
+  end
+
   # Records a completed redemption of the product on one of the application's vouchers.
   def record_voucher_purchase(application, product, processed_at: Time.current)
     voucher = application.vouchers.order(:id).first || create(:voucher, application: application)

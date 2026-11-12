@@ -724,11 +724,12 @@ module ConstituentPortal
       assert_equal 'draft', Application.last.status
     end
 
-    test 'should not submit application without provider info when no provider flag is posted' do
+    test 'an incomplete provider refusal preserves entered fields when no provider flag is posted' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "missing_provider_submit_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
       Applications::RequestProviderInfo.expects(:new).never
+      Applications::ApplicationCreator.expects(:call).never
 
       assert_no_difference('Application.count') do
         post constituent_portal_applications_path, params: {
@@ -747,8 +748,9 @@ module ConstituentPortal
             no_provider_info_provided: '1',
             certifying_professional_attributes: {
               name: '',
-              phone: '',
-              email: ''
+              phone: '2025551234',
+              fax: '2025550123',
+              email: 'retry@example.com'
             }
           },
           submit_application: 'Submit Application'
@@ -762,6 +764,11 @@ module ConstituentPortal
       )
       assert_equal expected, flash[:alert]
       assert_equal [expected], css_select('#error-summary li').map(&:text)
+      { name: '', phone: '2025551234', fax: '2025550123', email: 'retry@example.com' }.each do |field, value|
+        assert_select "input[name='application[certifying_professional_attributes][#{field}]']", count: 1 do |inputs|
+          assert_equal value, inputs.first['value'].to_s
+        end
+      end
     end
 
     test 'should not submit application without provider info when preferred language is Spanish' do

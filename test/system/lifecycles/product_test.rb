@@ -3,16 +3,36 @@
 require 'application_system_test_case'
 
 module Admin
-  class ProductResourcesTest < ApplicationSystemTestCase
-    test 'admin publishes edits and deletes exact product guidance with recoverable errors and PDF replacement' do
+  class ProductLifecycleTest < ApplicationSystemTestCase
+    test 'admin creates edits publishes guidance and archives a product without losing constituent history' do
       admin = create(:admin)
-      product = create(:product, name: 'Resource Journey Tablet')
-      sign_in_resource_admin(admin)
+      system_test_sign_in(admin, bypass_mfa_enrollment: true)
       visit admin_products_path
+      click_link 'Add New Product'
+      fill_in 'Manufacturer', with: 'Journey Devices'
+      fill_in 'Name', with: 'Resource Journey Tablet'
+      fill_in 'Model number', with: 'JOURNEY-001'
+      find('input[name="product[device_types][]"][value="Tablet"]').check
+      fill_in 'Description', with: 'A tablet awaiting public guidance.'
+      assert_difference('Product.count', 1) do
+        click_button 'Save Product'
+        assert_current_path admin_products_path
+        assert_text 'Product successfully created.'
+      end
+      product = Product.find_by!(model_number: 'JOURNEY-001')
+      assert_equal ['Tablet'], product.device_types
+      find('summary', text: 'Tablet').click
+      within('tr', text: product.name) { click_link 'Edit' }
+      fill_in 'Name', with: 'Updated Resource Journey Tablet'
+      fill_in 'Description', with: 'An accessible tablet with public guidance.'
+      click_button 'Save Product'
+      assert_current_path admin_products_path
+      assert_text 'Product successfully updated.'
+      assert_equal 'Updated Resource Journey Tablet', product.reload.name
+      assert_equal 'An accessible tablet with public guidance.', product.description
       find('summary', text: 'Tablet').click
       within('tr', text: product.name) { click_link 'Resources' }
       assert_selector 'h2', text: 'Public product resources'
-      take_screenshot('product-resources-admin-entry', html: true, full: true)
       click_link 'Add resource'
       fill_in 'Descriptive title (in the resource language)', with: 'Guía de inicio'
       select 'Spanish', from: 'Content language'
@@ -22,7 +42,6 @@ module Admin
       assert_field 'Descriptive title (in the resource language)', with: 'Guía de inicio'
       assert_field 'Content language', with: 'es'
       assert_field 'External URL', with: 'ftp://example.org/guide'
-      take_screenshot('product-resources-admin-url-retry', html: true, full: true)
       within('#save-resource-errors') { click_link href: '#product_resource_url' }
       assert_selector '#product_resource_url:focus'
       select 'English', from: 'Content language'
@@ -36,7 +55,6 @@ module Admin
       assert_current_path admin_product_path(product)
       assert_text 'Resource saved.'
       assert_link 'Guía de inicio', href: 'https://example.org/spanish-guide'
-      take_screenshot('product-resources-admin-saved-link', html: true, full: true)
 
       click_link 'Edit resource'
       select 'PDF document', from: 'Resource source'
@@ -65,13 +83,12 @@ module Admin
       assert_text 'Guía PDF accesible'
       assert product.product_resources.sole.document.attached?
       assert_nil product.product_resources.sole.url
-      take_screenshot('product-resources-admin-saved-pdf', html: true, full: true)
 
       constituent = create(:constituent, locale: 'es')
       application = create(:application, :approved, :with_all_proofs, user: constituent)
       purchase = create(:voucher_transaction, voucher: create(:voucher, application: application))
       purchase.voucher_transaction_products.create!(product: product, quantity: 1)
-      switch_user(constituent)
+      system_test_switch_user(constituent)
       page.current_window.resize_to(390, 844)
       visit constituent_portal_products_path
       click_link "#{product.manufacturer} #{product.name}"
@@ -81,7 +98,8 @@ module Admin
       assert_no_horizontal_overflow
       take_screenshot('product-resources-newly-published-pdf-narrow', html: true, full: true)
 
-      switch_user(admin)
+      system_test_switch_user(admin, bypass_mfa_enrollment: true)
+      page.current_window.resize_to(1200, 900)
       visit admin_product_path(product)
       resource = product.product_resources.sole
       previous_pdf_blob_id = resource.document.blob_id
@@ -95,19 +113,29 @@ module Admin
       assert_nil resource.reload.url
       assert resource.document.attached?
       assert_equal previous_pdf_blob_id, resource.document.blob_id
-      take_screenshot('product-resources-admin-pdf-to-url-retry', html: true, full: true)
       fill_in 'External URL', with: 'https://example.org/replacement-guide'
       click_button 'Save public resource'
       assert_current_path admin_product_path(product)
       assert_link 'Guía PDF accesible', href: 'https://example.org/replacement-guide'
       assert_equal 'https://example.org/replacement-guide', resource.reload.url
       assert_not resource.document.attached?
-      take_screenshot('product-resources-admin-pdf-to-url-saved', html: true, full: true)
       accept_confirm { click_button 'Delete resource' }
       assert_text 'Resource deleted.'
       assert_text 'No product guides have been added yet.'
       assert_empty product.product_resources
-      take_screenshot('product-resources-admin-deleted', html: true, full: true)
+      click_link 'Back to products'
+      find('summary', text: 'Tablet').click
+      within('tr', text: product.name) { click_button 'Archive' }
+      assert_text 'Product archived.'
+      assert product.reload.archived?
+      assert_no_selector 'tr', text: product.name, visible: :all
+
+      system_test_switch_user(constituent)
+      visit constituent_portal_products_path
+      click_link "#{product.manufacturer} #{product.name}"
+      assert_selector 'h1', text: product.name
+      assert_no_horizontal_overflow
+      take_screenshot('product-lifecycle-archived-device-history', html: true, full: true)
     end
 
     test 'guardian device history and localized guides remain readable on a narrow screen' do
@@ -156,35 +184,6 @@ module Admin
       scan = DocumentScan.where(user: admin, purpose: 'product_resource').order(:id).last
       scan.update!(status: :clean, completed_at: Time.current)
       assert_selector '[data-scan-state="clean"]'
-    end
-
-    def sign_in_resource_admin(admin)
-      credential = admin.totp_credentials.first || admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Browser authenticator', last_used_at: 1.minute.ago)
-      last_used_at = credential.reload.last_used_at
-      travel_to(last_used_at + 30.seconds) if last_used_at >= 30.seconds.ago
-      visit sign_in_path
-      within('form[action="/sign_in"]') do
-        fill_in 'contact-input', with: admin.email
-        fill_in 'password-input', with: 'password1234'
-        click_button 'Sign In'
-      end
-      assert_current_path verify_method_two_factor_authentication_path(type: 'totp')
-      within("form[action='#{process_verification_two_factor_authentication_path(type: 'totp')}']") do
-        fill_in 'code', with: ROTP::TOTP.new(credential.secret).now
-        click_button I18n.t('two_factor_verification.common.submit')
-      end
-      assert_current_path admin_dashboard_path
-    end
-
-    def switch_user(user)
-      system_test_sign_out
-      install_stimulus_error_reporting
-      user.admin? ? sign_in_resource_admin(user) : system_test_sign_in(user)
-      page.current_window.resize_to(1200, 900)
-    end
-
-    def assert_no_horizontal_overflow
-      assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth'), 'Page overflows the viewport'
     end
 
     def public_guide_pdf

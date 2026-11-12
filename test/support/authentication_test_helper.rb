@@ -36,12 +36,10 @@ module AuthenticationTestHelper
   end
 
   def assert_authentication_required
-    assert_response :redirect
     assert_redirected_to sign_in_path
   end
 
   def assert_not_authorized
-    assert_response :redirect
     assert_redirected_to root_path
     assert_match(/not authorized/i, flash[:alert])
   end

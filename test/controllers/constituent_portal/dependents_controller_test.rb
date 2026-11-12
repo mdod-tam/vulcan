@@ -742,8 +742,16 @@ module ConstituentPortal
       assert_equal 'Test Update', @dependent.first_name
       assert_equal original_email, @dependent.email
       assert_equal original_phone, @dependent.phone
-      assert_equal original_dependent_email, @dependent.dependent_email
-      assert_equal original_dependent_phone, @dependent.dependent_phone
+      if original_dependent_email.nil?
+        assert_nil @dependent.dependent_email
+      else
+        assert_equal original_dependent_email, @dependent.dependent_email
+      end
+      if original_dependent_phone.nil?
+        assert_nil @dependent.dependent_phone
+      else
+        assert_equal original_dependent_phone, @dependent.dependent_phone
+      end
     end
 
     test 'should preserve phone on partial update when only email is submitted' do
@@ -763,7 +771,11 @@ module ConstituentPortal
       assert_equal new_email, @dependent.email
       assert_equal new_email, @dependent.dependent_email
       assert_equal original_phone, @dependent.phone
-      assert_equal original_dependent_phone, @dependent.dependent_phone
+      if original_dependent_phone.nil?
+        assert_nil @dependent.dependent_phone
+      else
+        assert_equal original_dependent_phone, @dependent.dependent_phone
+      end
     end
 
     test 'should set Current.user before update' do

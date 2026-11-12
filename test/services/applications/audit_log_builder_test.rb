@@ -231,11 +231,22 @@ module Applications
     end
 
     test 'returns empty audit logs after a build failure' do
-      skip 'Add failure injection and result assertions before enabling this test'
-    end
+      failure = ActiveRecord::StatementInvalid.new('audit query unavailable')
+      {
+        build_audit_logs: 'Failed to build audit logs',
+        build_deduplicated_audit_logs: 'Failed to build deduplicated audit logs'
+      }.each do |method, message|
+        builder = AuditLogBuilder.new(@application)
+        logs = capture_rails_logs do
+          Event.stub(:select, ->(*) { raise failure }) do
+            assert_equal [], builder.public_send(method)
+          end
+        end
 
-    test 'builds deduplicated audit logs' do
-      skip 'Add duplicate-event inputs and deduplication assertions before enabling this test'
+        assert_equal ["#{message}: #{failure.message}"], builder.errors
+        assert_includes logs, "#{message}: ActiveRecord::StatementInvalid"
+        assert_not_includes logs, failure.message
+      end
     end
 
     test 'includes user profile changes in audit logs' do

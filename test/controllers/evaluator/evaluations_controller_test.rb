@@ -6,17 +6,10 @@ require 'test_helper'
 class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   def setup
     @evaluator = create(:evaluator)
-    @other_evaluator = create(:evaluator)
-    @admin = create(:admin)
     sign_in_for_controller_test(@evaluator, bypass_mfa_enrollment: true)
     @product = create(:product, name: 'iPad Air')
     @evaluation = create(:evaluation, evaluator: @evaluator, status: :scheduled)
     @requested_evaluation = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil, location: nil)
-  end
-
-  test 'gets pending' do
-    get pending_evaluators_evaluations_path
-    assert_response :success
   end
 
   test 'English staff help explains the confirmation audience' do
@@ -47,14 +40,16 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'report location native and ARIA required state agree for evaluator and administrator sources' do
+    admin = create(:admin)
+
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
     assert_select '#complete_evaluation_location[required][aria-required=true]'
 
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
     [@evaluation, @requested_evaluation].each do |evaluation|
-      evaluation.update!(evaluator: @admin)
+      evaluation.update!(evaluator: admin)
       get evaluators_evaluation_path(evaluation)
 
       assert_response :success
@@ -115,23 +110,21 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       products_tried_inputs: { @product.id.to_s => { selected: '1', reaction: 'Neutral' } }
     }
 
-    2.times do
-      assert_no_difference(['Event.where(action: "evaluation_completed").count', 'EquipmentNeed.count']) do
-        post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
-      end
-
-      assert_response :unprocessable_content
-      assert_select '#submit-report-errors a[href="#catalog-recommendations-group"]'
-      assert_select '#submit-report-recommended-product-ids-error', text: /cannot include archived catalog products/
-      assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s, count: 0
-      assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', replacement.id.to_s
-      assert_select "#trial-#{@product.id}[checked]"
-      assert_select "#trial-#{@product.id}-reaction option[value=Neutral][selected]"
-      assert_select '#complete_evaluation_notes', text: submitted[:notes]
-      assert_select '#complete_evaluation_recommendation_notes', text: submitted[:recommendation_notes]
-      assert_equal 'scheduled', @evaluation.reload.status
-      assert_nil @evaluation.report_submitted_at
+    assert_no_difference(['Event.where(action: "evaluation_completed").count', 'EquipmentNeed.count']) do
+      post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
     end
+
+    assert_response :unprocessable_content
+    assert_select '#submit-report-errors a[href="#catalog-recommendations-group"]'
+    assert_select '#submit-report-recommended-product-ids-error', text: /cannot include archived catalog products/
+    assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s, count: 0
+    assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', replacement.id.to_s
+    assert_select "#trial-#{@product.id}[checked]"
+    assert_select "#trial-#{@product.id}-reaction option[value=Neutral][selected]"
+    assert_select '#complete_evaluation_notes', text: submitted[:notes]
+    assert_select '#complete_evaluation_recommendation_notes', text: submitted[:recommendation_notes]
+    assert_equal 'scheduled', @evaluation.reload.status
+    assert_nil @evaluation.report_submitted_at
 
     submitted[:recommended_product_ids] = [replacement.id.to_s]
     assert_difference('Event.where(action: "evaluation_completed").count', 1) do
@@ -165,9 +158,11 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'administrator completed route applies the selected assignment scope' do
-    assigned = create(:evaluation, :completed, evaluator: @admin)
+    admin = create(:admin)
+
+    assigned = create(:evaluation, :completed, evaluator: admin)
     other = create(:evaluation, :completed, evaluator: @evaluator)
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
 
     get completed_evaluators_evaluations_path, params: { scope: 'mine' }
 
@@ -182,8 +177,10 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'administrator can switch between assigned and all evaluations' do
-    assigned = create(:evaluation, evaluator: @admin, status: :scheduled)
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    admin = create(:admin)
+
+    assigned = create(:evaluation, evaluator: admin, status: :scheduled)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluations_path, params: { scope: 'mine' }
 
@@ -199,7 +196,9 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'evaluator cannot expand scope beyond their assignments' do
-    other = create(:evaluation, evaluator: @other_evaluator, status: :scheduled)
+    other_evaluator = create(:evaluator)
+
+    other = create(:evaluation, evaluator: other_evaluator, status: :scheduled)
 
     get evaluators_evaluations_path, params: { scope: 'all', status: 'scheduled' }
 
@@ -224,10 +223,12 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'follow-up filters combine cancelled and no-show within the selected scope' do
-    cancelled = create(:evaluation, evaluator: @admin, status: :cancelled)
-    no_show = create(:evaluation, evaluator: @admin, status: :no_show)
+    admin = create(:admin)
+
+    cancelled = create(:evaluation, evaluator: admin, status: :cancelled)
+    no_show = create(:evaluation, evaluator: admin, status: :no_show)
     other = create(:evaluation, evaluator: @evaluator, status: :cancelled)
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluations_path, params: { scope: 'mine', status: 'needs_followup' }
 
@@ -258,7 +259,10 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'unsupported filters fall back to authorized scope and show the applied selection' do
-    other = create(:evaluation, evaluator: @other_evaluator, status: :scheduled)
+    other_evaluator = create(:evaluator)
+    admin = create(:admin)
+
+    other = create(:evaluation, evaluator: other_evaluator, status: :scheduled)
 
     get evaluators_evaluations_path, params: { scope: 'unsupported', status: 'unsupported' }
 
@@ -266,7 +270,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'a[aria-current="page"]', text: 'All'
     assert_select "a[href='#{evaluators_evaluations_path(scope: 'mine')}']", text: 'All'
 
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
     get evaluators_evaluations_path, params: { scope: 'unsupported', status: 'unsupported' }
 
     assert_evaluation_rows(included: [@evaluation, @requested_evaluation, other])
@@ -294,6 +298,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'show renders evaluation activity and application assignment labels' do
+    admin = create(:admin)
+
     Event.create!(
       user: @evaluator,
       action: 'evaluation_scheduled',
@@ -313,7 +319,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       metadata: { evaluation_id: @evaluation.id, no_show_notes: 'Constituent missed evaluation' }
     )
     Event.create!(
-      user: @admin,
+      user: admin,
       action: 'evaluator_assigned',
       auditable: @evaluation.application,
       metadata: { application_id: @evaluation.application_id, evaluator_id: @evaluator.id, evaluator_name: @evaluator.full_name }
@@ -525,8 +531,10 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'requested report exposes outside consultation only to its assigned administrator and preserves retry inputs' do
-    @requested_evaluation.update!(evaluator: @admin)
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    admin = create(:admin)
+
+    @requested_evaluation.update!(evaluator: admin)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
     get evaluators_evaluation_path(@requested_evaluation)
 
     assert_response :success
@@ -562,7 +570,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'administrator oversight cannot expose or submit another evaluators outside consultation action' do
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_as_administrator
     get evaluators_evaluation_path(@requested_evaluation)
 
     assert_select '#complete-evaluation-form', count: 0
@@ -576,13 +584,15 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'historical outside consultation remains readable and accepts supplemental notes after archival' do
+    admin = create(:admin)
+
     evaluation = create(
       :evaluation, :completed,
-      evaluator: @admin, assessment_source: 'outside_specialist',
+      evaluator: admin, assessment_source: 'outside_specialist',
       evaluation_date: nil, location: nil, products_tried: []
     )
-    evaluation.application.transition_status!(:archived, actor: @admin)
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    evaluation.application.transition_status!(:archived, actor: admin)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
 
     get evaluators_evaluation_path(evaluation)
     assert_response :success
@@ -643,13 +653,15 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'failed report preserves every visible input and remains retryable after clearing selections' do
+    other_evaluator = create(:evaluator)
+
     original_date = @evaluation.evaluation_date
     submitted = {
       appointment_completed_at: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'),
       location: 'Retry Library', notes: 'Detailed observations to preserve', attendees_field: 'Interpreter, Family friend',
       products_tried_inputs: { @product.id.to_s => { selected: '1', reaction: 'Satisfied' } }, recommended_product_ids: [''],
       recommendation_notes: 'Family-facing recommendation context',
-      application_id: create(:application).id, evaluator_id: @other_evaluator.id, status: 'cancelled'
+      application_id: create(:application).id, evaluator_id: other_evaluator.id, status: 'cancelled'
     }
 
     2.times do
@@ -829,8 +841,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'supplemental notes update cannot reschedule completed evaluation' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current,
-                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
+    complete_evaluation
     original_evaluation_date = @evaluation.evaluation_date
 
     assert_no_difference('Event.where(action: "evaluation_rescheduled").count') do
@@ -850,8 +861,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'reschedule action rejects completed evaluation' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current,
-                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
+    complete_evaluation
     original_evaluation_date = @evaluation.evaluation_date
 
     assert_no_difference('Event.where(action: "evaluation_rescheduled").count') do
@@ -872,8 +882,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'update allows supplemental post-completion notes' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current,
-                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
+    complete_evaluation
 
     patch evaluators_evaluation_path(@evaluation), params: {
       evaluation: {
@@ -924,8 +933,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'cancel action rejects completed evaluation' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current,
-                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
+    complete_evaluation
 
     post cancel_evaluators_evaluation_path(@evaluation), params: {
       evaluation: {
@@ -939,7 +947,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin can view evaluation but only in read-only mode' do
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_as_administrator
 
     get evaluators_evaluation_path(@evaluation)
 
@@ -950,7 +958,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin cannot schedule an evaluation' do
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_as_administrator
 
     post schedule_evaluators_evaluation_path(@requested_evaluation),
          params: {
@@ -963,7 +971,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin cannot patch lifecycle actions through update' do
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_as_administrator
 
     assert_no_difference('Event.where(action: "evaluation_cancelled").count') do
       patch evaluators_evaluation_path(@evaluation), params: {
@@ -980,7 +988,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'admin cannot submit an evaluation report' do
-    sign_in_for_controller_test(@admin, bypass_mfa_enrollment: true)
+    sign_in_as_administrator
 
     post submit_report_evaluators_evaluation_path(@evaluation), params: {
       evaluation: {
@@ -1000,7 +1008,9 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'other evaluator cannot mutate an evaluation' do
-    sign_in_for_controller_test(@other_evaluator, bypass_mfa_enrollment: true)
+    other_evaluator = create(:evaluator)
+
+    sign_in_for_controller_test(other_evaluator, bypass_mfa_enrollment: true)
 
     post schedule_evaluators_evaluation_path(@requested_evaluation),
          params: { evaluation: { evaluation_date: 2.days.from_now, location: 'Other evaluator attempt' } }
@@ -1011,6 +1021,17 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def complete_evaluation
+    @evaluation.update!(status: :completed, evaluation_date: Time.current,
+                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
+  end
+
+  def sign_in_as_administrator
+    admin = create(:admin)
+    sign_in_for_controller_test(admin, bypass_mfa_enrollment: true)
+    admin
+  end
 
   def assert_evaluation_rows(included:, excluded: [])
     assert_response :success

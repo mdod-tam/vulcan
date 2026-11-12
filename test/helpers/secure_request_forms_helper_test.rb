@@ -263,4 +263,30 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
 
     assert_nil secure_request_candidate_destination_text(candidate)
   end
+
+  test 'certification request history names and masks the issued provider after current provider details change' do
+    actor = create(:admin)
+    application = create(
+      :application,
+      skip_proofs: true,
+      certifying_professional_name: 'Dr. Issued',
+      certifying_professional_email: 'issued.provider@example.test'
+    )
+    result = Applications::RequestCertificationUpload.new(application: application, actor: actor, deliver_email: false).call
+    assert_predicate result, :success?
+    notification = application.notifications.find_by!(action: 'cert_upload_requested')
+    issued_email = notification.metadata.fetch('provider_email')
+    expires_at = Time.zone.parse(notification.metadata.fetch('expires_at'))
+    Current.set(user: actor) do
+      application.update!(certifying_professional_name: 'Dr. Current', certifying_professional_email: 'current.provider@example.test')
+    end
+
+    detail = secure_request_notification_detail(notification, application: application, delivery_owners_by_id: {})
+    assert_includes detail, 'Dr. Issued (i***@example.test)'
+    assert_includes detail, 'via Email'
+    assert_includes detail, "(expires #{I18n.l(expires_at, format: :short)})"
+    assert_not_includes detail, issued_email
+    assert_not_includes detail, 'Dr. Current'
+    assert_not_includes detail, 'current.provider@example.test'
+  end
 end

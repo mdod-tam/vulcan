@@ -6,20 +6,21 @@ module PaperApplicationsTestHelper
     email ||= "#{first_name.downcase}.#{last_name.downcase}.#{Time.now.to_i}@example.com"
 
     within_applicant_fieldset do
-      find('input[name="constituent[first_name]"]').set('').set(first_name)
-      find('input[name="constituent[last_name]"]').set('').set(last_name)
-      find('input[name="constituent[email]"]').set('').set(email)
-      find('input[name="constituent[phone]"]').set('').set(phone)
+      find('input[name="constituent[first_name]"]').set(first_name)
+      find('input[name="constituent[last_name]"]').set(last_name)
+      find('input[name="constituent[email]"]').set(email)
+      find('input[name="constituent[phone]"]').set(phone)
       find('input[name="constituent[date_of_birth]"]').set(date_of_birth)
-      find('input[name="constituent[physical_address_1]"]').set('').set('123 Main St')
-      find('input[name="constituent[city]"]').set('').set('Baltimore')
-      find('input[name="constituent[state]"]').set('').set('MD')
-      find('input[name="constituent[zip_code]"]').set('').set('21201')
+      find('input[name="constituent[physical_address_1]"]').set('123 Main St')
+      find('input[name="constituent[city]"]').set('Baltimore')
+      find('input[name="constituent[state]"]').set('MD')
+      find('input[name="constituent[zip_code]"]').set('21201')
     end
   end
 
   def fill_in_application_details(household_size: 2, annual_income: 30_000)
     within_application_details_fieldset do
+      choose 'accept_income_proof', allow_label_click: true
       household_size_field = find('input[name="application[household_size]"]')
       household_size_field.set('')
       household_size_field.set(household_size.to_s)
@@ -41,13 +42,14 @@ module PaperApplicationsTestHelper
 
   def fill_in_certifying_professional_information(name: 'Dr. Smith', phone: '555-987-6543', email: 'dr.smith@example.com')
     within_certifying_professional_fieldset do
-      find('input[name="application[certifying_professional_name]"]').set('').set(name)
-      find('input[name="application[certifying_professional_phone]"]').set('').set(phone)
-      find('input[name="application[certifying_professional_email]"]').set('').set(email)
+      find('input[name="application[certifying_professional_name]"]').set(name)
+      find('input[name="application[certifying_professional_phone]"]').set(phone)
+      find('input[name="application[certifying_professional_email]"]').set(email)
     end
   end
 
   def attach_and_accept_proofs
+    choose 'accept_disability_certification', allow_label_click: true
     attach_cleared_document 'disability_certification', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
 
     within_proof_documents_fieldset do
@@ -70,17 +72,8 @@ module PaperApplicationsTestHelper
   end
 
   def sync_paper_submit_gate
-    page.execute_script(<<~JS)
-      const form = document.querySelector('form[data-controller~="paper-application"]');
-      if (form) {
-        form.dispatchEvent(new CustomEvent('income-validation:validated', {
-          bubbles: true,
-          detail: { exceedsThreshold: false }
-        }));
-        form.dispatchEvent(new Event('change', { bubbles: true }));
-        form.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    JS
+    # Blur the field so ordinary change handlers decide readiness.
+    find('h1').click
   end
 
   # Form sections
@@ -112,21 +105,6 @@ module PaperApplicationsTestHelper
     wait_for_network_idle
   end
 
-  def safe_interaction(&block) # rubocop:disable Naming/BlockForwarding,Style/ArgumentsForwarding
-    using_wait_time(Capybara.default_max_wait_time, &block) # rubocop:disable Naming/BlockForwarding,Style/ArgumentsForwarding
-  rescue Capybara::ElementNotFound => e
-    puts "Element interaction failed: #{e.message}, retrying after DOM stabilized"
-    wait_until_dom_stable if respond_to?(:wait_until_dom_stable)
-    using_wait_time(Capybara.default_max_wait_time, &block) # rubocop:disable Naming/BlockForwarding,Style/ArgumentsForwarding
-  end
-
-  def measure_time(description)
-    start_time = Time.current
-    yield
-    elapsed = Time.current - start_time
-    puts "#{description} took #{elapsed.round(2)} seconds" if ENV['VERBOSE_TESTS']
-  end
-
   # The path staff take for a new adult applicant: open the form and choose to create one, which
   # shows the applicant fields and the shared sections (disability, certification, proofs).
   def start_new_adult_paper_application
@@ -153,60 +131,13 @@ module PaperApplicationsTestHelper
   end
 
   def reveal_adult_application_sections
-    click_button 'Create New Applicant' if page.has_button?('Create New Applicant', wait: 1)
-
+    click_button 'Create New Applicant' unless page.has_selector?('#self-info-section', wait: 0)
+    assert_selector '#self-info-section'
     reveal_paper_application_common_sections
-
-    page.execute_script(<<~JS)
-      const adultSearchSection = document.querySelector('[data-applicant-type-target="adultSearchSection"]');
-      const adultSection = document.querySelector('[data-applicant-type-target="adultSection"]');
-
-      [adultSearchSection, adultSection].forEach((section) => {
-        if (!section) return;
-        section.hidden = false;
-        section.classList.remove('hidden');
-        section.style.display = 'block';
-        section.querySelectorAll('input, select, textarea, button').forEach((field) => {
-          field.disabled = false;
-        });
-      });
-    JS
   end
 
   def reveal_paper_application_common_sections
-    page.execute_script(<<~JS)
-      const commonSections = document.querySelector('[data-applicant-type-target="commonSections"]');
-      const proofSection = document.querySelector('#proof-heading')?.closest('section');
-      const incomeFieldsContainer = document.querySelector('[data-income-validation-target="incomeFieldsContainer"]');
-
-      [commonSections, proofSection, incomeFieldsContainer].forEach((section) => {
-        if (!section) return;
-        section.hidden = false;
-        section.classList.remove('hidden');
-        section.style.display = 'block';
-        section.querySelectorAll('input, select, textarea, button').forEach((field) => {
-          field.disabled = false;
-        });
-      });
-
-      ['application[household_size]', 'application[annual_income]', 'income_proof', 'residency_proof', 'id_proof'].forEach((name) => {
-        const field = document.querySelector(`[name="${name}"]`);
-        let node = field;
-        while (node && node !== document.body) {
-          node.hidden = false;
-          node.classList?.remove('hidden');
-          if (node.style) node.style.display = node.tagName === 'INPUT' ? '' : 'block';
-          node = node.parentElement;
-        }
-        if (field) field.disabled = false;
-      });
-    JS
-  end
-
-  def assert_paper_submit_still_gated
-    assert_button 'Submit Paper Application', disabled: true
-    status = page.find('[data-paper-application-target="status"]', visible: :all).text
-    assert_match(/Complete all required confirmations before submitting/i, status)
+    assert_selector '#proof-heading'
   end
 
   def paper_fill_in(field_label, value)

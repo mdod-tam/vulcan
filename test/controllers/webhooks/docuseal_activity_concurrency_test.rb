@@ -10,7 +10,7 @@ module Webhooks
 
     %w[viewed started declined].each do |activity|
       test "concurrent #{activity} deliveries wait for one durable audit event" do
-        existing_system_actor = User.system_user
+        existing_system_actor = PublicAuditActor.system_audit_actor
         system_actor = ensure_system_audit_actor!
         owner = create(:constituent)
         application = create(:application, :in_progress, user: owner, document_signing_service: 'docuseal',

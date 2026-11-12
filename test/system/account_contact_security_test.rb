@@ -361,10 +361,6 @@ class AccountContactSecurityTest < ApplicationSystemTestCase
     assert_equal value, find_field(id).value
   end
 
-  def assert_no_horizontal_overflow
-    assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth'), 'The narrow form must fit without horizontal scrolling'
-  end
-
   def confirm_delivered_email(change, purpose, recipient)
     mail = ActionMailer::Base.deliveries.find do |delivery|
       delivery.to == [recipient] && delivery.body.decoded.include?("/contact_verifications/#{purpose}")

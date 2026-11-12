@@ -28,13 +28,13 @@ module Admin
       field.set('Unfinished')
       session_record = @admin.sessions.order(:id).last
       absolute_expiry = session_record.expires_at
-      session_record.update!(last_active_at: 29.minutes.ago)
+      session_record.update!(last_active_at: (Session::IDLE_TIMEOUT - 1.minute).ago)
       old_activity = session_record.last_active_at
 
       # Advance only the browser's deadline clock; the server has a genuinely old activity row.
       page.execute_script(<<~JS)
         window.originalSessionClock = Date.now;
-        Date.now = () => window.originalSessionClock() + 29 * 60 * 1000;
+        Date.now = () => window.originalSessionClock() + #{(Session::IDLE_TIMEOUT - 1.minute).in_milliseconds};
       JS
       assert_selector '[data-session-activity-target="notice"]', visible: true
       assert_text 'Your session expires in 1 minute'

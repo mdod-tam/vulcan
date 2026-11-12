@@ -26,15 +26,9 @@ class PublicLocaleParityTest < ActiveSupport::TestCase
         translation_leaves(node, scope)
       end
 
-      assert_equal english.keys.sort, spanish.keys.sort
-      english.each do |key, text|
-        translated = spanish.fetch(key)
-        assert_equal text.class, translated.class, "Value type differs for #{key}"
-        next unless text.is_a?(String)
-
-        assert_equal interpolation_arguments(text), interpolation_arguments(translated), "Interpolation differs for #{key}"
-        assert_not_empty translated, "Spanish translation is empty for #{key}"
-      end
+      assert_equal translation_contract(english), translation_contract(spanish), "Translation contracts differ for #{scope}"
+      assert_equal [], spanish.select { |_key, value| value.is_a?(String) && value.empty? }.keys,
+                   "Spanish translations are empty for #{scope}"
     end
   end
 
@@ -44,6 +38,12 @@ class PublicLocaleParityTest < ActiveSupport::TestCase
     return { prefix => node } unless node.is_a?(Hash)
 
     node.each_with_object({}) { |(key, value), leaves| leaves.merge!(translation_leaves(value, "#{prefix}.#{key}")) }
+  end
+
+  def translation_contract(leaves)
+    leaves.transform_values do |value|
+      [value.class, value.is_a?(String) ? interpolation_arguments(value) : nil]
+    end
   end
 
   def interpolation_arguments(text)

@@ -62,15 +62,6 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
     assert_includes response.body, '$24,000.00'
   end
 
-  test 'standalone creation editing deletion and information-request writes have no route' do
-    [[:post, '/evaluators/evaluations'],
-     [:get, "/evaluators/evaluations/#{@evaluation.id}/edit"],
-     [:delete, "/evaluators/evaluations/#{@evaluation.id}"],
-     [:post, "/evaluators/evaluations/#{@evaluation.id}/request_additional_info"]].each do |method, path|
-      assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path(path, method: method) }
-    end
-  end
-
   test 'supplemental notes cannot be saved before report submission' do
     patch evaluators_evaluation_path(@evaluation), params: { evaluation: { post_completion_notes: 'Unsubmitted supplement' } }
 

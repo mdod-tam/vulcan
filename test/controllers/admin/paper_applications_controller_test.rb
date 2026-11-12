@@ -805,7 +805,6 @@ module Admin
       @unique_email = "rejectedproofs.#{SecureRandom.hex(6)}@example.com"
 
       stub_mailers
-      stub_proof_services
 
       assert_difference 'User.count', 1, 'User.count should increase by 1' do
         assert_difference 'Application.count', 1, 'Application.count should increase by 1' do
@@ -827,6 +826,15 @@ module Admin
       assert_equal 'address_mismatch', residency_review.rejection_reason_code
       assert_nil residency_review.notes
       assert residency_review.rejection_reason.present?
+
+      form = SecureRequestForm.residency_proof.find_by!(application: app, recipient: app.user)
+      notification = Notification.find_by!(action: 'proof_resubmission_requested', notifiable: app, recipient: app.user)
+      assert_equal form.id, notification.metadata.fetch('secure_request_form_id')
+      assert_equal residency_review.id, notification.metadata.fetch('proof_review_id')
+      assert_equal 'residency', notification.metadata.fetch('proof_type')
+      assert_predicate form, :status_sent?
+      assert_equal 'submitted', notification.delivery_status
+      assert_not Event.exists?(action: 'proof_resubmission_request_failed', auditable: app)
 
       application_events = Event.where('action IN (?, ?, ?)', 'application_created', 'proof_submitted', 'proof_rejected').order(:created_at)
 
@@ -901,18 +909,6 @@ module Admin
     def stub_mailers
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
       ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_now: true, deliver_later: true))
-    end
-
-    def stub_proof_services
-      # Keep proof processing real and suppress delivery so the request creates its ProofReview records.
-
-      NotificationService.stubs(:create_and_deliver!).returns(true)
-
-      ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_now: true, deliver_later: true))
-    end
-
-    test 'should send proof_rejected email when proof is rejected' do
-      skip 'This functionality is already tested in the applications controller test'
     end
 
     test 'should create paper application with rejected residency proof but no file attached' do

@@ -238,10 +238,5 @@ module Letters
 
       service.send(:add_footer, footer_pdf)
     end
-
-    test 'correctly queues item for printing' do
-      # Covered by integration tests.
-      skip 'Tested through integration tests'
-    end
   end
 end

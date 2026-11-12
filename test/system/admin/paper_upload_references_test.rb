@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
-require_relative 'paper_applications_test_helper'
 
 module Admin
   class PaperUploadReferencesTest < ApplicationSystemTestCase

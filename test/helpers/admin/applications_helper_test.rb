@@ -34,7 +34,7 @@ module Admin
                    proof_review_request_params(@application, :income, :rejected))
       another = proof_review_request_params(@application, :residency, :rejected)
       assert_not_equal 'retry-key', another[:decision_key]
-      assert_equal @application.residency_proof.blob&.id, another[:reviewed_blob_id]
+      assert_nil another[:reviewed_blob_id]
     end
 
     test 'disability certification action state derives requested after rejection from notifications' do
@@ -212,6 +212,18 @@ module Admin
 
       assert_includes line, 'Phone: &lt;b&gt;1&lt;/b&gt;'
       assert_not_includes line, '<b>'
+    end
+
+    test 'voucher activity distinguishes automatic approval and manual issuance using the recorded date and value' do
+      metadata = { 'voucher_code' => 'ABC123', 'initial_value' => 1250, 'issued_at' => Time.zone.local(2026, 4, 2, 10).iso8601 }
+      expected = {
+        'automatic' => 'Voucher ABC123 automatically issued on April 02, 2026 for $1,250.00',
+        'manual_approval' => 'Voucher ABC123 issued after admin approval on April 02, 2026 for $1,250.00',
+        'manual' => 'Voucher ABC123 assigned on April 02, 2026 for $1,250.00'
+      }
+      expected.each do |method, text|
+        assert_equal text, voucher_assignment_detail(metadata.merge('assignment_method' => method), fallback_time: 1.year.ago)
+      end
     end
 
     private

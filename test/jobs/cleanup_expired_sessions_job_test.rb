@@ -7,8 +7,8 @@ class CleanupExpiredSessionsJobTest < ActiveSupport::TestCase
     user = create(:constituent)
     at = Time.current.change(usec: 0)
     sessions = [
-      { last_active_at: at - 29.minutes, expires_at: at + 1.hour },
-      { last_active_at: at - 30.minutes, expires_at: at + 1.hour },
+      { last_active_at: at - Session::IDLE_TIMEOUT + 1.minute, expires_at: at + 1.hour },
+      { last_active_at: at - Session::IDLE_TIMEOUT, expires_at: at + 1.hour },
       { last_active_at: at, expires_at: at },
       { last_active_at: at, expires_at: at + 1.hour }
     ].map { |attributes| Session.create!(user: user, ip_address: '127.0.0.1', user_agent: 'cleanup test', **attributes) }

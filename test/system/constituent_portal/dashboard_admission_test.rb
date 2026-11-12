@@ -14,6 +14,9 @@ module ConstituentPortal
 
       visit constituent_portal_dashboard_path
 
+      assert_selector 'h1', text: 'My Dashboard'
+      assert_selector '.card', minimum: 3
+
       within '[data-testid="application-admission-card"]' do
         assert_text 'Application status'
         assert_text 'You already have an active or pending application.'

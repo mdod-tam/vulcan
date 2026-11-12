@@ -81,7 +81,7 @@ class LifecycleConcurrencyTest < ActiveSupport::TestCase
 
   test 'cleanup rechecks activity after waiting on a refreshed session row' do
     session = Session.create!(user: @user, ip_address: '127.0.0.1', user_agent: 'cleanup race',
-                              last_active_at: 31.minutes.ago, expires_at: 1.hour.from_now)
+                              last_active_at: (Session::IDLE_TIMEOUT + 1.minute).ago, expires_at: 1.hour.from_now)
     signals = Queue.new
     worker = nil
     Session.transaction do
