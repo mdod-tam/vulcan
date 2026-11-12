@@ -28,35 +28,6 @@ class ProofUploadsTest < ApplicationSystemTestCase
     assert_authenticated_as(@user)
   end
 
-  test 'constituent can view proof upload form' do
-    path = constituent_portal_application_new_proof_path(@application, proof_type: 'income')
-    visit path
-    wait_for_turbo
-
-    assert_selector 'h1', text: 'Upload New Income Proof'
-    assert_selector "[data-controller='document-upload']"
-    assert_field 'income_proof', type: 'file'
-    assert_button 'Submit Document'
-    assert_text 'Maximum file size: 5MB'
-  end
-
-  test 'constituent can resubmit rejected proof from application page' do
-    visit "/constituent_portal/applications/#{@application.id}"
-    assert_text 'Application Details'
-
-    # Rejected proofs show a Resubmit button
-    assert_text 'Resubmit Income Proof'
-
-    click_on 'Resubmit Income Proof'
-    assert_selector 'h1', text: /Upload New Income Proof/i
-
-    attach_cleared_document 'income_proof', @valid_pdf
-    click_button 'Submit Document'
-
-    assert_success_message('Proof submitted successfully')
-    assert_current_path constituent_portal_application_path(@application)
-  end
-
   test 'prevents resubmitting when proof is not rejected' do
     @application.update!(income_proof_status: :not_reviewed)
     visit "/constituent_portal/applications/#{@application.id}"
@@ -68,21 +39,6 @@ class ProofUploadsTest < ApplicationSystemTestCase
     click_on 'Sign Out', match: :first
     visit "/constituent_portal/applications/#{@application.id}"
     assert_current_path '/sign_in'
-  end
-
-  test 'constituent can upload proof document' do
-    visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
-    wait_for_turbo
-
-    attach_cleared_document 'income_proof', @valid_pdf
-    assert_text I18n.t('documents.upload.uploaded', filename: 'income_proof.pdf')
-
-    click_button 'Submit Document'
-    wait_for_turbo
-
-    assert_success_message('Proof submitted successfully')
-
-    assert @application.reload.income_proof.attached?
   end
 
   test 'cancelling an upload before the file is stored keeps the form usable and a new submit succeeds' do

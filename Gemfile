@@ -96,4 +96,5 @@ group :test do
   gem 'minitest-rails', '~> 8.1'
   gem 'mocha', '~> 3.1', require: false
   gem 'rails-controller-testing'
+  gem 'zlib', require: false
 end

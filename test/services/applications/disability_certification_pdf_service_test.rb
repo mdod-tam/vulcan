@@ -5,6 +5,8 @@ require 'tmpdir'
 
 module Applications
   class DisabilityCertificationPdfServiceTest < ActiveSupport::TestCase
+    include PdfTextHelper
+
     PREGENERATED_PDF = Rails.root.join('app/assets/pdfs/disability_certification_form.pdf')
 
     setup do
@@ -53,6 +55,37 @@ module Applications
           assert_not result.success?
           assert_equal 1, handoffs.size
           assert_delivery_closed_without_named_artifacts(handles, tmpdir)
+        end
+      end
+    end
+
+    test 'generated and missing-source forms queue actual applicant and provider details and retry the same artifact' do
+      @application.user.update!(first_name: 'Maya', last_name: 'Chen', date_of_birth: Date.new(1980, 1, 15))
+      @application.update!(certifying_professional_name: 'Dr. Casey Reed', certifying_professional_email: 'casey@example.test',
+                           certifying_professional_phone: '410-555-0100', certifying_professional_fax: '410-555-0101')
+
+      Dir.mktmpdir('missing-pregenerated-dcf') do |directory|
+        [{ type: :generated }, { type: :pregenerated, source: File.join(directory, 'missing.pdf') }].each_with_index do |source, index|
+          service = DisabilityCertificationPdfService.new(application: @application, actor: @admin,
+                                                          request_key: "generated-dcf-#{index}", pdf_source: source)
+          result = nil
+          assert_difference 'PrintQueueItem.count', 1 do
+            result = service.call
+            assert result.success?, result.message
+          end
+          item = result.data.reload
+          assert_equal [@application.id, @application.user_id, @admin.id, 'disability_certification_form', 'pending'],
+                       [item.application_id, item.constituent_id, item.admin_id, item.letter_type, item.status]
+          text = inflated_pdf_text(item.pdf_letter.download)
+          ['Disability Certification Form', 'Applicant: Maya Chen', 'DOB: January 15, 1980',
+           'Name: Dr. Casey Reed', 'Email: casey@example.test', 'Phone: 410-555-0100', 'Fax: 410-555-0101'].each do |line|
+            assert_includes text, line
+          end
+          assert_no_difference ['PrintQueueItem.count', 'ActiveStorage::Blob.count'] do
+            retried = service.call
+            assert retried.success?, retried.message
+            assert_equal item.id, retried.data.id
+          end
         end
       end
     end

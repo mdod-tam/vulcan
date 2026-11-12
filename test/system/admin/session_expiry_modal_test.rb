@@ -19,10 +19,10 @@ module Admin
         fill_in 'Reason for Rejection', with: draft
       end
 
-      admin.sessions.order(:id).last.update!(last_active_at: 31.minutes.ago)
+      admin.sessions.order(:id).last.update!(last_active_at: (Session::IDLE_TIMEOUT + 1.minute).ago)
       page.execute_script(<<~JS)
         window.originalSessionClock = Date.now;
-        Date.now = () => window.originalSessionClock() + 31 * 60 * 1000;
+        Date.now = () => window.originalSessionClock() + #{(Session::IDLE_TIMEOUT + 1.minute).in_milliseconds};
         window.sessionActivityModalSubmissions = 0;
         document.querySelector('#proofRejectionModal form').addEventListener('turbo:submit-start', () => {
           window.sessionActivityModalSubmissions += 1;
@@ -123,10 +123,10 @@ module Admin
     end
 
     def expire_and_count_submissions(admin, selector)
-      admin.sessions.order(:id).last.update!(last_active_at: 31.minutes.ago)
+      admin.sessions.order(:id).last.update!(last_active_at: (Session::IDLE_TIMEOUT + 1.minute).ago)
       page.execute_script(<<~JS, selector)
         window.originalSessionClock = Date.now;
-        Date.now = () => window.originalSessionClock() + 31 * 60 * 1000;
+        Date.now = () => window.originalSessionClock() + #{(Session::IDLE_TIMEOUT + 1.minute).in_milliseconds};
         window.expiredFormSubmissions = 0;
         document.querySelector(arguments[0]).addEventListener('turbo:submit-start', () => {
           window.expiredFormSubmissions += 1;

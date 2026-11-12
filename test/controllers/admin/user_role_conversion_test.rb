@@ -57,7 +57,13 @@ module Admin
     def assert_vendor_fields_reset(user, type)
       assert_equal type, user.type
       Users::Vendor::VENDOR_ONLY_ATTRIBUTES.each do |attribute|
-        assert_equal User.column_defaults[attribute], user.read_attribute_before_type_cast(attribute), attribute
+        expected = User.column_defaults[attribute]
+        actual = user.read_attribute_before_type_cast(attribute)
+        if expected.nil?
+          assert_nil actual, attribute
+        else
+          assert_equal expected, actual, attribute
+        end
       end
     end
   end

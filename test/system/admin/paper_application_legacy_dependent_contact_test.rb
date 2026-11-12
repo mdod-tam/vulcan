@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
-require_relative 'paper_applications_test_helper'
 require_relative '../../support/paper_application_context_helpers'
 require Rails.root.join('test/support/system_test_evidence')
 

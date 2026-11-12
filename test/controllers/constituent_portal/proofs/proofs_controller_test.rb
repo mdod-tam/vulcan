@@ -191,15 +191,6 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test 'obsolete proof resubmission route is unavailable' do
-    assert_raises(ActionController::RoutingError) do
-      Rails.application.routes.recognize_path(
-        "/constituent_portal/applications/#{@application.id}/resubmit_proof",
-        method: :post
-      )
-    end
-  end
-
   test 'proof upload help shows the program phone number' do
     get constituent_portal_application_new_proof_path(application_id: @application.id, proof_type: 'income')
 

@@ -5,7 +5,7 @@ require 'active_support/core_ext/securerandom'
 class Session < ApplicationRecord
   class AuthenticationRequired < StandardError; end
 
-  IDLE_TIMEOUT = 30.minutes
+  IDLE_TIMEOUT = 2.hours
   ACTIVITY_WRITE_INTERVAL = 1.minute
   REAUTHENTICATION_WINDOW = 5.minutes
 

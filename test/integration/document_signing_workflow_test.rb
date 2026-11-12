@@ -362,7 +362,11 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     assert_predicate scan, :pending?
     assert_empty scan.blob.attachments
     @application.reload
-    assert_equal primary&.id, @application.disability_certification.blob&.id
+    if primary
+      assert_equal primary.id, @application.disability_certification.blob&.id
+    else
+      assert_nil @application.disability_certification.blob&.id
+    end
     assert_equal certification_status, @application.disability_certification_status
     assert_equal signing_status, @application.document_signing_status
     assert_not Event.exists?(action: 'document_signing_completed', auditable: @application)

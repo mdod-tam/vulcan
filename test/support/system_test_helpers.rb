@@ -4,6 +4,17 @@
 AuditEvent = Event unless defined?(AuditEvent)
 
 module SystemTestHelpers
+  def assert_no_horizontal_overflow
+    assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth'), 'Page must fit without horizontal scrolling'
+  end
+
+  def assert_single_action_error(id, heading:)
+    assert_selector "##{id}[role=alert]"
+    assert_selector '[role=alert]', count: 1
+    assert_no_selector '[data-testid="flash-alert"]'
+    assert_selector "##{id} h3", text: heading
+  end
+
   def meaningful_page_content_selector
     'main, [role="main"], h1, [data-testid], form[action], header nav'
   end
@@ -227,7 +238,7 @@ module SystemTestHelpers
     wait_for_meaningful_page_content(timeout: [timeout, 3].min) if body_present
     body_present
   rescue Ferrum::NodeNotFoundError, Ferrum::DeadBrowserError => e
-    puts "Warning: DOM stability check failed: #{e.message}" if ENV['VERBOSE_TESTS']
+    puts "Warning: DOM stability check failed: #{e.message}" if TestOutput.verbose?
     false
   end
 
@@ -433,7 +444,7 @@ module SystemTestHelpers
     return false unless wait_for_modal_open(modal_id, timeout: timeout)
 
     has_buttons = page.has_selector?("##{modal_id} button", text: /Approve|Reject/, wait: timeout)
-    puts 'Found approve/reject buttons in review modal' if has_buttons && ENV['VERBOSE_TESTS']
+    puts 'Found approve/reject buttons in review modal' if has_buttons && TestOutput.verbose?
     puts 'Warning: No approve/reject buttons found in review modal' unless has_buttons
 
     true
@@ -469,6 +480,12 @@ module SystemTestHelpers
     trigger_selector = "button[data-modal-id='#{modal_id}']"
     click_modal_trigger_and_wait(trigger_selector, modal_id, timeout: timeout)
     wait_for_proof_review_modal(proof_type, timeout: timeout)
+  end
+
+  def open_proof_rejection_modal(proof_type, timeout: 15)
+    click_review_proof_and_wait(proof_type, timeout: timeout)
+    within("##{proof_type}ProofReviewModal") { click_button 'Reject' }
+    wait_for_modal_open('proofRejectionModal', timeout: timeout)
   end
 
   # Waits for the attachments marker, without comparison to its previous timestamp.
@@ -552,7 +569,7 @@ module SystemTestHelpers
           raise Capybara::ElementNotFound, "Navigation failed after #{max_retries} retries: #{e.message}"
         end
 
-        puts "Navigation retry #{retries}/#{max_retries}: #{e.message}" if ENV['VERBOSE_TESTS']
+        puts "Navigation retry #{retries}/#{max_retries}: #{e.message}" if TestOutput.verbose?
 
         capture_before_browser_recovery('visit_admin_application_with_retry', e)
         Capybara.reset_sessions!

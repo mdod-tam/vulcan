@@ -76,15 +76,19 @@ class SessionTest < ActiveSupport::TestCase
     end
   end
 
-  test 'idle expiry applies at the boundary even before absolute expiry' do
+  test 'idle expiry applies at two hours even before absolute expiry' do
     freeze_time do
       session = create_session
 
-      travel 30.minutes
+      travel 1.hour
+      assert_not session.expired?
+      travel 59.minutes
+      assert_not session.expired?
+      travel 1.minute
 
       assert session.expired?
       assert_not session.record_activity!
-      assert_equal 30.minutes.ago, session.reload.last_active_at
+      assert_equal 2.hours.ago, session.reload.last_active_at
     end
   end
 
@@ -119,12 +123,12 @@ class SessionTest < ActiveSupport::TestCase
     freeze_time do
       session = create_session
       stale = Session.find(session.id)
-      session.update!(last_active_at: 31.minutes.ago)
+      session.update!(last_active_at: (Session::IDLE_TIMEOUT + 1.minute).ago)
 
       travel 2.minutes
 
       assert_not stale.record_activity!
-      assert_equal 33.minutes.ago, session.reload.last_active_at
+      assert_equal (Session::IDLE_TIMEOUT + 3.minutes).ago, session.reload.last_active_at
     end
   end
 
@@ -150,10 +154,10 @@ class SessionTest < ActiveSupport::TestCase
     freeze_time do
       session = create_session
       travel 2.minutes
-      delay_lock(session, 28.minutes)
+      delay_lock(session, Session::IDLE_TIMEOUT - 2.minutes)
 
       assert_not session.record_activity!
-      assert_equal 30.minutes.ago, session.reload.last_active_at
+      assert_equal 2.hours.ago, session.reload.last_active_at
     end
   end
 

@@ -11,7 +11,7 @@ module Admin
 
     setup do
       Current.reset
-      @existing_system_actor = User.system_user
+      @existing_system_actor = PublicAuditActor.system_audit_actor
       ensure_system_audit_actor!
       @admin = create(:admin)
       @original_controls = FeatureFlag.where(name: EmailDelivery::CONTROL_NAMES).to_h do |control|

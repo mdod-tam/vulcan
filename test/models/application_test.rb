@@ -10,20 +10,10 @@ class ApplicationTest < ActiveSupport::TestCase
     Current.user = @admin
 
     setup_paper_application_context
-
-    @application = create(:application, :in_progress, skip_proofs: true)
-    @proof_review = build(:proof_review,
-                          application: @application,
-                          admin: @admin)
   end
 
   def teardown
     Current.reset if defined?(Current) && Current.respond_to?(:reset)
-  end
-
-  # Restore this notification test after it supports the current guards.
-  test 'notifies admins when proofs need review' do
-    skip 'Skipping notification test until compatible with new guards'
   end
 
   test 'deletion preserves each kind of application lifecycle history' do
@@ -48,6 +38,7 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'proof reviewability compares submissions with decision time and selects the latest decision' do
+    @application = create(:application, :in_progress, skip_proofs: true)
     older = create(:proof_review, application: @application, admin: @admin, proof_type: :income,
                                   created_at: 1.day.ago, reviewed_at: 3.days.ago)
     latest = create(:proof_review, application: @application, admin: @admin, proof_type: :income,
@@ -148,56 +139,32 @@ class ApplicationTest < ActiveSupport::TestCase
     end
   end
 
-  test 'transition_status! logs application_status_changed with explicit constituent actor' do
-    Current.force_notifications = false
-
-    application = create(:application, :draft, :with_income_proof, :with_residency_proof)
-
-    Current.user = nil
-
-    assert_equal 'draft', application.status
-
-    assert_difference -> { ApplicationStatusChange.count }, 1 do
-      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
-        application.transition_status!(:in_progress, actor: application.user, metadata: { trigger: 'test' })
-      end
-    end
-
-    status_change = application.status_changes.last
-    assert_equal 'draft', status_change.from_status
-    assert_equal 'in_progress', status_change.to_status
-    assert_equal application.user, status_change.user
-
-    audit_event = Event.where(action: 'application_status_changed', auditable: application).last
-    assert_equal application.user, audit_event.user
-    assert_equal 'in_progress', audit_event.metadata['new_status']
-    assert_equal 'draft', audit_event.metadata['old_status']
-  end
-
   test 'transition_status! attributes audit to passed actor not Current.user' do
     Current.force_notifications = false
 
     application = create(:application, :draft, :with_income_proof, :with_residency_proof)
     admin = create(:admin)
 
+    actor = create(:admin)
     Current.user = admin
 
     assert_equal 'draft', application.status
 
     assert_difference -> { ApplicationStatusChange.count }, 1 do
       assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
-        other_admin = create(:admin)
-        application.transition_status!(:in_progress, actor: other_admin, metadata: { trigger: 'test' })
+        application.transition_status!(:in_progress, actor: actor, metadata: { trigger: 'test' })
       end
     end
 
     status_change = application.status_changes.last
     assert_equal 'draft', status_change.from_status
     assert_equal 'in_progress', status_change.to_status
-    assert_not_equal admin, status_change.user
+    assert_equal actor, status_change.user
 
     audit_event = Event.where(action: 'application_status_changed', auditable: application).last
-    assert_not_equal admin, audit_event.user
+    assert_equal actor, audit_event.user
+    assert_equal 'in_progress', audit_event.metadata['new_status']
+    assert_equal 'draft', audit_event.metadata['old_status']
   end
 
   test 'submit! transitions status to in_progress and logs audit event' do
@@ -213,9 +180,15 @@ class ApplicationTest < ActiveSupport::TestCase
     assert application.status_in_progress?
 
     status_change = application.status_changes.last
+    assert_equal 'draft', status_change.from_status
     assert_equal 'in_progress', status_change.to_status
     assert_equal actor, status_change.user
     assert_equal 'submission', status_change.metadata['trigger']
+
+    audit_event = Event.where(action: 'application_status_changed', auditable: application).last
+    assert_equal actor, audit_event.user
+    assert_equal 'in_progress', audit_event.metadata['new_status']
+    assert_equal 'draft', audit_event.metadata['old_status']
   end
 
   test 'training_request_pending? is true until a newer training session is created' do
@@ -775,41 +748,8 @@ class ApplicationTest < ActiveSupport::TestCase
 
   # escalate_to_dcf!
 
-  test 'escalate_to_dcf! transitions to awaiting_dcf and leaves the certification request to staff' do
-    application = create(:application, :in_progress, skip_proofs: true)
-    application.update_columns(
-      status: Application.statuses[:in_progress],
-      income_proof_status: Application.income_proof_statuses[:approved],
-      residency_proof_status: Application.residency_proof_statuses[:approved],
-      id_proof_status: Application.id_proof_statuses[:approved],
-      disability_certification_status: Application.disability_certification_statuses[:not_requested],
-      updated_at: Time.current
-    )
-    application.reload
-
-    CertifyingProfessionalMailer.expects(:request_certification).never
-
-    assert_difference -> { ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count }, 1 do
-      assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
-        application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
-      end
-    end
-
-    application.reload
-    assert_equal 'awaiting_dcf', application.status
-    assert_equal 'not_requested', application.disability_certification_status
-  end
-
   test 'escalate_to_dcf! transitions to awaiting_dcf but skips cert request when proofs not approved' do
-    application = create(:application, :in_progress, skip_proofs: true)
-    application.update_columns(
-      status: Application.statuses[:in_progress],
-      income_proof_status: Application.income_proof_statuses[:approved],
-      residency_proof_status: Application.residency_proof_statuses[:not_reviewed],
-      disability_certification_status: Application.disability_certification_statuses[:not_requested],
-      updated_at: Time.current
-    )
-    application.reload
+    application = dcf_application(residency_proof_status: :not_reviewed, id_proof_status: :not_reviewed)
 
     CertifyingProfessionalMailer.expects(:request_certification).never
 
@@ -821,16 +761,7 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'escalate_to_dcf! is a no-op when already awaiting_dcf' do
-    application = create(:application, :in_progress, skip_proofs: true)
-    application.update_columns(
-      status: Application.statuses[:awaiting_dcf],
-      income_proof_status: Application.income_proof_statuses[:approved],
-      id_proof_status: Application.id_proof_statuses[:approved],
-      residency_proof_status: Application.residency_proof_statuses[:approved],
-      disability_certification_status: Application.disability_certification_statuses[:not_requested],
-      updated_at: Time.current
-    )
-    application.reload
+    application = dcf_application(status: :awaiting_dcf)
 
     CertifyingProfessionalMailer.expects(:request_certification).never
 
@@ -845,14 +776,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
   test 'escalate_to_dcf! no-ops for terminal statuses' do
     %i[approved rejected archived].each do |terminal_status|
-      application = create(:application, skip_proofs: true, status: terminal_status)
-      application.update_columns(
-        income_proof_status: Application.income_proof_statuses[:approved],
-        residency_proof_status: Application.residency_proof_statuses[:approved],
-        disability_certification_status: Application.disability_certification_statuses[:not_requested],
-        updated_at: Time.current
-      )
-      application.reload
+      application = dcf_application(initial_status: terminal_status, status: terminal_status, id_proof_status: :not_reviewed)
 
       CertifyingProfessionalMailer.expects(:request_certification).never
 
@@ -869,15 +793,7 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'escalate_to_dcf! is idempotent when already awaiting_dcf with cert requested' do
-    application = create(:application, :in_progress, skip_proofs: true)
-    application.update_columns(
-      status: Application.statuses[:awaiting_dcf],
-      income_proof_status: Application.income_proof_statuses[:approved],
-      residency_proof_status: Application.residency_proof_statuses[:approved],
-      disability_certification_status: Application.disability_certification_statuses[:requested],
-      updated_at: Time.current
-    )
-    application.reload
+    application = dcf_application(status: :awaiting_dcf, disability_certification_status: :requested, id_proof_status: :not_reviewed)
 
     CertifyingProfessionalMailer.expects(:request_certification).never
 
@@ -893,16 +809,7 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'escalate_to_dcf! creates exactly one status change and one audit event' do
-    application = create(:application, :in_progress, skip_proofs: true)
-    application.update_columns(
-      status: Application.statuses[:in_progress],
-      income_proof_status: Application.income_proof_statuses[:approved],
-      id_proof_status: Application.id_proof_statuses[:approved],
-      residency_proof_status: Application.residency_proof_statuses[:approved],
-      disability_certification_status: Application.disability_certification_statuses[:not_requested],
-      updated_at: Time.current
-    )
-    application.reload
+    application = dcf_application
 
     CertifyingProfessionalMailer.expects(:request_certification).never
 
@@ -911,6 +818,9 @@ class ApplicationTest < ActiveSupport::TestCase
         application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
       end
     end
+
+    assert_equal 'awaiting_dcf', application.reload.status
+    assert_equal 'not_requested', application.disability_certification_status
 
     status_change = ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').last
     assert_not_nil status_change
@@ -922,5 +832,16 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal @admin, event.user
     assert_equal 'awaiting_dcf', event.metadata['new_status']
     assert_equal 'proof_review_approved', event.metadata['trigger']
+  end
+
+  private
+
+  def dcf_application(initial_status: :in_progress, **attributes)
+    application = create(:application, skip_proofs: true, status: initial_status)
+    application.update_columns({
+      status: :in_progress, income_proof_status: :approved, residency_proof_status: :approved,
+      id_proof_status: :approved, disability_certification_status: :not_requested, updated_at: Time.current
+    }.merge(attributes))
+    application.reload
   end
 end

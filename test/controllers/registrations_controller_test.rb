@@ -39,7 +39,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal addresses.map { |email| User.normalize_email(email) }, RegistrationVerification.order(:id).last(4).map(&:email)
   end
 
-  test 'legacy full form cannot create an account or preserve a preselected password' do
+  test 'unverified initiation cannot create an account or accept account credentials' do
     assert_no_difference ['User.count', 'Session.count'] do
       post sign_up_path, params: { user: { email: 'legacy@example.test', password: 'attacker-password',
                                            password_confirmation: 'attacker-password', first_name: 'Injected',

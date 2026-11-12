@@ -5,13 +5,8 @@ require_relative '../config/environment'
 Rails.application.eager_load!
 require 'rails/test_help'
 
-# Suppress info and debug logs unless VERBOSE_TESTS is set.
-Rails.logger.level = :warn unless ENV['VERBOSE_TESTS']
-ActiveRecord::Base.logger.level = :warn unless ENV['VERBOSE_TESTS']
-
-ActiveStorage.logger.level = :error if defined?(ActiveStorage.logger)
-
-Rails.application.config.active_record.verbose_query_logs = false unless ENV['VERBOSE_TESTS']
+TestOutput.install
+ActiveRecord::Migration.verbose = TestOutput.verbose?
 
 # Truncate the database before seeds load.
 begin
@@ -117,6 +112,9 @@ module ActiveSupport
     # To re-enable, use parallelize(workers: ENV.fetch('PARALLEL_WORKERS', :number_of_processors), with: :processes).
     parallelize(workers: 1)
 
+    parallelize_setup { |_worker| TestOutput.reset_after_fork }
+    parallelize_teardown { |_worker| TestOutput.report }
+
     if defined?(DatabaseCleaner)
       parallelize_setup do |_worker|
         DatabaseCleaner.clean_with(:truncation)
@@ -177,17 +175,6 @@ module ActiveSupport
         'HTTP_USER_AGENT' => 'Rails Testing',
         'REMOTE_ADDR' => '127.0.0.1'
       }
-    end
-
-    if ENV['VERBOSE_TESTS']
-      test 'ensure test_auth_status route is recognised' do
-        if Rails.application.routes.url_helpers.respond_to?(:test_auth_status_path)
-          assert_equal '/test/auth_status',
-                       Rails.application.routes.url_helpers.test_auth_status_path
-        else
-          assert true, 'Route unavailable in this environment – skipping assertion'
-        end
-      end
     end
 
     # url_for needs a host for ActiveStorage URLs.

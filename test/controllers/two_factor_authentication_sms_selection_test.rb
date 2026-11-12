@@ -27,6 +27,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
   end
 
   test 'All off refuses a new SMS challenge while keeping authenticator verification available' do
+    ensure_system_audit_actor!
     admin = create(:admin)
     EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: false, actor: admin, operation_id: SecureRandom.uuid)
     TwilioVerifyService.expects(:client).never
@@ -74,7 +75,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     assert SmsVerificationAttempt.exists?(purpose: 'login')
   end
 
-  test 'choosing SMS verification sends one SMS code' do
+  test 'choosing SMS sends one code and a later resend replaces its challenge' do
     start_password_step
 
     TwilioVerifyService.expects(:send_verification).once.with('555-123-4567', purpose: :login, owner: kind_of(String), locale: kind_of(Symbol), sms_credential_id: kind_of(Integer)).returns(
@@ -91,6 +92,15 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select 'p', text: /We've sent a 6-digit code by text/
     assert_select 'input[type="submit"][value="Verify"]'
+
+    travel 31.seconds
+    TwilioVerifyService.expects(:send_verification).once.returns(
+      success: true, verification_sid: 'TEST_SMS_RESENT', status: 'pending', code_expires_at: 10.minutes.from_now.to_i
+    )
+    post resend_sms_verification_two_factor_authentication_path
+    assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
+    assert_equal I18n.t('two_factor_verification.sms.resent'), flash[:notice]
+    assert_equal 'TEST_SMS_RESENT', session[TwoFactorAuth::SESSION_KEYS[:challenge]]
   end
 
   test 'choosing SMS verification again reuses active challenge without sending another code' do
@@ -177,6 +187,14 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
       get verify_method_two_factor_authentication_path(type: 'unknown', locale: locale)
       assert_redirected_to verify_two_factor_authentication_path(locale: locale)
       assert_equal I18n.t('two_factor_verification.errors.invalid_method', locale: locale), flash[:alert]
+
+      [nil, 'unsupported'].each do |method|
+        assert_no_difference('Session.count') do
+          post verify_code_two_factor_authentication_path(locale: locale), params: { method: method, code: '123456' }, as: :json
+        end
+        assert_response :unprocessable_content
+        assert_equal({ 'error' => I18n.t('two_factor_verification.errors.invalid_type', locale: locale) }, response.parsed_body)
+      end
     end
 
     test "TOTP and SMS keep #{locale} through forms, errors, resend and verification" do
@@ -201,6 +219,13 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
       post resend_sms_verification_two_factor_authentication_path(locale: locale), headers: { 'Accept' => Mime[:turbo_stream].to_s }
       assert_response :success
       assert_includes response.body, I18n.t('two_factor_verification.sms.resend_hint', locale: locale)
+
+      travel 31.seconds
+      TwilioVerifyService.expects(:send_verification).once.returns(success: false)
+      post resend_sms_verification_two_factor_authentication_path(locale: locale), headers: { 'Accept' => Mime[:turbo_stream].to_s }
+      assert_response :success
+      assert_select 'turbo-stream[action=replace][target=sms_resend]'
+      assert_includes response.body, I18n.t('two_factor_verification.sms.send_failed', locale: locale)
 
       TwilioVerifyService.expects(:check_verification).once.returns(success: true, status: 'pending', valid: false)
       post process_verification_two_factor_authentication_path(type: 'sms', locale: locale), params: { code: 'invalid' }

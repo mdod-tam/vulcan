@@ -10,7 +10,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_equal constituent, candidate.recipient
       assert_equal :letter, candidate.channel
@@ -20,7 +20,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'letter', phone_type: 'text')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_equal :letter, candidate.channel
     end
@@ -29,7 +29,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'email', phone_type: 'text')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_equal :email, candidate.channel
     end
@@ -38,10 +38,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'email', phone_type: 'text')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { constituent.id => 'sms' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, channel_overrides: { constituent.id => 'sms' })
 
       assert_equal :sms, candidate.channel
     end
@@ -62,8 +59,7 @@ module Applications
         email: "dependent.default.#{SecureRandom.hex(3)}@system.matvulcan.local",
         dependent_email: guardian.email
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
       candidates = SecureRequestRecipientResolver.new(application: application).resolve
 
@@ -76,8 +72,7 @@ module Applications
       guardian = create(:constituent, email: "guardian.separate.#{SecureRandom.hex(3)}@example.com")
       dependent_email = "dependent.separate.#{SecureRandom.hex(3)}@example.com"
       dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
       candidates = SecureRequestRecipientResolver.new(application: application).resolve
 
@@ -90,10 +85,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { constituent.id => 'email' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, channel_overrides: { constituent.id => 'email' })
 
       assert_equal :email, candidate.channel
       assert_equal constituent.email, candidate.email
@@ -106,13 +98,10 @@ module Applications
                                        dependent_phone: manager.phone)
       applicant.update!(dependent_email: applicant.email)
       create(:guardian_relationship, guardian_user: first_guardian, dependent_user: applicant)
-      create(:guardian_relationship, guardian_user: manager, dependent_user: applicant)
-      application = create(:application, user: applicant, managing_guardian: manager)
+      application = guardianship_application(manager, applicant)
 
-      default_candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
-      sms_candidate = SecureRequestRecipientResolver
-                      .new(application: application, channel_overrides: { applicant.id => 'sms' })
-                      .resolve.first
+      default_candidate = resolve_recipient(application)
+      sms_candidate = resolve_recipient(application, channel_overrides: { applicant.id => 'sms' })
 
       assert_equal applicant, default_candidate.recipient
       assert_equal :email, default_candidate.channel
@@ -141,8 +130,7 @@ module Applications
     test 'honors explicit dependent guardian and both recipient selections' do
       guardian = create(:constituent)
       dependent = create(:constituent, dependent_email: guardian.email)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
       dependent_candidates = SecureRequestRecipientResolver
                              .new(application: application, recipient_ids: [dependent.id])
@@ -188,14 +176,10 @@ module Applications
         dependent_email: other_guardian.email
       )
       create(:guardian_relationship, guardian_user: other_guardian, dependent_user: dependent, relationship_type: 'Aunt')
-      create(:guardian_relationship, guardian_user: managing_guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: managing_guardian)
+      application = guardianship_application(managing_guardian, dependent)
 
-      default_candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
-      dependent_candidate = SecureRequestRecipientResolver
-                            .new(application: application, recipient_ids: [dependent.id])
-                            .resolve
-                            .first
+      default_candidate = resolve_recipient(application)
+      dependent_candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal dependent, default_candidate.recipient
       assert_equal dependent_email, dependent_candidate.email
@@ -212,15 +196,11 @@ module Applications
         dependent_email: dependent_email,
         dependent_phone: guardian.phone
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application,
-                       recipient_ids: [dependent.id],
-                       channel_overrides: { dependent.id => 'sms' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application,
+                                    recipient_ids: [dependent.id],
+                                    channel_overrides: { dependent.id => 'sms' })
 
       assert_equal dependent, candidate.recipient
       assert_equal guardian.phone, candidate.phone
@@ -248,12 +228,9 @@ module Applications
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
       application = create(:application, user: dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application,
-                       recipient_ids: [dependent.id],
-                       channel_overrides: { dependent.id => 'sms' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application,
+                                    recipient_ids: [dependent.id],
+                                    channel_overrides: { dependent.id => 'sms' })
 
       assert_equal guardian.phone, candidate.phone
       assert_equal guardian, candidate.phone_owner
@@ -276,10 +253,7 @@ module Applications
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
       application = create(:application, user: dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [dependent.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal guardian, candidate.email_owner
       assert_equal :managing_guardian, candidate.delivery_source
@@ -321,13 +295,10 @@ module Applications
 
       GuardianRelationship.expects(:where).never
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application,
-                       recipient_ids: [guardian.id],
-                       known_recipients: [guardian],
-                       guardian_relationships: [relationship])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application,
+                                    recipient_ids: [guardian.id],
+                                    known_recipients: [guardian],
+                                    guardian_relationships: [relationship])
 
       assert_equal guardian, candidate.recipient
       assert_equal :guardian, candidate.recipient_role
@@ -350,14 +321,10 @@ module Applications
         email: "dependent.owner.#{SecureRandom.hex(3)}@system.matvulcan.local",
         dependent_email: guardian.email
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      default_candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
-      dependent_candidate = SecureRequestRecipientResolver
-                            .new(application: application, recipient_ids: [dependent.id])
-                            .resolve
-                            .first
+      default_candidate = resolve_recipient(application)
+      dependent_candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal guardian, default_candidate.email_owner
       assert_equal :guardian_relationship, default_candidate.delivery_source
@@ -383,13 +350,9 @@ module Applications
         dependent_phone: '410-555-0161',
         phone_type: 'text'
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [dependent.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal dependent, candidate.email_owner
       assert_equal :dependent_contact, candidate.delivery_source
@@ -406,8 +369,7 @@ module Applications
                          email: "dependent.mixed.#{SecureRandom.hex(3)}@system.matvulcan.local",
                          dependent_email: guardian.email,
                          phone: dependent_phone, dependent_phone: dependent_phone, phone_type: 'text')
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
       candidate = SecureRequestRecipientResolver
                   .new(application:, recipient_ids: [dependent.id],
@@ -425,8 +387,7 @@ module Applications
       dependent_email = "dependent.mixed.#{SecureRandom.hex(3)}@example.com"
       dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email,
                                        phone: '000-123-4567', dependent_phone: guardian.phone)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
       candidate = SecureRequestRecipientResolver
                   .new(application:, recipient_ids: [dependent.id],
@@ -449,10 +410,7 @@ module Applications
                                      relationship_type: 'Aunt')
       application = create(:application, user: dependent, managing_guardian: managing_guardian)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [other_guardian.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [other_guardian.id])
 
       assert_equal other_guardian, candidate.email_owner
       assert_equal :guardian_relationship, candidate.delivery_source
@@ -460,19 +418,10 @@ module Applications
     end
 
     test 'rejects synthetic email as a contact path' do
-      constituent = nil
-      Current.paper_context = true
-      begin
-        constituent = create(:constituent,
-                             email: "adult.synthetic.#{SecureRandom.hex(3)}@system.matvulcan.local",
-                             phone: nil,
-                             communication_preference: 'letter')
-      ensure
-        Current.reset
-      end
+      constituent = create_paper_constituent(email: "adult.synthetic.#{SecureRandom.hex(3)}@system.matvulcan.local", phone: nil, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_nil candidate.email
       assert_equal :letter, candidate.channel
@@ -480,16 +429,10 @@ module Applications
     end
 
     test 'routes address-only constituent to letter' do
-      constituent = nil
-      Current.paper_context = true
-      begin
-        constituent = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
-      ensure
-        Current.reset
-      end
+      constituent = create_paper_constituent(email: nil, phone: nil, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert candidate.success?
       assert_equal :letter, candidate.channel
@@ -499,38 +442,13 @@ module Applications
       assert_nil candidate.phone
     end
 
-    test 'address-only resolution creates no email phone or sms route' do
-      constituent = nil
-      Current.paper_context = true
-      begin
-        constituent = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
-      ensure
-        Current.reset
-      end
-      application = create(:application, user: constituent)
-
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { constituent.id => 'email' })
-                  .resolve
-                  .first
-
-      assert_equal :invalid_channel_override, candidate.failure_reason
-      assert_nil candidate.channel
-    end
-
     test 'fails with no_contact_path when no digital contact and incomplete address' do
-      constituent = nil
-      Current.paper_context = true
-      begin
-        constituent = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
-      ensure
-        Current.reset
-      end
+      constituent = create_paper_constituent(email: nil, phone: nil, communication_preference: 'letter')
       # Direct updates model an incomplete legacy address.
       constituent.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_not candidate.success?
       assert_equal :no_contact_path, candidate.failure_reason
@@ -541,10 +459,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'email', physical_address_1: nil)
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { constituent.id => 'letter' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, channel_overrides: { constituent.id => 'letter' })
 
       assert_equal :invalid_channel_override, candidate.failure_reason
       assert_nil candidate.channel
@@ -552,19 +467,10 @@ module Applications
     end
 
     test 'explicit email override fails strictly without a real email' do
-      constituent = nil
-      Current.paper_context = true
-      begin
-        constituent = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
-      ensure
-        Current.reset
-      end
+      constituent = create_paper_constituent(email: nil, phone: nil, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { constituent.id => 'email' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, channel_overrides: { constituent.id => 'email' })
 
       assert_equal :invalid_channel_override, candidate.failure_reason
       assert_nil candidate.channel
@@ -573,11 +479,8 @@ module Applications
     test 'forged unknown channel value fails without fallback' do
       application = create(:application)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application,
-                       channel_overrides: { application.user_id => 'carrier_pigeon' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application,
+                                    channel_overrides: { application.user_id => 'carrier_pigeon' })
 
       assert_equal :invalid_channel_override, candidate.failure_reason
       assert_nil candidate.channel
@@ -587,10 +490,7 @@ module Applications
       constituent = create(:constituent, phone: '410-555-0162', phone_type: 'voice')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { constituent.id => 'sms' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, channel_overrides: { constituent.id => 'sms' })
 
       assert_equal :invalid_channel_override, candidate.failure_reason
       assert_not_includes candidate.available_channels, :sms
@@ -600,7 +500,7 @@ module Applications
       constituent = create(:constituent, phone: '410-555-0163', phone_type: 'videophone')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_not_includes candidate.available_channels, :sms
     end
@@ -611,10 +511,7 @@ module Applications
       constituent.update_column(:phone, '123')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { constituent.id => 'sms' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, channel_overrides: { constituent.id => 'sms' })
 
       assert_nil candidate.phone
       assert_equal :invalid_channel_override, candidate.failure_reason
@@ -629,13 +526,9 @@ module Applications
         dependent_email: guardian.email,
         phone_type: 'text'
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, channel_overrides: { guardian.id => 'sms' })
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, channel_overrides: { guardian.id => 'sms' })
 
       assert_equal guardian, candidate.recipient
       assert_equal 'voice', candidate.phone_type
@@ -652,10 +545,9 @@ module Applications
         dependent_email: guardian.email,
         communication_preference: 'letter'
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_equal guardian, candidate.recipient
       assert_equal :letter, candidate.channel
@@ -666,8 +558,7 @@ module Applications
       guardian = create(:constituent, physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       dependent = create(:constituent, physical_address_1: '12 Dependent St', city: 'Baltimore',
                                        state: 'MD', zip_code: '21201')
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
       candidate = SecureRequestRecipientResolver
                   .new(application:, recipient_ids: [dependent.id],
@@ -686,10 +577,9 @@ module Applications
         email: "dependent.noaddr.#{SecureRandom.hex(3)}@system.matvulcan.local",
         dependent_email: guardian.email
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_equal guardian, candidate.address_owner
       assert_not_includes candidate.available_channels, :letter
@@ -700,29 +590,17 @@ module Applications
       constituent = create(:constituent, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, permitted_channels: %i[email])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, permitted_channels: %i[email])
 
       assert_equal %i[email], candidate.available_channels
       assert_equal :email, candidate.channel
     end
 
     test 'digital-only action reports no route for an address-only constituent' do
-      constituent = nil
-      Current.paper_context = true
-      begin
-        constituent = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
-      ensure
-        Current.reset
-      end
+      constituent = create_paper_constituent(email: nil, phone: nil, communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, permitted_channels: %i[email sms])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, permitted_channels: %i[email sms])
 
       assert_equal :no_contact_path, candidate.failure_reason
       assert_empty candidate.available_channels
@@ -732,7 +610,7 @@ module Applications
       constituent = create(:constituent, communication_preference: 'email')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_equal :email, candidate.channel
       assert_includes candidate.available_channels, :letter
@@ -746,14 +624,10 @@ module Applications
         email: "dependent.owner.#{SecureRandom.hex(3)}@system.matvulcan.local",
         dependent_email: guardian.email
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
       guardian.update!(status: :suspended)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [dependent.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_includes candidate.available_channels, :email
       assert_includes candidate.available_channels, :letter
@@ -770,14 +644,10 @@ module Applications
       dependent_email = "dependent.mixed.#{SecureRandom.hex(3)}@example.com"
       dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email,
                                        communication_preference: 'letter')
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
       guardian.update!(status: :suspended)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [dependent.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal :ok, candidate.channel_eligibility[:email]
       assert_equal :owner_ineligible, candidate.channel_eligibility[:letter]
@@ -797,13 +667,9 @@ module Applications
         dependent_email: guardian.email,
         communication_preference: 'letter'
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [dependent.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal dependent, candidate.recipient
       assert_equal :letter, candidate.channel
@@ -816,7 +682,7 @@ module Applications
                                          communication_preference: 'letter')
       application = create(:application, user: constituent)
 
-      candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      candidate = resolve_recipient(application)
 
       assert_equal :letter, candidate.channel
       assert_equal :constituent, candidate.delivery_source
@@ -827,13 +693,9 @@ module Applications
       guardian = create(:constituent, physical_address_1: '9 Guardian Way',
                                       communication_preference: 'letter')
       dependent = create(:constituent)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [guardian.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [guardian.id])
 
       assert_equal :guardian, candidate.recipient_role
       assert_equal :letter, candidate.channel
@@ -848,13 +710,9 @@ module Applications
         email: "dependent.ddig.#{SecureRandom.hex(3)}@system.matvulcan.local",
         dependent_email: guardian.email
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [dependent.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal :email, candidate.channel
       assert_equal :managing_guardian, candidate.delivery_source
@@ -871,23 +729,16 @@ module Applications
         phone: "555-#{rand(200..899)}-#{rand(1000..9999)}",
         phone_type: 'text'
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      email_candidate = SecureRequestRecipientResolver
-                        .new(application: application, recipient_ids: [dependent.id])
-                        .resolve
-                        .first
+      email_candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal :email, email_candidate.channel
       assert_equal :dependent_contact, email_candidate.delivery_source
       assert_equal dependent, email_candidate.delivery_owner
 
-      sms_candidate = SecureRequestRecipientResolver
-                      .new(application: application, recipient_ids: [dependent.id],
-                           channel_overrides: { dependent.id => 'sms' })
-                      .resolve
-                      .first
+      sms_candidate = resolve_recipient(application, recipient_ids: [dependent.id],
+                                                     channel_overrides: { dependent.id => 'sms' })
 
       assert_equal :sms, sms_candidate.channel
       assert_equal :constituent, sms_candidate.delivery_source
@@ -906,13 +757,9 @@ module Applications
         phone: "555-#{rand(200..899)}-#{rand(1000..9999)}",
         phone_type: 'text'
       )
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
-      application = create(:application, user: dependent, managing_guardian: guardian)
+      application = guardianship_application(guardian, dependent)
 
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [dependent.id])
-                  .resolve
-                  .first
+      candidate = resolve_recipient(application, recipient_ids: [dependent.id])
 
       assert_equal guardian, candidate.delivery_owner_for(:email)
       assert_equal dependent, candidate.delivery_owner_for(:sms)
@@ -920,6 +767,24 @@ module Applications
       assert_equal guardian, candidate.email_owner
       assert_equal dependent, candidate.phone_owner
       assert_equal guardian, candidate.address_owner
+    end
+
+    private
+
+    def resolve_recipient(application, **)
+      SecureRequestRecipientResolver.new(application: application, **).resolve.first
+    end
+
+    def guardianship_application(guardian, dependent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      create(:application, user: dependent, managing_guardian: guardian)
+    end
+
+    def create_paper_constituent(**attributes)
+      Current.paper_context = true
+      create(:constituent, **attributes)
+    ensure
+      Current.reset
     end
   end
 end

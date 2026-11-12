@@ -287,7 +287,6 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
       content_type: 'application/pdf'
     )
     mark_document_clean!(application.residency_proof.blob, user: application.user, slot: 'residency_proof')
-    NotificationService.stubs(:create_and_deliver!).returns(true)
 
     result = ProofReviewService.new(application, @admin, proof_decision_params(application, 'residency').merge({
                                                                                                                  proof_type: 'residency',
@@ -298,11 +297,15 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert result.success?, result.message
     assert_equal 'rejected', application.reload.residency_proof_status
     assert_not application.income_proof.attached?
+    assert_equal true, result.data[:resubmission_delivered]
+    form = SecureRequestForm.residency_proof.find_by!(application: application, recipient: application.user)
+    notification = Notification.find_by!(action: 'proof_resubmission_requested', notifiable: application, recipient: application.user)
+    assert_equal form.id, notification.metadata.fetch('secure_request_form_id')
+    assert_equal result.data.fetch(:proof_review).id, notification.metadata.fetch('proof_review_id')
+    assert_not application.events.exists?(action: 'proof_resubmission_request_failed')
   end
 
   test 'rejecting income then residency and id succeeds after previous rejected proof attachments are purged' do
-    NotificationService.stubs(:create_and_deliver!).returns(true)
-
     assert_difference -> { @application.reload.total_rejections }, 3 do
       perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
         income_result = ProofReviewService.new(@application, @admin, proof_decision_params(@application, 'income').merge({
@@ -311,6 +314,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
                                                                                                                            rejection_reason: 'Income documentation is not acceptable.'
                                                                                                                          })).call
         assert income_result.success?, income_result.message
+        assert_equal true, income_result.data[:resubmission_delivered]
       end
       assert_not @application.reload.income_proof.attached?
 
@@ -321,6 +325,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
                                                                                                                                  rejection_reason: 'Residency documentation is not acceptable.'
                                                                                                                                })).call
         assert residency_result.success?, residency_result.message
+        assert_equal true, residency_result.data[:resubmission_delivered]
       end
       assert_not @application.reload.residency_proof.attached?
 
@@ -331,6 +336,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
                                                                                                                    rejection_reason: 'ID documentation is not acceptable.'
                                                                                                                  })).call
         assert id_result.success?, id_result.message
+        assert_equal true, id_result.data[:resubmission_delivered]
       end
       assert_not @application.reload.id_proof.attached?
     end
@@ -338,6 +344,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_equal 'rejected', @application.income_proof_status
     assert_equal 'rejected', @application.residency_proof_status
     assert_equal 'rejected', @application.id_proof_status
+    assert_not @application.events.exists?(action: 'proof_resubmission_request_failed')
   end
 
   private

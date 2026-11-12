@@ -33,7 +33,7 @@ class Voucher < ApplicationRecord
       .where(
         "issued_at + (INTERVAL '1 month' * ?) - CURRENT_TIMESTAMP <= ? * INTERVAL '1 day'",
         Policy.get('voucher_validity_period_months'),
-        expiration_threshold.to_i
+        expiration_threshold.in_days
       )
   }
 

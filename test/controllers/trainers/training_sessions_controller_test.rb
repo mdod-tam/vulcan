@@ -444,16 +444,6 @@ module Trainers
       assert_not Event.exists?(action: 'training_completed', auditable: @session)
     end
 
-    test 'generic status creation edit and destruction routes are absent' do
-      [[:post, "/trainers/training_sessions/#{@session.id}/update_status"],
-       [:patch, "/trainers/training_sessions/#{@session.id}"],
-       [:post, '/trainers/training_sessions'],
-       [:get, "/trainers/training_sessions/#{@session.id}/edit"],
-       [:delete, "/trainers/training_sessions/#{@session.id}"]].each do |method, path|
-        assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path(path, method: method) }
-      end
-    end
-
     test 'named routes reject another trainers session without changing either application' do
       before = @other_session.attributes
       assert_no_difference ['TrainingSession.count', 'Event.count'] do

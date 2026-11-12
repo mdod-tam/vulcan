@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
-require_relative 'paper_applications_test_helper'
 require Rails.root.join('test/support/system_test_evidence')
 
 module Admin
@@ -275,13 +274,9 @@ module Admin
       complete_paper_application_attestations
     end
 
-    # These overrides require the rendered sections to be visible without DOM changes.
+    # Identity-review retries must restore this branch without selecting Create New again.
     def reveal_adult_application_sections
       assert_selector '#self-info-section', visible: true
-    end
-
-    def reveal_paper_application_common_sections
-      assert_selector '#proof-heading', visible: true
     end
 
     def uploaded_ids

@@ -92,3 +92,26 @@ jobs:
         
       - name: Run Rails tests
         run: bin/rails test
+
+      - name: Run browser lifecycle tests
+        env:
+          SYSTEM_TEST_WORKERS: '1'
+          CHROME_NO_SANDBOX: 'true'
+          RAILS_SYSTEM_TESTING_SCREENSHOT_HTML: '1'
+        run: bin/rails test test/system/lifecycles
+
+      - name: Upload browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-diagnostics
+          path: tmp/capybara/
+          if-no-files-found: ignore
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: log/test*.log
+          if-no-files-found: ignore

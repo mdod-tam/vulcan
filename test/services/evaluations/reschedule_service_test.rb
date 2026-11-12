@@ -104,15 +104,35 @@ module Evaluations
       assert_equal 'completed', @evaluation.reload.status
     end
 
-    test 'requires future rescheduled time' do
-      result = RescheduleService.new(
-        @evaluation,
-        @evaluator,
-        { evaluation_date: 1.day.ago, location: 'Library', reschedule_reason: 'Backdate attempt' }
-      ).call
+    test 'missing malformed and nonfuture reschedule fields leave the appointment and its history unchanged' do
+      original = @evaluation.attributes
+      freeze_time do
+        required = 'evaluation_date and reschedule_reason are required'
+        future = 'evaluation_date must be in the future'
+        invalid = 'evaluation_date must be a valid date/time'
+        cases = [
+          [nil, 'Retry', required, { evaluation_date: ['is required'] }],
+          [3.days.from_now, '', required, { reschedule_reason: ['is required'] }],
+          ['', '', required, { evaluation_date: ['is required'], reschedule_reason: ['is required'] }],
+          ['not-a-date', 'Retry', invalid, { evaluation_date: ['must be a valid date/time'] }],
+          [Time.current, 'Retry', future, { evaluation_date: ['must be in the future'] }],
+          [1.day.ago, 'Retry', future, { evaluation_date: ['must be in the future'] }]
+        ]
+        cases.each do |date, reason, message, errors|
+          evaluation = Evaluation.find(@evaluation.id)
+          assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
+            result = RescheduleService.new(
+              evaluation, @evaluator,
+              { evaluation_date: date, location: 'Proposed location', reschedule_reason: reason }
+            ).call
 
-      assert result.failure?
-      assert_equal 'evaluation_date must be in the future', result.message
+            assert_predicate result, :failure?
+            assert_equal message, result.message
+          end
+          assert_equal errors, evaluation.errors.to_hash
+          assert_equal original, @evaluation.reload.attributes
+        end
+      end
     end
 
     test 'stale reschedule cannot change a completed report appointment date or location' do

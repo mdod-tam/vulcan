@@ -63,7 +63,7 @@ module Users
 
     private
 
-    # A constituent's disabilities are checked once they have an application, or when intake asks for the check.
+    # Draft intake may omit disability; submitted applications and explicit intake still require it.
     def must_have_disability
       errors.add(:base, :disability_required) unless disability_selected?
     end
@@ -71,7 +71,7 @@ module Users
     def validate_disability?
       return false if new_record? && !require_disability_selection
 
-      applications.exists? || require_disability_selection
+      applications.submitted.exists? || require_disability_selection
     end
 
     # Contact details cannot be cleared outside paper intake unless another route still reaches the constituent.

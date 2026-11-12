@@ -5,6 +5,7 @@ require 'test_helper'
 module ConstituentPortal
   class ApplicationsDisabilityTest < ActionDispatch::IntegrationTest
     include AuthenticationTestHelper
+    include AutosaveTestHelper
 
     setup do
       # FPL policies drive the income validation.
@@ -55,25 +56,11 @@ module ConstituentPortal
       assert_match(/At least one disability must be selected/, response.body)
     end
 
-    test 'should create application when submitting with one disability' do
-      @application_params[:application][:hearing_disability] = '1'
-
-      assert_difference 'Application.count', 1 do
-        post constituent_portal_applications_path, params: @application_params.merge(submit_application: true)
-      end
-
-      assert_redirected_to constituent_portal_application_path(Application.last)
-      assert @constituent.reload.hearing_disability
-      assert_equal 'in_progress', Application.last.status
-    end
-
     test 'should create application when submitting with multiple disabilities' do
-      @application_params[:application][:hearing_disability] = '1'
-      @application_params[:application][:vision_disability] = '1'
-      @application_params[:application][:mobility_disability] = '1'
+      params = submission_params(hearing_disability: '1', vision_disability: '1', mobility_disability: '1')
 
       assert_difference 'Application.count', 1 do
-        post constituent_portal_applications_path, params: @application_params.merge(submit_application: true)
+        post constituent_portal_applications_path, params: params
       end
 
       assert_redirected_to constituent_portal_application_path(Application.last)
@@ -92,30 +79,35 @@ module ConstituentPortal
       assert_equal 'draft', Application.last.status
     end
 
+    test 'an autosaved draft accepts a full save without disabilities but still refuses final submission' do
+      patch autosave_field_constituent_portal_applications_path,
+            params: { **autosave_metadata(actor: @constituent), field_name: 'application[household_size]', field_value: '2' },
+            as: :json
+      assert_response :success
+      draft = @constituent.applications.sole
+
+      post constituent_portal_applications_path,
+           params: @application_params.merge(autosave_metadata(actor: @constituent), save_draft: 'Save Application')
+
+      assert_redirected_to constituent_portal_application_path(draft)
+      assert_equal [draft.id], @constituent.applications.pluck(:id), 'The full save must resume its autosaved draft'
+      assert_equal 'draft', draft.reload.status
+      assert_not @constituent.reload.disability_selected?
+
+      put constituent_portal_application_path(draft),
+          params: @application_params.merge(autosave_metadata(actor: @constituent), submit_application: true)
+
+      assert_response :unprocessable_content
+      assert_match(/At least one disability must be selected/, response.body)
+      assert_equal 'draft', draft.reload.status
+    end
+
     test 'should update application when adding disabilities' do
       post constituent_portal_applications_path, params: @application_params
       application = Application.last
 
-      put constituent_portal_application_path(application), params: {
-        application: {
-          hearing_disability: '1',
-          vision_disability: '1',
-          maryland_resident: '1',
-          household_size: 2,
-          annual_income: '50000',
-          self_certify_disability: '1',
-          certifying_professional_attributes: {
-            name: 'Dr. Smith',
-            phone: '555-123-4567',
-            email: 'dr.smith@example.com'
-          },
-          **proof_receipts,
-          terms_accepted: '1',
-          information_verified: '1',
-          disability_information_release_authorized: '1'
-        },
-        submit_application: true
-      }
+      put constituent_portal_application_path(application),
+          params: submission_params(annual_income: '50000', hearing_disability: '1', vision_disability: '1', **proof_receipts)
 
       assert_redirected_to constituent_portal_application_path(application)
       assert @constituent.reload.hearing_disability
@@ -140,18 +132,17 @@ module ConstituentPortal
           cognition_disability: disability_type == :cognition
         )
 
-        params = @application_params.deep_dup
-        params[:application].merge!(proof_receipts(user: constituent))
-        params[:application]["#{disability_type}_disability"] = '1'
+        params = submission_params(**proof_receipts(user: constituent), "#{disability_type}_disability": '1')
 
         assert_difference 'Application.count', 1 do
-          post constituent_portal_applications_path, params: params.merge(submit_application: true)
+          post constituent_portal_applications_path, params: params
         end
 
         created_application = constituent.applications.order(created_at: :desc).first
         assert_redirected_to constituent_portal_application_path(created_application)
         assert constituent.reload.send("#{disability_type}_disability"),
                "#{disability_type}_disability should be true after submission"
+        assert_equal 'in_progress', created_application.reload.status, disability_type.to_s
       end
     end
 
@@ -160,46 +151,8 @@ module ConstituentPortal
       application = Application.last
       assert_equal 'draft', application.status
 
-      put constituent_portal_application_path(application), params: {
-        application: {
-          household_size: 3,
-          maryland_resident: '1',
-          annual_income: '50000',
-          self_certify_disability: '1',
-          certifying_professional_attributes: {
-            name: 'Dr. Smith',
-            phone: '555-123-4567',
-            email: 'dr.smith@example.com'
-          },
-          terms_accepted: '1',
-          information_verified: '1',
-          disability_information_release_authorized: '1'
-        },
-        submit_application: true
-      }
-
-      assert_response :unprocessable_content
-      assert_match(/At least one disability must be selected/, response.body)
-
-      put constituent_portal_application_path(application), params: {
-        application: {
-          household_size: 3,
-          maryland_resident: '1',
-          annual_income: '50000',
-          self_certify_disability: '1',
-          cognition_disability: '1',
-          certifying_professional_attributes: {
-            name: 'Dr. Smith',
-            phone: '555-123-4567',
-            email: 'dr.smith@example.com'
-          },
-          **proof_receipts,
-          terms_accepted: '1',
-          information_verified: '1',
-          disability_information_release_authorized: '1'
-        },
-        submit_application: true
-      }
+      put constituent_portal_application_path(application),
+          params: submission_params(household_size: 3, annual_income: '50000', cognition_disability: '1', **proof_receipts)
 
       assert_redirected_to constituent_portal_application_path(application)
       assert @constituent.reload.cognition_disability
@@ -207,6 +160,10 @@ module ConstituentPortal
     end
 
     private
+
+    def submission_params(**attributes)
+      { application: @application_params.fetch(:application).merge(attributes), submit_application: true }
+    end
 
     def proof_receipts(user: @constituent)
       %i[income_proof residency_proof].to_h do |slot|

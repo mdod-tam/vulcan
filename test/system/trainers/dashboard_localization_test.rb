@@ -40,7 +40,7 @@ module Trainers
       assert_selector 'table[aria-labelledby="activity-history-heading"] th', text: /Detalles/i
       assert_text 'Capacitación programada'
       assert_no_text 'PRIVATE ACTIVITY SENTINEL'
-      assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth'), 'The narrow dashboard overflows horizontally.'
+      assert_no_horizontal_overflow
       take_screenshot('trainer-dashboard-spanish-counts-and-overdue-narrow', html: true, full: true)
 
       region = find('div[role=region][data-activity-history-scroll][tabindex="0"]')
@@ -72,7 +72,7 @@ module Trainers
       assert_text 'No hay sesiones pendientes de programación.'
       assert_text 'Aún no se ha registrado actividad.'
       assert_no_text 'No activity has been recorded yet.'
-      assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth')
+      assert_no_horizontal_overflow
       take_screenshot('trainer-dashboard-spanish-empty-activity-narrow', html: true, full: true)
     ensure
       page.current_window.resize_to(1200, 900)

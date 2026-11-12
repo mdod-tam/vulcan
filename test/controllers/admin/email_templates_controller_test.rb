@@ -482,6 +482,28 @@ module Admin
       assert_includes response.body, 'Draft Sample Name'
       assert_includes response.body, 'Draft body Sample Name'
       assert_includes response.body, 'Preview uses sample data and does not save changes.'
+
+      original = template.reload.attributes
+      assert_no_difference ['EmailTemplate.count', 'Event.count'] do
+        patch preview_admin_email_template_path(template), headers: default_headers.merge('Turbo-Frame' => 'template-preview-en'), params: {
+          locale: 'es', email_template: { subject: 'Draft {{ name }}', body: 'Draft body {{ name }}', syntax: 'liquid' }
+        }
+        assert_response :unprocessable_content
+        assert_select 'turbo-frame#template-preview-en [role="alert"]', text: 'Could not find this locale template for preview.'
+        assert_equal original, template.reload.attributes
+
+        sentinel = 'private diagnostic person@example.test token=secret'
+        EmailTemplates::SampleData.expects(:for_template).once.raises(StandardError, sentinel)
+        patch preview_admin_email_template_path(template), headers: default_headers.merge('Turbo-Frame' => 'template-preview-en'), params: {
+          locale: 'en', email_template: { subject: 'Draft {{ name }}', body: 'Draft body {{ name }}', syntax: 'liquid' }
+        }
+        assert_response :unprocessable_content
+        assert_select 'turbo-frame#template-preview-en [role="alert"]',
+                      text: 'This template could not be previewed. Check the placeholders and try again.'
+        assert_not_includes response.body, sentinel
+        assert_not_includes response.body, 'person@example.test'
+        assert_equal original, template.reload.attributes
+      end
     end
 
     test 'preview returns friendly placeholder error for invalid Liquid draft' do
@@ -921,6 +943,7 @@ module Admin
     end
 
     test 'a test send follows the template category and says why it was not sent' do
+      ensure_system_audit_actor!
       en, = template_pair('voucher_notifications_voucher_assigned')
       EmailDelivery::ControlWriter.set(name: EmailDelivery.category_control('voucher'), enabled: false, actor: @admin,
                                        operation_id: 'op-1')

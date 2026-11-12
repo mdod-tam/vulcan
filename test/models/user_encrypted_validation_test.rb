@@ -42,10 +42,12 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
     assert_equal attrs[:phone], user.phone
     assert_equal attrs[:ssn_last4], user.ssn_last4
 
-    if data_encrypted_in_database?(user)
-      puts 'At least one raw contact column differs from its readable attribute value'
-    else
-      puts 'Raw contact comparison did not establish a storage difference'
+    if TestOutput.verbose?
+      if data_encrypted_in_database?(user)
+        puts 'At least one raw contact column differs from its readable attribute value'
+      else
+        puts 'Raw contact comparison did not establish a storage difference'
+      end
     end
   end
 
@@ -172,7 +174,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
     assert_equal false, Rails.application.config.active_record.encryption.support_unencrypted_data,
                  'Encrypted attributes must reject plaintext storage values'
 
-    puts 'Encryption configuration verified'
+    puts 'Encryption configuration verified' if TestOutput.verbose?
   end
 
   test 'declares the expected encrypted attributes' do
@@ -184,7 +186,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
       assert_includes encrypted_attrs, attr, "#{attr} should be declared as encrypted"
     end
 
-    puts "All expected attributes declared as encrypted: #{encrypted_attrs.join(', ')}"
+    puts "All expected attributes declared as encrypted: #{encrypted_attrs.join(', ')}" if TestOutput.verbose?
   end
 
   test 'encrypted data is queryable with standard Rails methods' do
@@ -241,7 +243,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
       User.exists_with_phone?(attrs[:phone])
     end
 
-    puts 'Email and phone queries completed without raising'
+    puts 'Email and phone queries completed without raising' if TestOutput.verbose?
   end
 
   test 'nil and blank profile values remain accessible' do

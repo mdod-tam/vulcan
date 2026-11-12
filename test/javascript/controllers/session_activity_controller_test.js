@@ -26,13 +26,13 @@ const messages = {
 
 describe("signed-in form session activity", () => {
   let application, controller, host, serverDeadlines
-  const state = ({ idle = 30, absolute = 24 * 60 } = {}) => ({
+  const state = ({ idle = 120, absolute = 24 * 60 } = {}) => ({
     idle_expires_at: new Date(Date.now() + idle * minute).toISOString(),
     absolute_expires_at: new Date(Date.now() + absolute * minute).toISOString(),
     issued_at: new Date().toISOString()
   })
 
-  const render = async ({ idle = 30, absolute = 24 * 60, locale = "en" } = {}) => {
+  const render = async ({ idle = 120, absolute = 24 * 60, locale = "en" } = {}) => {
     const initial = state({ idle, absolute })
     serverDeadlines = initial
     document.body.innerHTML = `<div data-controller="session-activity"
@@ -59,7 +59,7 @@ describe("signed-in form session activity", () => {
     jest.setSystemTime(new Date("2026-10-23T12:00:00Z"))
     railsRequest.perform.mockReset()
     railsRequest.perform.mockImplementation(async ({ method }) => {
-      if (method === "post") serverDeadlines.idle_expires_at = new Date(Date.now() + 30 * minute).toISOString()
+      if (method === "post") serverDeadlines.idle_expires_at = new Date(Date.now() + 120 * minute).toISOString()
       return { data: { ...serverDeadlines, issued_at: new Date().toISOString() } }
     })
   })
@@ -73,7 +73,7 @@ describe("signed-in form session activity", () => {
 
   test("timers and synthetic input never renew a session", async () => {
     await render()
-    jest.advanceTimersByTime(26 * minute)
+    jest.advanceTimersByTime(116 * minute)
     document.querySelector("input").dispatchEvent(new Event("input", { bubbles: true }))
     await flush()
     expect(posts()).toHaveLength(0)
@@ -88,7 +88,7 @@ describe("signed-in form session activity", () => {
     expect(status).toBeEmptyDOMElement()
     expect(controller.noticeTarget.hidden).toBe(true)
 
-    jest.advanceTimersByTime(26 * minute)
+    jest.advanceTimersByTime(116 * minute)
     await flush()
     expect(document.querySelector('[role="status"]')).toBe(status)
     expect(status.textContent).toBe(messages.en.idle_other.replace("%{minutes}", "4"))
@@ -140,7 +140,7 @@ describe("signed-in form session activity", () => {
     expect(controller.noticeTarget.hidden).toBe(false)
     jest.advanceTimersByTime(2 * minute)
     await flush()
-    serverDeadlines.idle_expires_at = new Date(Date.now() + 30 * minute).toISOString()
+    serverDeadlines.idle_expires_at = new Date(Date.now() + 120 * minute).toISOString()
     controller.checkStatus()
     await flush()
     expect(controller.noticeTarget.hidden).toBe(true)

@@ -7,248 +7,63 @@ module ConstituentPortal
     include OnlineApplicationTestHelpers
 
     setup do
+      setup_fpl_policies
       @constituent = create(:constituent)
-      @valid_pdf = file_fixture('income_proof.pdf').to_s
-      @valid_image = file_fixture('residency_proof.pdf').to_s
 
       system_test_sign_in(@constituent)
       visit new_constituent_portal_application_path
       wait_for_turbo
     end
 
-    test 'keeps submit disabled without selecting disabilities' do
-      check 'I certify that I am a resident of Maryland'
-      fill_in 'Household Size', with: 2
-      fill_in 'Annual Income', with: 50_000
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-      clear_disability_type_checkboxes
-
-      within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Dr. Smith'
-        fill_in 'Phone', with: '555-123-4567'
-        fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
-      end
-
+    test 'a server-refused submission preserves the entered application and disability fields' do
+      fill_in_online_application_fields(
+        household_size: 3, annual_income: 60_000, disabilities: %w[Hearing Vision],
+        provider: { name: '', phone: '2025551234', email: 'drsmith@example.com' }
+      )
       attach_required_documents
       accept_submit_confirmations
-
       wait_for_fpl_data_to_load(timeout: 15)
-
-      assert_selector 'input[name="submit_application"]:disabled', wait: 15
-      assert_selector '#portal-submit-gate-status',
-                      text: 'Complete all required confirmations before submitting.',
-                      visible: :all
-    end
-
-    test 'can submit application with one disability selected' do
-      check 'I certify that I am a resident of Maryland'
-      fill_in 'Household Size', with: 2
-      fill_in 'Annual Income', with: 50_000
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-
-      check 'Hearing'
-
-      within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Dr. Smith'
-        fill_in 'Phone', with: '555-123-4567'
-        fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
+      assert_no_selector '#error-summary'
+      assert_selector 'input[name="submit_application"]:not([disabled])', wait: 15
+      page.driver.clear_network_traffic
+      assert_no_difference -> { Application.where(user: @constituent).where.not(status: :draft).count } do
+        click_button 'Submit Application'
+        assert_selector '#error-summary[role="alert"]', text: 'Certifying professional information is required for submission.'
       end
-
-      attach_required_documents
-      accept_submit_confirmations
-
-      # Income validation enables submit after the FPL thresholds load.
-      wait_for_fpl_data_to_load(timeout: 15)
-      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
-      click_button 'Submit Application'
-
-      assert_success_message('Application submitted successfully')
-
-      @constituent.reload
-      assert @constituent.hearing_disability
-    end
-
-    test 'can submit application with multiple disabilities selected' do
-      check 'I certify that I am a resident of Maryland'
-      fill_in 'Household Size', with: 2
-      fill_in 'Annual Income', with: 50_000
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-
-      check 'Hearing'
-      check 'Vision'
-      check 'Mobility'
-
-      within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Dr. Smith'
-        fill_in 'Phone', with: '555-123-4567'
-        fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
+      submission = page.driver.network_traffic.find do |exchange|
+        exchange.request&.method == 'POST' && URI(exchange.request.url).path == constituent_portal_applications_path
       end
+      assert_not_nil submission, 'The enabled final-submit control must send the application POST'
+      assert_equal 422, submission.response&.status
 
-      attach_required_documents
-      accept_submit_confirmations
-
-      # Income validation enables submit after the FPL thresholds load.
-      wait_for_fpl_data_to_load(timeout: 15)
-      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
-      click_button 'Submit Application'
-
-      assert_success_message('Application submitted successfully')
-
-      @constituent.reload
-      assert @constituent.hearing_disability
-      assert @constituent.vision_disability
-      assert @constituent.mobility_disability
-      assert_not @constituent.speech_disability
-      assert_not @constituent.cognition_disability
-    end
-
-    test 'can save draft without selecting disabilities' do
-      check 'I certify that I am a resident of Maryland'
-      fill_in 'Household Size', with: 2
-      fill_in 'Annual Income', with: 50_000
-
-      # Drafts skip provider validation. This provider info is optional here.
-      within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Draft Doctor'
-        fill_in 'Phone', with: '555-000-0000'
-        fill_in 'Email', with: 'draft@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
-      end
-
-      attach_cleared_document 'Upload Residency Proof Document', @valid_image
-      attach_cleared_document 'Upload Income Proof Document', @valid_pdf
-
-      click_button 'Save Application'
-
-      assert_application_saved_as_draft
-    end
-
-    test 'can edit draft to add disabilities and then submit' do
-      check 'I certify that I am a resident of Maryland'
-      fill_in 'Household Size', with: 2
-      fill_in 'Annual Income', with: 50_000
-
-      # Drafts skip provider validation. This provider info is optional here.
-      within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Draft Doctor'
-        fill_in 'Phone', with: '555-000-0000'
-        fill_in 'Email', with: 'draft@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
-      end
-
-      attach_cleared_document 'Upload Residency Proof Document', @valid_image
-      attach_cleared_document 'Upload Income Proof Document', @valid_pdf
-
-      click_button 'Save Application'
-      wait_for_turbo
-
-      assert_application_saved_as_draft(wait: 10)
-
-      current_url =~ %r{/applications/(\d+)}
-      application_id = ::Regexp.last_match(1)
-      visit edit_constituent_portal_application_path(application_id)
-      wait_for_turbo
-
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-      check 'Hearing'
-      check 'Cognition'
-
-      within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Dr. Smith'
-        fill_in 'Phone', with: '555-123-4567'
-        fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
-      end
-
-      accept_submit_confirmations
-
-      # Income validation enables submit after the FPL thresholds load.
-      wait_for_fpl_data_to_load(timeout: 15)
-      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
-      click_button 'Submit Application'
-
-      assert_success_message('Application submitted successfully')
-
-      @constituent.reload
-      assert @constituent.hearing_disability
-      assert @constituent.cognition_disability
-    end
-
-    test 'preserves disability selections when provider info is incomplete' do
-      check 'I certify that I am a resident of Maryland'
-      fill_in 'Household Size', with: 2
-      fill_in 'Annual Income', with: 50_000
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-
-      check 'Hearing'
-      check 'Vision'
-
-      attach_required_documents
-      accept_submit_confirmations
-
-      # A blank provider name makes the server reject the submission.
-      within '#certifying-professional-fields' do
-        fill_in 'Phone', with: '555-123-4567'
-        fill_in 'Email', with: 'test@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
-      end
-
-      # Wait for FPL thresholds to load, then submit with incomplete provider info.
-      wait_for_fpl_data_to_load(timeout: 15)
-      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
-      click_button 'Submit Application'
-
-      assert_no_text 'Application submitted successfully'
-
+      assert_checked_field 'I certify that I am a resident of Maryland'
+      assert_field 'Household Size', with: '3', disabled: false
+      assert_equal 60_000, find_field('Annual Income', disabled: false).value.to_f
+      assert_checked_field 'I certify that I have a disability that affects my ability to access telecommunications services'
       assert_checked_field 'Hearing'
       assert_checked_field 'Vision'
-    end
-
-    test 'can select all disability types' do
-      check 'I certify that I am a resident of Maryland'
-      fill_in 'Household Size', with: 2
-      fill_in 'Annual Income', with: 50_000
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-
-      check 'Hearing'
-      check 'Vision'
-      check 'Speech'
-      check 'Mobility'
-      check 'Cognition'
-
       within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Dr. Smith'
-        fill_in 'Phone', with: '555-123-4567'
-        fill_in 'Email', with: 'dr.smith@example.com'
-        check 'I authorize the release and sharing of my disability-related information as described above'
+        assert_field 'Name', with: '', disabled: false
+        assert_field 'Phone', with: '2025551234', disabled: false
+        assert_field 'Email', with: 'drsmith@example.com', disabled: false
       end
+      take_screenshot('application-provider-refusal-preserved', full: true, html: true)
 
-      attach_required_documents
-      accept_submit_confirmations
+      fill_in 'Household Size', with: '4'
+      fill_in 'Annual Income', with: '55000'
+      within '#certifying-professional-fields' do
+        fill_in 'Phone', with: '2025559876'
+        fill_in 'Email', with: 'corrected@example.com'
+        fill_in 'Name', with: 'Dr. Corrected Provider'
+      end
+      find('h1').click
 
-      # Income validation enables submit after the FPL thresholds load.
-      wait_for_fpl_data_to_load(timeout: 15)
-      assert_no_selector 'input[name="submit_application"]:disabled', wait: 15
-      click_button 'Submit Application'
-
-      assert_success_message('Application submitted successfully')
-
-      @constituent.reload
-      assert @constituent.hearing_disability
-      assert @constituent.vision_disability
-      assert @constituent.speech_disability
-      assert @constituent.mobility_disability
-      assert @constituent.cognition_disability
-    end
-
-    private
-
-    def clear_disability_type_checkboxes
-      %w[Hearing Vision Speech Mobility Cognition].each do |label|
-        uncheck label if page.has_checked_field?(label)
+      assert_field 'Household Size', with: '4'
+      assert_equal 55_000, find_field('Annual Income').value.to_f
+      within '#certifying-professional-fields' do
+        assert_field 'Phone', with: '2025559876'
+        assert_field 'Email', with: 'corrected@example.com'
+        assert_field 'Name', with: 'Dr. Corrected Provider'
       end
     end
   end

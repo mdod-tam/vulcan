@@ -61,131 +61,12 @@ module Admin
     end
 
     test 'admin can see all rejection reasons when rejecting income proof' do
-      # Page and authentication diagnostics.
       system_test_sign_in(@admin, bypass_mfa_enrollment: true)
-
-      puts '=== AUTHENTICATION DEBUG AFTER SIGN IN ==='
-      puts "Current.user after sign in: #{Current.user&.id}"
-      puts "Current path after sign in: #{current_path}"
-
       visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
-      assert_selector '#attachments-section', wait: 20
-
-      puts '=== AUTHENTICATION DEBUG AFTER NAVIGATION ==='
-      puts "Current.user after navigation: #{Current.user&.id}"
-      puts "Current path after navigation: #{current_path}"
-      puts "Current URL: #{current_url}"
-
-      if current_path == sign_in_path
-        puts 'REDIRECTED TO SIGN-IN PAGE - AUTHENTICATION LOST'
-        flunk 'Authentication was lost after navigation - redirected to sign-in page'
-      end
-
-      @application.reload
-      puts '=== APPLICATION DEBUG INFO ==='
-      puts "Application ID: #{@application.id}"
-      puts "Application Status: #{@application.status}"
-      puts "Income proof attached: #{@application.income_proof.attached?}"
-      puts "Residency proof attached: #{@application.residency_proof.attached?}"
-      puts "Income proof status: #{@application.income_proof_status}"
-      puts "User type: #{@application.user.type}"
-      puts "Admin authenticated: #{Current.user&.id}"
-
-      take_screenshot('basic_page_load_debug')
-
-      page_html = page.html
-      puts '=== PAGE HTML DEBUG ==='
-      puts "HTML length: #{page_html.length}"
-      puts "Contains <html>: #{page_html.include?('<html>')}"
-      puts "Contains <body>: #{page_html.include?('<body>')}"
-      puts "Contains 'Application': #{page_html.include?('Application')}"
-      puts "Page title from HTML: #{page_html.match(%r{<title>(.*?)</title>})&.captures&.first}"
-      puts "Body content preview: #{page_html.match(%r{<body[^>]*>(.*?)</body>}m)&.captures&.first&.[](0, 200)}"
-
-      # DOM timing diagnostics.
-      puts '=== DEEP DOM TIMING ANALYSIS ==='
-
-      ready_state = page.evaluate_script('document.readyState')
-      puts "Document ready state: #{ready_state}"
-
-      has_turbo = page.evaluate_script('typeof Turbo !== "undefined"')
-      puts "Turbo available: #{has_turbo}"
-
-      if has_turbo
-        turbo_loaded = begin
-          page.evaluate_script('Turbo.session ? "loaded" : "not loaded"')
-        rescue StandardError
-          'error'
-        end
-        puts "Turbo session state: #{turbo_loaded}"
-      end
-
-      full_html = page.evaluate_script('document.documentElement.outerHTML')
-      puts "Full HTML from JS length: #{full_html.length}"
-      puts "Full HTML contains <html>: #{full_html.include?('<html>')}"
-      puts "Full HTML contains <body>: #{full_html.include?('<body>')}"
-
-      puts "Capybara HTML length: #{page_html.length}"
-      puts "JavaScript HTML length: #{full_html.length}"
-      puts "Length difference: #{full_html.length - page_html.length}"
-
-      h1_count_js = page.evaluate_script('document.querySelectorAll("h1").length')
-      puts "H1 elements via JavaScript: #{h1_count_js}"
-
-      has_application_h1 = page.evaluate_script('Array.from(document.querySelectorAll("h1")).some(h => h.textContent.includes("Application"))')
-      puts "Has Application h1 via JavaScript: #{has_application_h1}"
-
-      stylesheets_loaded = page.evaluate_script('document.styleSheets.length')
-      puts "Stylesheets loaded: #{stylesheets_loaded}"
-
-      begin
-        performance_entries = page.evaluate_script('performance.getEntriesByType("navigation").length')
-        puts "Performance navigation entries: #{performance_entries}"
-      rescue StandardError => e
-        puts "Performance API error: #{e.message}"
-      end
-
-      if page_html.include?('We\'re sorry, but something went wrong') ||
-         page_html.include?('The page you were looking for doesn\'t exist') ||
-         page_html.include?('500 Internal Server Error') ||
-         page_html.include?('404 Not Found')
-        puts 'RAILS ERROR DETECTED IN PAGE'
-        puts "Error page HTML: #{page_html[0, 1000]}"
-        flunk 'Rails error detected on page'
-      end
-
-      h1_elements = all('h1', wait: 10)
-      puts "Found #{h1_elements.count} h1 elements"
-      h1_elements.each_with_index do |h1, i|
-        puts "  H1 #{i}: '#{h1.text}'"
-      end
-
-      body_elements = all('body', wait: 2)
-      puts "Found #{body_elements.count} body elements"
-
-      div_elements = all('div', wait: 2)
-      puts "Found #{div_elements.count} div elements"
-
-      if h1_elements.empty?
-        puts 'No H1 elements found - page may not have loaded properly'
-        puts 'Trying to find ANY text content...'
-        if page.has_text?('Application', wait: 2)
-          puts "Found 'Application' text on page"
-        else
-          puts "No 'Application' text found"
-        end
-        flunk 'No H1 elements found on page'
-      end
-
       assert_selector 'h1', text: /Application.*Details/i, count: 1, wait: 15
 
       assert_selector '#attachments-section', count: 1, wait: 15
-      click_review_proof_and_wait('income', timeout: 15)
-
-      within('#incomeProofReviewModal') do
-        assert_selector('button', text: 'Reject')
-        click_button 'Reject'
-      end
+      open_proof_rejection_modal('income', timeout: 15)
 
       within('#proofRejectionModal') do
         assert_selector('#rejection-proof-type', visible: false)
@@ -221,12 +102,7 @@ module Admin
 
       assert_selector 'button[data-modal-id="residencyProofReviewModal"]', count: 1, wait: 15
 
-      click_review_proof_and_wait('residency', timeout: 15)
-
-      within('#residencyProofReviewModal') do
-        assert_selector('button', text: 'Reject')
-        click_button 'Reject'
-      end
+      open_proof_rejection_modal('residency', timeout: 15)
 
       within('#proofRejectionModal') do
         assert_selector('#rejection-proof-type', visible: false, wait: 15)
@@ -258,13 +134,7 @@ module Admin
 
       assert_selector 'button[data-modal-id="incomeProofReviewModal"]', count: 1, wait: 15
 
-      click_review_proof_and_wait('income', timeout: 15)
-
-      within('#incomeProofReviewModal') do
-        click_button 'Reject'
-      end
-
-      wait_for_modal_open('proofRejectionModal', timeout: 10)
+      open_proof_rejection_modal('income', timeout: 15)
 
       within('#proofRejectionModal') do
         click_modal_button("button[data-reason-code='missing_name']")
@@ -292,13 +162,7 @@ module Admin
       visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', wait: 30
 
-      click_review_proof_and_wait('income', timeout: 15)
-
-      within('#incomeProofReviewModal') do
-        click_button 'Reject'
-      end
-
-      wait_for_modal_open('proofRejectionModal', timeout: 10)
+      open_proof_rejection_modal('income', timeout: 15)
 
       within('#proofRejectionModal') do
         click_modal_button("[data-rejection-form-target='generalReasons'] button[aria-label='Enter a custom rejection reason']")
@@ -315,9 +179,7 @@ module Admin
       visit_admin_application_with_retry(@application, user: @admin, bypass_mfa_enrollment: true)
       assert_selector '#attachments-section', wait: 20
 
-      click_review_proof_and_wait('income', timeout: 15)
-      within('#incomeProofReviewModal') { click_button 'Reject' }
-      wait_for_modal_open('proofRejectionModal', timeout: 10)
+      open_proof_rejection_modal('income', timeout: 15)
 
       within('#proofRejectionModal') do
         click_modal_button("button[data-reason-code='missing_name']")

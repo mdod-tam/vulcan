@@ -15,6 +15,22 @@ module VendorPortal
       sign_in_for_integration_test(@vendor, bypass_mfa_enrollment: true)
     end
 
+    test 'an authenticated non-vendor receives the appropriate refusal for HTML JSON and other formats' do
+      sign_in_for_integration_test(create(:constituent))
+
+      get vendor_portal_dashboard_path
+      assert_redirected_to root_path
+      assert_equal I18n.t('alerts.must_be_vendor', locale: :en), flash[:alert]
+
+      get vendor_portal_dashboard_path, headers: { 'Accept' => 'application/json' }
+      assert_response :unauthorized
+      assert_equal({ 'error' => 'Unauthorized. Vendor access required.' }, response.parsed_body)
+
+      get vendor_portal_dashboard_path, headers: { 'Accept' => 'application/xml' }
+      assert_response :unauthorized
+      assert_empty response.body
+    end
+
     def test_get_show
       get vendor_portal_dashboard_path
       assert_response :success

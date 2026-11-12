@@ -114,13 +114,13 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       session_record = @user.sessions.last
       absolute_expiry = session_record.expires_at
 
-      travel 29.minutes
+      travel Session::IDLE_TIMEOUT - 1.minute
       get edit_profile_path
       assert_response :success
       assert_equal Time.current, session_record.reload.last_active_at
       assert_equal absolute_expiry, session_record.expires_at
 
-      travel 30.minutes
+      travel Session::IDLE_TIMEOUT
       get edit_profile_path
       assert_redirected_to sign_in_path
       assert_equal 'Your session expired; please sign in again.', flash[:alert]
@@ -134,7 +134,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       session_record = @user.sessions.last
       absolute_expiry = session_record.expires_at
 
-      travel 29.minutes
+      travel Session::IDLE_TIMEOUT - 1.minute
       post '/session_activity', as: :json
       assert_response :success
       assert_equal Time.current, session_record.reload.last_active_at
@@ -143,7 +143,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       assert_equal absolute_expiry.iso8601, response.parsed_body.fetch('absolute_expires_at')
       assert_includes response.headers['Cache-Control'], 'no-store'
 
-      travel 29.minutes
+      travel Session::IDLE_TIMEOUT - 1.minute
       post '/session_activity', as: :json
       assert_response :success
     end
@@ -157,7 +157,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
         session_record = @user.sessions.last
         session_record.update!(expires_at: 5.minutes.from_now) if deadline == :absolute
         original_activity = session_record.last_active_at
-        travel(deadline == :idle ? 30.minutes : 5.minutes)
+        travel(deadline == :idle ? Session::IDLE_TIMEOUT : 5.minutes)
 
         post '/session_activity', as: :json
         assert_response :unauthorized
@@ -173,7 +173,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       post sign_in_path, params: { email: @user.email, password: 'password1234' }
       session_record = @user.sessions.last
       initial_activity = session_record.last_active_at
-      travel 29.minutes
+      travel Session::IDLE_TIMEOUT - 1.minute
 
       get '/session_activity', as: :json
       assert_response :success
@@ -191,7 +191,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
   test 'expired JSON requests return no-store 401' do
     freeze_time do
       post sign_in_path, params: { email: @user.email, password: 'password1234' }
-      travel 30.minutes
+      travel Session::IDLE_TIMEOUT
 
       get edit_profile_path, as: :json
 
@@ -245,12 +245,12 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       session_record = @user.sessions.last
       initial_activity = session_record.last_active_at
 
-      travel 15.minutes
+      travel Session::IDLE_TIMEOUT / 2
       get '/test/auth_status', as: :json
       assert response.parsed_body.fetch('authenticated')
       assert_equal initial_activity, session_record.reload.last_active_at
 
-      travel 15.minutes
+      travel Session::IDLE_TIMEOUT / 2
       get '/test/auth_status', as: :json
       assert_not response.parsed_body.fetch('authenticated')
       assert_equal initial_activity, session_record.reload.last_active_at
@@ -264,7 +264,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       post sign_in_path, params: { email: @user.email, password: 'password1234' }
       session_record = @user.sessions.last
       initial_activity = session_record.last_active_at
-      travel 29.minutes
+      travel Session::IDLE_TIMEOUT - 1.minute
       get document_scan_path(scan), as: :json
       assert_response :success
       assert_equal initial_activity, session_record.reload.last_active_at
@@ -302,7 +302,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
         freeze_time do
           post sign_in_path, params: { email: @user.email, password: 'password1234' }
           @user.sessions.last.update!(expires_at: 5.minutes.from_now) if deadline == :absolute
-          travel(deadline == :idle ? 30.minutes : 5.minutes)
+          travel(deadline == :idle ? Session::IDLE_TIMEOUT : 5.minutes)
 
           get constituent_portal_dashboard_path
 
@@ -322,7 +322,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
     @user.update!(locale: :es)
     freeze_time do
       post sign_in_path, params: { email: @user.email, password: 'password1234' }
-      travel 30.minutes
+      travel Session::IDLE_TIMEOUT
 
       get constituent_portal_dashboard_path(locale: :en)
 
@@ -352,7 +352,7 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
     @user.update!(locale: :es)
     freeze_time do
       post sign_in_path, params: { email: @user.email, password: 'password1234' }
-      travel 30.minutes
+      travel Session::IDLE_TIMEOUT
 
       get constituent_portal_dashboard_path(locale: 'unsupported')
 

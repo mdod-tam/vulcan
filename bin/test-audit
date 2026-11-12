@@ -1,0 +1,41 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: bin/test-audit [test paths/options]
+# Compare: bin/test-audit --compare tmp/before.json tmp/after.json
+require 'json'
+require 'fileutils'
+
+if ARGV.first == '--compare'
+  ARGV.shift
+  abort 'Usage: bin/test-audit --compare BEFORE.json AFTER.json' unless ARGV.length == 2
+
+  before, after = ARGV.map { |path| JSON.parse(File.read(path)) }
+  summaries = [before, after].map do |report|
+    rows = report['tests']
+    next report.fetch('summary') unless rows
+
+    report.fetch('summary').merge(
+      'failed_tests' => rows.count { |row| (row.fetch('failures') - ['Minitest::Skip']).any? },
+      'skipped_tests' => rows.count { |row| row.fetch('failures').include?('Minitest::Skip') }
+    )
+  end
+  losses = before.fetch('coverage').flat_map do |path, old|
+    current = after.fetch('coverage').fetch(path, { 'lines' => [], 'branches' => [] })
+    old_lines = old.fetch('lines').each_index.select { |index| old['lines'][index].to_i.positive? }
+    new_lines = current.fetch('lines').each_index.select { |index| current['lines'][index].to_i.positive? }
+    old_branches = old.fetch('branches').select { |row| row.last.positive? }.map { |row| row.first(2) }
+    new_branches = current.fetch('branches').select { |row| row.last.positive? }.map { |row| row.first(2) }
+    (old_lines - new_lines).map { |index| "#{path}:#{index + 1} line" } +
+      (old_branches - new_branches).map { |branch| "#{path}:#{branch.inspect} branch" }
+  end
+  successful_runs = summaries.all? { |summary| summary.fetch('failed_tests', 0).zero? }
+  puts JSON.pretty_generate(before: summaries.first, after: summaries.last, successful_runs: successful_runs, lost_coverage: losses)
+  exit 2 unless successful_runs
+  exit(losses.empty? ? 0 : 1)
+end
+
+require_relative 'test_audit'
+
+ARGV.unshift('test')
+load File.expand_path('rails', __dir__)

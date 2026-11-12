@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../../test/support/test_output'
+
 Rails.application.configure do
   config.enable_reloading = false
 
@@ -31,21 +33,7 @@ Rails.application.configure do
 
   config.action_controller.raise_on_missing_callback_actions = true
 
-  config.log_level = :warn unless ENV['VERBOSE_TESTS'] == 'true'
-  config.active_record.verbose_query_logs = ENV['VERBOSE_TESTS'] || false
-
-  config.logger = ActiveSupport::Logger.new($stdout)
-  if ENV['VERBOSE_TESTS']
-    config.logger.level = :debug
-    config.logger.formatter = config.log_formatter
-  else
-    config.logger.level = :warn
-    config.logger.formatter = proc do |severity, _datetime, _progname, msg|
-      if %w[WARN ERROR FATAL].include?(severity)
-        "[#{severity}] #{msg}\n"
-      else
-        ''
-      end
-    end
-  end
+  config.log_level = TestOutput.verbose? ? :debug : :warn
+  config.active_record.verbose_query_logs = TestOutput.verbose?
+  config.logger = TestOutput.configure(root: Rails.root)
 end

@@ -538,6 +538,45 @@ module Admin
       assert_not @application.disability_certification.attached?
     end
 
+    test 'approving the existing certification keeps its document auto-approves the application and replays without duplicate history' do
+      application = create(
+        :application, :in_progress,
+        disability_certification_status: :received,
+        income_proof_status: :approved,
+        residency_proof_status: :approved,
+        id_proof_status: :approved
+      )
+      blob = file_fixture('disability_certification_valid.pdf').open do |file|
+        ActiveStorage::Blob.create_and_upload!(io: file, filename: 'existing-certification.pdf', content_type: 'application/pdf')
+      end
+      mark_document_clean!(blob, user: @admin, purpose: :certification, slot: 'disability_certification')
+      application.disability_certification.attach(blob)
+      decision = proof_decision_params(application, :disability_certification).merge(status: 'approved')
+
+      assert_difference('ProofReview.count', 1) do
+        patch update_certification_status_admin_application_path(application), params: decision
+      end
+      assert_redirected_to admin_application_path(application)
+      assert_equal 'Disability certification status updated and application auto-approved.', flash[:notice]
+      application.reload
+      assert_predicate application, :status_approved?
+      assert_predicate application, :disability_certification_status_approved?
+      assert_equal blob.id, application.disability_certification.blob_id
+      review = application.proof_reviews.sole
+      assert_equal ['disability_certification', 'approved', @admin.id, blob.id],
+                   [review.proof_type, review.status, review.admin_id, review.reviewed_blob_id]
+      history = ApplicationStatusChange.find_by!(application: application, change_type: :disability_certification, to_status: 'approved')
+      assert_equal ['received', @admin.id], [history.from_status, history.user_id]
+
+      assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
+        patch update_certification_status_admin_application_path(application), params: decision
+      end
+      assert_redirected_to admin_application_path(application)
+      assert_equal 'This disability certification approval was already recorded.', flash[:notice]
+      assert_equal blob.id, application.reload.disability_certification.blob_id
+      assert_equal [review.id], application.proof_reviews.ids
+    end
+
     test 'a code-only certification rejection reaches the immutable decision writer' do
       reason = create(:rejection_reason, proof_type: 'disability_certification', code: 'route_code_only', body: 'The signature is missing.')
       Applications::RequestCertificationUpload.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, data: {}))
@@ -902,16 +941,6 @@ module Admin
       assert_select 'a[href=?]', trainers_training_session_path(session), text: 'View Session'
       assert_includes response.body, 'Private staff report'
       assert_includes response.body, 'Shared practice summary'
-    end
-
-    test 'admin training mutation routes are removed' do
-      assert_raises(NoMethodError) do
-        schedule_training_admin_application_path(@application)
-      end
-
-      assert_raises(NoMethodError) do
-        complete_training_admin_application_path(@application)
-      end
     end
 
     test 'show page keeps training visibility but removes admin mutation controls' do

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# rubocop:disable Style/OneClassPerFile -- system test base co-locates helper modules by design.
-
 require 'test_helper'
 require 'json'
 require 'digest'
@@ -115,7 +113,7 @@ module SeedLookupHelpers
     if user.persisted? && !user.is_a?(Users::Vendor)
       needs_update = attributes.any? { |key, value| user.send(key) != value }
       if needs_update
-        debug_puts "Updating existing user #{user.email} with test attributes" if ENV['VERBOSE_TESTS']
+        debug_puts "Updating existing user #{user.email} with test attributes" if TestOutput.verbose?
         attributes.each { |key, value| user.send("#{key}=", value) }
         user.save! if user.changed?
       end
@@ -169,7 +167,7 @@ module SeedLookupHelpers
   end
 
   def debug_puts(msg)
-    puts msg if ENV['VERBOSE_TESTS']
+    puts msg if TestOutput.verbose?
   end
 end
 
@@ -234,7 +232,7 @@ module MemorySafeTestHelpers
   end
 
   def debug_puts(msg)
-    puts msg if ENV['VERBOSE_TESTS']
+    puts msg if TestOutput.verbose?
   end
 end
 
@@ -377,10 +375,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
     @capturing_browser_recovery_diagnostics = true
     detail = error ? "#{reason}: #{error.class} - #{error.message}" : reason
-    puts "Capturing browser diagnostics before recovery: #{detail}" if ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+    puts "Capturing browser diagnostics before recovery: #{detail}" if TestOutput.verbose? || ENV['DEBUG_BROWSER']
     take_screenshot("recovery-#{reason}", html: true)
   rescue StandardError => e
-    puts "Failed to capture browser recovery diagnostics: #{e.message}" if ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+    puts "Failed to capture browser recovery diagnostics: #{e.message}" if TestOutput.verbose? || ENV['DEBUG_BROWSER']
   ensure
     @capturing_browser_recovery_diagnostics = false
   end
@@ -507,7 +505,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       )
     )
   rescue StandardError => e
-    puts "Failed to write screenshot sidecar: #{e.message}" if ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
+    puts "Failed to write screenshot sidecar: #{e.message}" if TestOutput.verbose? || ENV['DEBUG_BROWSER']
   end
 
   def screenshot_log_message(path)
@@ -761,4 +759,3 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     capybara_session_cleanup
   end
 end
-# rubocop:enable Style/OneClassPerFile

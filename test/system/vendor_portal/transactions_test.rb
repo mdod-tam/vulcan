@@ -44,6 +44,11 @@ module VendorPortal
 
       assert_no_selector '[role="alert"]'
       assert_text '23 purchases totaling $920.00'
+      export_params = Rack::Utils.parse_nested_query(URI.parse(find_link('Export CSV')[:href]).query)
+      assert_equal 'custom', export_params['period']
+      assert_equal '10/09/2026', export_params['start_date']
+      assert_equal '10/09/2026', export_params['end_date']
+      assert_not export_params.key?('page')
       assert_selector 'table tbody tr', count: 20
       pagination = find('nav[aria-label="Transaction pages"]')
       pagination.find('a[rel="next"]').execute_script('this.focus()')

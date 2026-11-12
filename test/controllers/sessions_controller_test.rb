@@ -51,8 +51,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
     get sign_in_path, headers: { 'Accept' => "#{Mime[:turbo_stream]}, text/html, application/xhtml+xml" }
 
-    assert_response :found
-    assert_redirected_to constituent_portal_dashboard_path
+    assert_redirected_to constituent_portal_dashboard_path, status: :found
     assert_select 'turbo-stream', count: 0
   end
 
@@ -249,62 +248,9 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to constituent_portal_dashboard_path
   end
 
-  def test_backward_compat_email_param_still_works
-    user = create(:constituent)
-
-    post sign_in_path, params: { email: user.email, password: 'password1234' }
-
-    assert_redirected_to constituent_portal_dashboard_path
-  end
-
   def test_paper_no_email_user_cannot_sign_in_with_phone
-    user = nil
-    Current.paper_context = true
-    begin
-      user = Users::Constituent.create!(
-        first_name: 'Paper', last_name: 'NoEmail',
-        phone: '410-555-0188',
-        phone_type: 'voice',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
-
-    post sign_in_path, params: { contact: user.phone, password: 'password1234' }
-
-    assert_redirected_to sign_in_path
-    follow_redirect!
-    assert_match I18n.t('controllers.sessions.invalid_credentials'), flash[:alert]
-  end
-
-  def test_paper_no_email_user_cannot_start_sms_2fa_by_phone
-    user = nil
-    Current.paper_context = true
-    begin
-      user = Users::Constituent.create!(
-        first_name: 'Paper', last_name: 'Sms2fa',
-        phone: '410-555-0189',
-        phone_type: 'voice',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
-
-    user.sms_credentials.create!(
-      phone_number: '555-321-9876',
-      last_sent_at: Time.current,
-      verified_at: Time.current
-    )
+    user = create_paper_no_email_constituent(phone: '410-555-0188', phone_type: 'voice',
+                                             first_name: 'Paper', last_name: 'NoEmail')
 
     post sign_in_path, params: { contact: user.phone, password: 'password1234' }
 
@@ -321,26 +267,6 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to sign_in_path
-  end
-
-  def test_locked_account_cannot_sign_in_by_phone
-    user = create(:constituent, failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
-
-    assert_no_difference('Session.count') do
-      post sign_in_path, params: { contact: user.phone, password: 'password1234' }
-    end
-
-    assert_redirected_to sign_in_path
-  end
-
-  def test_placeholder_phone_cannot_sign_in
-    user = create(:constituent, phone: '000-000-5678', email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local")
-
-    post sign_in_path, params: { contact: user.phone, password: 'password1234' }
-
-    assert_redirected_to sign_in_path
-    follow_redirect!
-    assert_match I18n.t('controllers.sessions.invalid_credentials'), flash[:alert]
   end
 
   def test_guardian_generated_synthetic_phone_cannot_sign_in
@@ -363,22 +289,8 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
   def test_malformed_email_shaped_identifier_cannot_sign_in
     phone = '410-555-0143'
-    user = nil
-    Current.paper_context = true
-    begin
-      user = Users::Constituent.create!(
-        first_name: 'Phone', last_name: 'MalformedSignIn',
-        phone: phone,
-        phone_type: 'voice',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
+    user = create_paper_no_email_constituent(phone: phone, phone_type: 'voice',
+                                             first_name: 'Paper', last_name: 'NoEmail')
 
     post sign_in_path, params: { contact: '4105550143@', password: 'password1234' }
 

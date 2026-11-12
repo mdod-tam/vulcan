@@ -5,8 +5,10 @@ require Rails.root.join('test/support/system_test_evidence')
 
 class ApplicationsSystemTest < ApplicationSystemTestCase
   include SystemTestEvidence
+  include OnlineApplicationTestHelpers
 
   setup do
+    setup_fpl_policies
     @user = create(:constituent, first_name: 'Test', last_name: 'Guardian')
     @dependent = create(:constituent, first_name: 'Jane', last_name: 'Dependent', email: 'jane.dependent@example.com', phone: '5555551212')
 
@@ -15,43 +17,12 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     @user.reload
 
     assert @user.dependents.exists?(@dependent.id), 'Dependent relationship not properly established'
-    @valid_pdf = file_fixture('income_proof.pdf').to_s
-    @valid_image = file_fixture('residency_proof.pdf').to_s
 
     # Each test controls its sign-in state.
   end
 
   teardown do
     Capybara.reset_sessions!
-  end
-
-  test 'can view new application form' do
-    skip 'This test needs to be updated to match the actual application UI'
-
-    visit new_constituent_portal_application_path
-
-    assert_selector 'h1', text: 'New Application'
-
-    assert_text 'most recent tax return (preferred)'
-    assert_text 'current year SSA award letter (less than 2 months old)'
-    assert_text 'bank statement showing your SSA deposit'
-    assert_text 'utility bill, it must show your current address'
-
-    assert_no_text 'pay stubs'
-    assert_no_text 'paystubs'
-
-    assert_text 'Certifying Professional Information'
-    assert_text 'Doctor / Physician'
-    assert_text 'Audiologist'
-    assert_no_text 'other certifying professional'
-  end
-
-  test 'can submit application with valid data' do
-    skip 'This test needs to be updated to match the actual application UI'
-
-    visit new_constituent_portal_application_path
-
-    assert_success_message('Application submitted successfully', wait: 5)
   end
 
   # An open registration soft-match case permits drafts but blocks final submission.
@@ -61,25 +32,13 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
   # A complete form prevents a disabled submit control from producing a false pass.
   # The disability information release uses its label because its id differs from its parameter name.
   def fill_complete_application_form
-    check 'I certify that I am a resident of Maryland'
-    fill_in 'Household Size', with: 3
-    fill_in 'Annual Income', with: 60_000
-    check 'I certify that I have a disability that affects my ability to access telecommunications services'
-    check 'Hearing'
-    find('input[name*="physical_address_1"]').set('456 Oak Ave')
-    find('input[name*="city"]').set('Annapolis')
-    select 'Maryland', from: 'State'
-    find('input[name*="zip_code"]').set('21401')
-    within '#certifying-professional-fields' do
-      find('input[name="application[certifying_professional_attributes][name]"]').set('Dr. Jane Smith')
-      find('input[name="application[certifying_professional_attributes][phone]"]').set('2025551234')
-      find('input[name="application[certifying_professional_attributes][email]"]').set('drsmith@example.com')
-    end
-    attach_cleared_document 'application_income_proof', @valid_pdf, make_visible: true
-    attach_cleared_document 'application_residency_proof', @valid_image, make_visible: true
-    check 'terms_accepted'
-    check 'information_verified'
-    check 'I authorize the release and sharing of my disability-related information as described above'
+    fill_in_online_application_fields(
+      household_size: 3, annual_income: 60_000,
+      provider: { name: 'Dr. Jane Smith', phone: '2025551234', email: 'drsmith@example.com' },
+      address: { physical_address_1: '456 Oak Ave', city: 'Annapolis', state: 'Maryland', zip_code: '21401' }
+    )
+    attach_online_application_documents(:income_proof, :residency_proof)
+    accept_submit_confirmations
   end
 
   def open_registration_soft_match_case_for(subject)
@@ -214,7 +173,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
   end
 
   test 'a refused submission resumes its autosaved dependent draft and preserves a usable save retry' do
-    @dependent.update!(physical_address_1: '12 Original Dependent Road')
+    Current.set(user: @user) { @dependent.update!(physical_address_1: '12 Original Dependent Road') }
     guardian_address = @user.physical_address_1
     system_test_sign_in(@user)
     assert_text 'Dashboard', wait: 10
@@ -329,110 +288,6 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     take_evidence_screenshot('application-create-refused-pending-review', full: true, html: true)
   end
 
-  test 'shows validation errors for invalid submission' do
-    skip 'This test needs to be updated to match the actual application UI'
-
-    visit new_constituent_portal_application_path
-
-    assert_error_message("can't be blank", wait: 5)
-  end
-
-  test 'dashboard shows correct application status after submission' do
-    skip 'This test needs to be updated to match the actual application UI'
-
-    assert_text 'Application Status'
-  end
-
-  test 'application form is accessible with keyboard navigation' do
-    skip 'This test needs to be updated to match the actual application UI'
-
-    visit new_constituent_portal_application_path
-  end
-
-  test 'can save a draft application' do
-    system_test_sign_in(@user)
-    assert_text 'Dashboard', wait: 10
-
-    visit new_constituent_portal_application_path
-    wait_for_page_stable
-
-    check 'I certify that I am a resident of Maryland'
-
-    fill_in 'Household Size', with: 2
-    fill_in 'Annual Income', with: 50_000
-
-    wait_for_page_stable
-
-    # Address selectors use parameter names to avoid label changes.
-    find('input[name*="physical_address_1"]').set('456 Oak Ave')
-    find('input[name*="city"]').set('Annapolis')
-    select 'Maryland', from: 'State'
-    find('input[name*="zip_code"]').set('21401')
-
-    check 'I certify that I have a disability that affects my ability to access telecommunications services'
-    check 'Vision'
-
-    within '#certifying-professional-fields' do
-      find('input[name="application[certifying_professional_attributes][name]"]').set('Dr. Test Provider')
-      find('input[name="application[certifying_professional_attributes][phone]"]').set('2025551234')
-      find('input[name="application[certifying_professional_attributes][email]"]').set('test@example.com')
-    end
-
-    check 'I authorize the release and sharing of my disability-related information as described above'
-
-    find('input[type="submit"][name="save_draft"]').click
-
-    assert_application_saved_as_draft(wait: 10)
-    assert_current_path %r{/constituent_portal/applications/\d+}
-
-    application = Application.find_by(user_id: @user.id, status: 'draft')
-    assert_not_nil application, 'Draft application was not created in the database.'
-    assert_equal 2, application.household_size
-    assert_equal 50_000, application.annual_income
-    assert application.user.vision_disability
-  end
-
-  test 'preserves form data when validation fails' do
-    system_test_sign_in(@user)
-    assert_text 'Dashboard', wait: 10
-
-    visit new_constituent_portal_application_path
-
-    check 'I certify that I am a resident of Maryland'
-    fill_in 'Household Size', with: 3
-    fill_in 'Annual Income', with: 60_000
-    check 'I certify that I have a disability that affects my ability to access telecommunications services'
-    check 'Hearing'
-    check 'Vision'
-
-    within '#certifying-professional-fields' do
-      fill_in 'Name', with: 'Dr. Jane Smith'
-      fill_in 'Phone', with: '2025551234'
-      fill_in 'Email', with: 'drsmith@example.com'
-    end
-
-    # Clear the required provider name to exercise invalid form input.
-    within '#certifying-professional-fields' do
-      fill_in 'Name', with: ''
-    end
-
-    find('input[name="submit_application"]').click
-
-    assert_selector 'h1', text: 'New Application'
-
-    assert_checked_field 'I certify that I am a resident of Maryland'
-    assert_field 'Household Size', with: '3'
-    assert_field 'Annual Income', with: '60000'
-    assert_checked_field 'I certify that I have a disability that affects my ability to access telecommunications services'
-    assert_checked_field 'Hearing'
-    assert_checked_field 'Vision'
-
-    within '#certifying-professional-fields' do
-      assert_field 'Phone', with: '2025551234'
-      assert_field 'Email', with: 'drsmith@example.com'
-    end
-  end
-
   test 'saves all form fields when clicking Save Application' do
     system_test_sign_in(@user)
     assert_text 'Dashboard', wait: 10
@@ -440,38 +295,15 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     visit new_constituent_portal_application_path(user_id: @dependent.id, for_self: false)
     wait_for_turbo
 
-    check 'I certify that I am a resident of Maryland'
-
-    safe_fill_household_and_income(4, 60_000)
-
-    find('input[name*="physical_address_1"]').set('').set('123 Main St')
-    find('input[name*="city"]').set('').set('Baltimore')
-    select 'Maryland', from: 'State'
-    find('input[name*="zip_code"]').set('').set('21201')
-
     assert_selector 'h1#form-title', text: "New Application for #{@dependent.full_name}", wait: 10
+    fill_in_online_application_fields(
+      household_size: 4, annual_income: 60_000, disabilities: %w[Hearing Vision Mobility],
+      provider: { name: 'Dr. Robert Johnson', phone: '4105551234', fax: '4105555678', email: 'dr.johnson@example.com' },
+      address: { physical_address_1: '123 Main St', city: 'Baltimore', state: 'Maryland', zip_code: '21201' }
+    )
 
-    check 'I certify that I have a disability that affects my ability to access telecommunications services'
-    check 'Hearing'
-    check 'Vision'
-    check 'Mobility'
-
-    within '#certifying-professional-fields' do
-      find('input[name="application[certifying_professional_attributes][name]"]').set('').set('Dr. Robert Johnson')
-      find('input[name="application[certifying_professional_attributes][phone]"]').set('').set('4105551234')
-      find('input[name="application[certifying_professional_attributes][fax]"]').set('').set('4105555678')
-      find('input[name="application[certifying_professional_attributes][email]"]').set('').set('dr.johnson@example.com')
-    end
-
-    check 'I authorize the release and sharing of my disability-related information as described above'
-
-    attach_cleared_document 'Upload Residency Proof Document', @valid_image
-    attach_cleared_document 'Upload Income Proof Document', @valid_pdf
-
-    find('input[type="submit"][name="save_draft"]').click
-
-    wait_for_turbo
-    assert_application_saved_as_draft(wait: 10)
+    attach_online_application_documents(:residency_proof, :income_proof)
+    save_online_application_draft
 
     application = Application.where(user_id: @dependent.id, status: 'draft').order(created_at: :desc).first
     assert_not_nil application, 'Should have created a draft application for the dependent'

@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
-require_relative 'paper_applications_test_helper'
 
 module Admin
   class ApplicationCreationAuditTest < ApplicationSystemTestCase
@@ -14,10 +13,7 @@ module Admin
       @constituent = create(:constituent)
       setup_active_storage_test
 
-      Policy.find_or_create_by(key: 'fpl_1_person').update(value: 15_650)
-      Policy.find_or_create_by(key: 'fpl_2_person').update(value: 21_150)
-      Policy.find_or_create_by(key: 'fpl_3_person').update(value: 26_650)
-      Policy.find_or_create_by(key: 'fpl_modifier_percentage').update(value: 400)
+      setup_fpl_policies
     end
 
     teardown do
@@ -25,7 +21,6 @@ module Admin
     end
 
     test 'admin can see application creation event for online applications' do
-      sign_out
       sign_in(@constituent)
 
       visit new_constituent_portal_application_path
@@ -34,25 +29,17 @@ module Admin
       click_button 'Submit Application'
 
       assert_success_message('Application submitted successfully')
+      submitted_application = Application.find_by!(user: @constituent)
 
-      sign_out
-      # The session reset clears any stored location.
-      Capybara.reset_sessions!
-
-      sign_in(@admin, bypass_mfa_enrollment: true)
+      system_test_switch_user(@admin, bypass_mfa_enrollment: true)
 
       visit admin_applications_path
 
-      view_link = nil
       within 'table' do
-        row = first('tr', text: @constituent.email)
-        within row do
-          view_link = find_link('View Application')
+        within 'tr', text: @constituent.email do
+          find_link(href: admin_application_path(submitted_application, anchor: 'attachments-section')).click
         end
       end
-
-      application_path = view_link[:href]
-      visit application_path
 
       wait_for_turbo
 

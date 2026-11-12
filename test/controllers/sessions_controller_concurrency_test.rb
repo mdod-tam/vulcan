@@ -144,8 +144,6 @@ class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
       password: 'Password123!',
       password_confirmation: 'Password123!'
     )
-    original_sign_in_at = user.last_sign_in_at
-    original_sign_in_ip = user.last_sign_in_ip
     original_event_count = Event.where(user_id: user.id).count
 
     holder_ready = Queue.new
@@ -181,8 +179,8 @@ class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
     assert_nil sign_in_response[:session_cookie], 'the stale password must not set a signed session cookie'
     user.reload
     assert_equal 0, user.sessions.count
-    assert_equal original_sign_in_at, user.last_sign_in_at
-    assert_equal original_sign_in_ip, user.last_sign_in_ip
+    assert_nil user.last_sign_in_at
+    assert_nil user.last_sign_in_ip
     assert_equal original_event_count, Event.where(user_id: user.id).count
     assert user.authenticate('ChangedPassword123!')
   ensure

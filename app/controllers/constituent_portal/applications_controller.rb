@@ -444,6 +444,7 @@ module ConstituentPortal
     end
 
     def build_certifying_professional_for_form
+      restore_certifying_professional_from_params
       @application.certifying_professional_attributes ||= {} if @application
       provider_params = {
         certifying_professional_name: find_param_value(:name, :certifying_professional),

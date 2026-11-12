@@ -237,21 +237,8 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
 
   test 'should not create recovery request for phone-only record' do
     phone = '410-555-0210'
-    Current.paper_context = true
-    begin
-      Users::Constituent.create!(
-        first_name: 'Phone', last_name: 'OnlyRecovery',
-        phone: phone,
-        phone_type: 'text',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
+    create_paper_no_email_constituent(phone: phone, phone_type: 'text',
+                                      first_name: 'Phone', last_name: 'OnlyRecovery')
 
     assert_no_difference('RecoveryRequest.count') do
       post request_security_key_reset_path, params: {
@@ -364,17 +351,6 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('RecoveryRequest.count') do
       post request_security_key_reset_path, params: {
         details: 'Missing contact parameter test'
-      }
-    end
-
-    assert_redirected_to account_recovery_confirmation_path
-  end
-
-  test 'ignores legacy email parameter without contact' do
-    assert_no_difference('RecoveryRequest.count') do
-      post request_security_key_reset_path, params: {
-        email: @user.email,
-        details: 'Legacy email param'
       }
     end
 

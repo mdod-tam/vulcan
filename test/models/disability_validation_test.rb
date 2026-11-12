@@ -56,6 +56,43 @@ class DisabilityValidationTest < ActiveSupport::TestCase
                          household_size: 1,
                          annual_income: 30_000)
     assert application.save, 'Application should be saved as draft without disability'
+    @constituent.update!(Users::Constituent::DISABILITY_FLAGS.index_with(false))
+    assert_not @constituent.reload.disability_selected?, 'A draft-only constituent may save incomplete disability information'
+  end
+
+  test 'explicit intake still requires disability selection for a draft-only constituent' do
+    create(:application, :draft, user: @constituent, skip_proofs: true)
+    @constituent.require_disability_selection = true
+
+    assert_raises ActiveRecord::RecordInvalid do
+      @constituent.update!(Users::Constituent::DISABILITY_FLAGS.index_with(false))
+    end
+    assert @constituent.errors.added?(:base, :disability_required)
+  end
+
+  test 'a newer draft does not exempt a constituent with an older submitted application' do
+    @constituent.update!(hearing_disability: true)
+    create(:application, user: @constituent, status: :approved, application_date: 8.years.ago, skip_proofs: true)
+    create(:application, :draft, user: @constituent, application_date: Time.current, skip_proofs: true)
+
+    assert_raises ActiveRecord::RecordInvalid do
+      @constituent.update!(Users::Constituent::DISABILITY_FLAGS.index_with(false))
+    end
+    assert @constituent.errors.added?(:base, :disability_required)
+    assert @constituent.reload.hearing_disability, 'The refused edit must preserve the stored disability'
+  end
+
+  test 'non-draft applications still require a disability when the constituent is updated' do
+    %i[in_progress awaiting_proof reminder_sent awaiting_dcf approved rejected archived].each do |status|
+      constituent = create(:constituent)
+      create(:application, user: constituent, status: status, skip_proofs: true)
+
+      assert_raises ActiveRecord::RecordInvalid, "#{status} must retain the disability requirement" do
+        constituent.update!(Users::Constituent::DISABILITY_FLAGS.index_with(false))
+      end
+      assert constituent.errors.added?(:base, :disability_required), status.to_s
+      assert constituent.reload.hearing_disability, "#{status} must preserve the stored disability after refusal"
+    end
   end
 
   test 'application cannot be submitted without disability' do
@@ -112,46 +149,6 @@ class DisabilityValidationTest < ActiveSupport::TestCase
       assert application.save,
              "Application should be submitted with only #{disability_type} disability selected"
     end
-  end
-
-  test 'application can be submitted with multiple disabilities selected' do
-    @constituent.update(
-      hearing_disability: true,
-      vision_disability: true,
-      speech_disability: false,
-      mobility_disability: true,
-      cognition_disability: false
-    )
-
-    application = create(:application,
-                         :with_income_proof, :with_residency_proof,
-                         user: @constituent,
-                         status: :draft,
-                         household_size: 1,
-                         annual_income: 30_000)
-    application.status = 'in_progress'
-
-    assert application.save, 'Application should be submitted with multiple disabilities'
-  end
-
-  test 'application can be submitted with all disabilities selected' do
-    @constituent.update(
-      hearing_disability: true,
-      vision_disability: true,
-      speech_disability: true,
-      mobility_disability: true,
-      cognition_disability: true
-    )
-
-    application = create(:application,
-                         :with_income_proof, :with_residency_proof,
-                         user: @constituent,
-                         status: :draft,
-                         household_size: 1,
-                         annual_income: 30_000)
-    application.status = 'in_progress'
-
-    assert application.save, 'Application should be submitted with all disabilities'
   end
 
   test 'disability_selected? returns true when at least one disability is selected' do

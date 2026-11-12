@@ -2,7 +2,6 @@
 
 require 'application_system_test_case'
 require Rails.root.join('test/support/system_test_evidence')
-require_relative 'paper_applications_test_helper'
 
 module Admin
   class PaperApplicationContactControlsTest < ApplicationSystemTestCase
@@ -10,6 +9,7 @@ module Admin
     include SystemTestEvidence
 
     setup do
+      setup_fpl_policies
       @admin = create(:admin, email: "contact_controls_#{SecureRandom.hex(4)}@example.com")
       system_test_sign_in(@admin, bypass_mfa_enrollment: true)
       visit new_admin_paper_application_path

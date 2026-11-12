@@ -95,7 +95,11 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
         message = "#{submission_method} #{label}"
         assert result[:success], message
         assert_equal placement, result[:placement], message
-        assert_equal reason, result[:retention_reason], message
+        if reason.nil?
+          assert_nil result[:retention_reason], message
+        else
+          assert_equal reason, result[:retention_reason], message
+        end
         expected_status = placement == :primary ? 'received' : status.to_s
         assert_equal expected_status, application.reload.disability_certification_status, message
       end

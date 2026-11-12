@@ -122,11 +122,11 @@ class SessionActivitySystemTest < ApplicationSystemTestCase
   def age_session(user)
     session_record = user.sessions.order(:id).last
     absolute_expiry = session_record.expires_at
-    session_record.update!(last_active_at: 29.minutes.ago)
+    session_record.update!(last_active_at: (Session::IDLE_TIMEOUT - 1.minute).ago)
     old_activity = session_record.last_active_at
     page.execute_script(<<~JS)
       window.originalSessionClock = Date.now;
-      Date.now = () => window.originalSessionClock() + 29 * 60 * 1000;
+      Date.now = () => window.originalSessionClock() + #{(Session::IDLE_TIMEOUT - 1.minute).in_milliseconds};
     JS
     [session_record, old_activity, absolute_expiry]
   end

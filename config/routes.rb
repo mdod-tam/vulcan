@@ -245,8 +245,6 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :constituents_dashboard, only: %i[index show]
-
     resources :policies, only: %i[index show edit update create] do
       collection do
         get :changes

@@ -22,7 +22,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     sign_out if respond_to?(:sign_out)
 
     @execution_time = Time.current - @start_time
-    puts "PasswordsControllerTest #{name} took #{@execution_time.round(2)}s"
+    puts "PasswordsControllerTest #{name} took #{@execution_time.round(2)}s" if TestOutput.verbose?
   end
 
   %i[phone email].each do |contact|
@@ -651,21 +651,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     sign_out if respond_to?(:sign_out)
 
     phone = '410-555-0177'
-    Current.paper_context = true
-    begin
-      Users::Constituent.create!(
-        first_name: 'Phone', last_name: 'OnlyAccess',
-        phone: phone,
-        phone_type: 'text',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
+    create_paper_no_email_constituent(phone: phone, phone_type: 'text',
+                                      first_name: 'Phone', last_name: 'OnlyAccess')
 
     SmsService.expects(:send_message).never
 
@@ -803,22 +790,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     sign_out if respond_to?(:sign_out)
 
     phone = '410-555-0164'
-    Current.paper_context = true
-    user = nil
-    begin
-      user = Users::Constituent.create!(
-        first_name: 'Phone', last_name: 'OnlyMalformedAccess',
-        phone: phone,
-        phone_type: 'text',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
+    user = create_paper_no_email_constituent(phone: phone, phone_type: 'text',
+                                             first_name: 'Phone', last_name: 'OnlyMalformedAccess')
 
     SmsService.expects(:send_message).never
 
@@ -835,22 +808,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     sign_out if respond_to?(:sign_out)
 
     phone = '410-555-0165'
-    Current.paper_context = true
-    user = nil
-    begin
-      user = Users::Constituent.create!(
-        first_name: 'Phone', last_name: 'OnlyAccess',
-        phone: phone,
-        phone_type: 'voice',
-        communication_preference: :letter,
-        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
-        date_of_birth: Date.new(1950, 1, 1),
-        password: 'password1234', password_confirmation: 'password1234',
-        hearing_disability: true
-      )
-    ensure
-      Current.reset
-    end
+    user = create_paper_no_email_constituent(phone: phone, phone_type: 'voice',
+                                             first_name: 'Phone', last_name: 'OnlyAccess')
 
     SmsService.expects(:send_message).never
 
