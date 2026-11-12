@@ -9,15 +9,12 @@ class Event < ApplicationRecord
 
   validates :action, presence: true
   validate :validate_metadata_structure
+  validate :validate_changes_structure, if: -> { metadata.is_a?(Hash) }
+  validate :validate_feature_flag_metadata, if: -> { action == 'feature_flag_toggled' && metadata.is_a?(Hash) }
 
   before_create do
     self.user_agent = Current.user_agent
     self.ip_address = Current.ip_address
-  end
-
-  # Treat absent metadata as an empty object.
-  def metadata
-    super || {}
   end
 
   # Combine metadata changes with values held in the encrypted audit cell.
@@ -61,5 +58,20 @@ class Event < ApplicationRecord
     return if metadata.is_a?(Hash)
 
     errors.add(:metadata, 'must be a JSON object')
+  end
+
+  def validate_changes_structure
+    return if metadata['changes'].nil? || metadata['changes'].is_a?(Hash)
+
+    errors.add(:metadata, 'changes must be a JSON object')
+  end
+
+  def validate_feature_flag_metadata
+    name = metadata['flag_name']
+    errors.add(:metadata, 'flag_name must be a nonblank string') unless name.is_a?(String) && name.present?
+
+    %w[old_value new_value].each do |key|
+      errors.add(:metadata, "#{key} must be a boolean") unless [true, false].include?(metadata[key])
+    end
   end
 end
