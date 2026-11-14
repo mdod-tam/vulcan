@@ -16,6 +16,28 @@ module Admin
       proof_types.index_with { |type| proof_review_request_params(application, type, :rejected) }
     end
 
+    def proof_review_guidance(application, proof_type)
+      applicant = application.user
+
+      case proof_type
+      when :residency
+        address = applicant.mailing_address_line.presence || 'not provided'
+        "Does the address in this residency proof match the address provided in the application (#{address})?"
+      when :income
+        income = number_to_currency(application.annual_income).presence || 'not provided'
+        "Does the income shown in this proof match the annual household income reported in the application (#{income})? " \
+          "Household size: #{application.household_size || 'not provided'}."
+      when :id
+        date_of_birth = applicant.date_of_birth&.strftime('%B %d, %Y') || 'not provided'
+        "Does this ID match the applicant, #{applicant.full_name}, and their date of birth (#{date_of_birth})? " \
+          'Are the identifying details clearly legible?'
+      when :disability_certification
+        disabilities = applicant.disabilities.to_sentence.presence || 'none recorded'
+        "Are the signer's name, occupation, and license number clearly visible? " \
+          "Does the signer confirm the applicant's reported disabilities (#{disabilities})?"
+      end
+    end
+
     include RejectionReasonsHelper
 
     def audit_log_timestamp(log)

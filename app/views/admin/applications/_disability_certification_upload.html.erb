@@ -19,13 +19,17 @@
         <%= f.hidden_field key, value: value %>
       <% end %>
       <%= f.hidden_field :proof_type, value: 'disability_certification' %>
-    
+
+      <p id="certification_review_guidance" class="mb-4 rounded-md bg-gray-50 p-3 text-sm leading-6 text-gray-700 break-words">
+        <%= proof_review_guidance(@application, :disability_certification) %>
+      </p>
+
       <div class="flex items-center space-x-4 mb-4">
         <div>
           <%= f.radio_button "disability_certification_status", "approved",
               checked: true,
               class: "h-4 w-4 text-primary-600 border-gray-300",
-              "aria-describedby": "certification_status_help",
+              'aria-describedby': 'certification_status_help certification_review_guidance',
               id: "accept_disability_certification",
               data: { document_proof_handler_target: 'acceptRadio', action: 'change->document-proof-handler#toggleProofAction' } %>
           <%= f.label "accept_disability_certification", "Approve Certification and Upload",
@@ -34,7 +38,7 @@
         <div>
           <%= f.radio_button "disability_certification_status", "rejected",
               class: "h-4 w-4 text-primary-600 border-gray-300",
-              "aria-describedby": "certification_status_help",
+              'aria-describedby': 'certification_status_help certification_review_guidance',
               id: "reject_disability_certification",
               data: { document_proof_handler_target: 'rejectRadio', action: 'change->document-proof-handler#toggleProofAction' } %>
           <%= f.label "reject_disability_certification", "Reject Certification",
