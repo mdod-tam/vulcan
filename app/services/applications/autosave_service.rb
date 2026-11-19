@@ -269,9 +269,8 @@ module Applications
       @application.save!(validate: false)
       log_application_created_event if was_new_record
       # Autosave records draft progress field-by-field without full validation.
-      # rubocop:disable Rails/SkipsModelValidations
+      # rubocop:disable-next Rails/SkipsModelValidations
       @application.update_column(:last_visited_step, attribute)
-      # rubocop:enable Rails/SkipsModelValidations
       { success: true }
     end
 

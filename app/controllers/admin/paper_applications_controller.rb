@@ -458,6 +458,7 @@ module Admin
         :guardian_no_email_address,
         :guardian_no_phone_number,
         :income_proof_action, :income_proof, :income_proof_signed_id,
+        :no_income_information,
         :income_proof_rejection_reason, :income_proof_custom_rejection_reason,
         :residency_proof_action, :residency_proof, :residency_proof_signed_id,
         :residency_proof_rejection_reason, :residency_proof_custom_rejection_reason,
@@ -475,7 +476,7 @@ module Admin
 
     def base_params_from(permitted)
       base = permitted.slice(
-        :relationship_type, :guardian_id, :dependent_id, :no_certifying_professional_information,
+        :relationship_type, :guardian_id, :dependent_id, :no_certifying_professional_information, :no_income_information,
         :existing_constituent_id, :identity_review_receipt, :identity_candidate_id, :identity_determination,
         :identity_rationale, :contact_info_mode, :contact_info_verified,
         :no_email_address, :no_phone_number,

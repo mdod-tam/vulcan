@@ -1,4 +1,4 @@
-<%# locals: (record:, previous_values:, fields:, impact_token:, title:, confirmation:, body: nil, products: [], purchase_orders: [], vendors: [], new_purchase_order: nil, autofocus: true) -%>
+<%# locals: (record:, previous_values:, fields:, impact_token:, title:, confirmation:, body: nil, products: [], purchase_orders: [], autofocus: true) -%>
 <%= hidden_field_tag :reviewing, '1' %>
 <%= hidden_field_tag :impact_token, impact_token %>
 <div class="rounded border border-warning-300 bg-warning-50 p-4">
@@ -9,13 +9,13 @@
       ) %>
   <% if body %><p><%= body %></p><% end %>
   <dl class="mt-2 space-y-1">
-    <% equipment_impact_fields(record, previous_values, fields: fields, new_purchase_order: new_purchase_order).each do |field| %>
+    <% equipment_impact_fields(record, previous_values, fields: fields).each do |field| %>
       <div>
         <dt class="inline font-medium"><%= equipment_field_label(field) %>:</dt>
         <dd class="inline">
-          <%= equipment_impact_value(field, previous_values[field], products: products, purchase_orders: purchase_orders, vendors: vendors) %> →
+          <%= equipment_impact_value(field, previous_values[field], products: products, purchase_orders: purchase_orders) %> →
           <%= equipment_impact_value(field, field.in?(%w[shipped_at sent_at]) ? typed_date_input_value(record, field) : record.public_send(field),
-                                     products: products, purchase_orders: purchase_orders, vendors: vendors, new_purchase_order: new_purchase_order) %>
+                                     products: products, purchase_orders: purchase_orders) %>
         </dd>
       </div>
     <% end %>

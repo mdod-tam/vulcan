@@ -3,7 +3,7 @@
   <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
     <div class="flex flex-wrap items-center gap-3">
       <h2 id="equipment-title" class="text-xl font-semibold text-gray-900">Equipment</h2>
-      <%= admin_fulfillment_badge(application) %>
+      <%= admin_fulfillment_badge(application) if application.equipment_fulfillment? || application.equipment_needs_initialized_at? %>
     </div>
     <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-sm text-primary-600 underline',
                                                                              data: { turbo_frame: '_top' } %>
@@ -20,16 +20,23 @@
         <% end %>
       </ul>
     <% elsif application.equipment_catalog_product_pending? %>
-      <p class="text-sm text-gray-600 mb-4">An available catalog model has not been selected for this outside-catalog recommendation.</p>
+      <p class="text-sm text-gray-600 mb-4">An available catalog model still needs to be selected for this recommendation.</p>
     <% else %>
       <p class="text-sm text-gray-600 mb-4">No new devices are currently needed.</p>
     <% end %>
   <% else %>
-    <p class="text-sm text-gray-600 mb-4">Purchasing needs have not been initialized.</p>
+    <p class="text-sm text-gray-600 mb-4">Purchasing needs have not been recorded yet.</p>
   <% end %>
   <% if application.equipment_procurement_eligible? %>
     <%= link_to 'Edit equipment needs', edit_admin_application_equipment_needs_path(application, return_context: @return_context),
                 class: 'text-sm text-primary-600 underline', data: { turbo_frame: '_top' } %>
   <% end %>
-  <%= render 'equipment_items', items: @equipment_items, audit_records: @equipment_audit_records, return_context: @return_context %>
+  <%= render 'equipment_items', items: @equipment_items, audit_records: @equipment_audit_records,
+                                return_context: @return_context, title: 'Devices for this application' %>
+  <div class="flex flex-wrap gap-4 text-sm">
+    <% if @equipment_items.any? { |item| item.funding_source == 'icanconnect' } %>
+      <%= link_to 'Add installation, interpretation or travel cost',
+                  new_admin_icanconnect_financial_record_path(application_id: application.id), class: 'text-primary-700 underline' %>
+    <% end %>
+  </div>
 </section>

@@ -336,6 +336,24 @@ module ConstituentPortal
       end
     end
 
+    test 'training capacity and service window use the viewer locale' do
+      Policy.stubs(:max_training_sessions).returns(5)
+      application = create_reviewed_application(user: @user)
+
+      %w[en es].each do |locale|
+        @user.update!(locale:)
+
+        get constituent_portal_dashboard_path
+
+        assert_response :success
+        assert_select '[data-testid="training-card"]' do
+          assert_select 'p', text: I18n.t('trainer_workflow.capacity.remaining', count: 5, max: 5, locale:)
+          assert_select 'p', text: I18n.t('trainer_workflow.capacity.available_through',
+                                          date: I18n.l(application.service_window_end_date, format: :long, locale:), locale:)
+        end
+      end
+    end
+
     test 'dashboard shows requested training state and disables duplicate request button' do
       application = create_reviewed_application(user: @user)
       application.update!(training_requested_at: 1.hour.ago)

@@ -19,6 +19,7 @@
                  deadlines: session_deadlines,
                  locale: public_request_locale_param || current_user.effective_message_locale || I18n.default_locale %>
     <% end %>
+    <%= yield :skip_link %>
     <%= render "shared/header" %>
     <div id="flash">
       <%= render "shared/flash" %>

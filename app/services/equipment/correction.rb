@@ -4,9 +4,10 @@ module Equipment
   class Correction
     class InvalidImpactToken < Conflict; end
 
-    EDITABLE_ITEM_FIELDS = %w[product_id purchase_order_id shipped_at tracking_number carrier serial_number imei].freeze
-    ITEM_FIELDS = (EDITABLE_ITEM_FIELDS + %w[withdrawn_at manufacturer_model_identity normalized_manufacturer normalized_imei normalized_serial_number]).freeze
-    PO_FIELDS = %w[vendor_id number sent_at].freeze
+    EDITABLE_ITEM_FIELDS = (%w[product_id shipped_at stock_received_on tracking_number carrier serial_number imei disability_setup_group] + EquipmentShipping::FIELDS).freeze
+    ITEM_FIELDS = (EDITABLE_ITEM_FIELDS + %w[purchase_order_id withdrawn_at unfulfilled_since manufacturer_model_identity normalized_manufacturer normalized_imei
+                                             normalized_serial_number]).freeze
+    PO_FIELDS = (%w[number sent_at] + EquipmentShipping::FIELDS).freeze
 
     def self.impact_token(record:, attributes:, extra: {})
       Rails.application.message_verifier('equipment-impact').generate(impact_data(record, attributes, extra), expires_in: 30.minutes)
@@ -19,7 +20,7 @@ module Equipment
     def self.confirmation_values(value)
       if value.respond_to?(:each_pair)
         value.to_h.stringify_keys.transform_values { |entry| confirmation_values(entry) }.tap do |values|
-          %w[sent_at shipped_at].each { |field| values[field] = DateInputNormalizer.normalize(values[field])&.iso8601.to_s if values.key?(field) }
+          %w[sent_at shipped_at stock_received_on].each { |field| values[field] = DateInputNormalizer.normalize(values[field])&.iso8601.to_s if values.key?(field) }
         end
       elsif value.is_a?(Array)
         value.map { |entry| confirmation_values(entry) }
@@ -35,31 +36,35 @@ module Equipment
 
     # Keep form versions, identity acknowledgment, and reviewed impact explicit at this write boundary.
     def update_item!(item:, attributes:, expected_version:, reason:, operation: 'update', confirmed_impact: false, # rubocop:disable Metrics/ParameterLists
-                     purchase_order_versions: {}, new_purchase_order: nil, serial_duplicate_reason: nil, impact_token: nil)
+                     serial_duplicate_reason: nil, impact_token: nil)
       require_reason!(reason)
+      raise Conflict, 'Assign purchase orders through bid award.' if attributes.to_h.key?('purchase_order_id') || attributes.to_h.key?(:purchase_order_id)
+
       attributes = attributes.to_h.stringify_keys.slice(*EDITABLE_ITEM_FIELDS)
       raise Conflict, 'Unknown equipment correction.' unless %w[update detach withdraw].include?(operation)
 
       EquipmentItem.transaction do
-        application, orders, created_order = lock_item!(item, attributes, expected_version, operation == 'update' ? new_purchase_order : nil)
+        lock_item!(item, expected_version)
+        raise Conflict, 'Amend the active bid reservation first.' if item.bid_group_lines.reserved.exists?
+
         previous = item.attributes.slice(*ITEM_FIELDS)
-        require_unchanged_item_details!(item, attributes, new_purchase_order) unless operation == 'update'
-        apply_item_operation!(item, operation, attributes, new_purchase_order: created_order)
-        new_assignment = previous['purchase_order_id'].nil? && (item.purchase_order_id.present? || new_purchase_order.present?)
-        Mutation.eligible!(application) if new_assignment && operation == 'update'
+        require_unchanged_item_details!(item, attributes) unless operation == 'update'
+        apply_item_operation!(item, operation, attributes)
         if item.shipped_at_in_database.present?
           require_confirmation!(item, attributes, impact_token, confirmed_impact,
-                                operation: operation, new_purchase_order: new_purchase_order || {})
+                                operation: operation)
         end
-        assign_purchase_order!(item, orders, purchase_order_versions, created_order)
-        require_available_product!(item) if item.will_save_change_to_product_id?
+        validate_product_correction!(item)
         item.serial_duplicate_reason = serial_duplicate_reason.to_s.strip.presence
         item.save!
+        if previous['purchase_order_id'] && previous['purchase_order_id'] != item.purchase_order_id
+          PurchaseOrder.find(previous['purchase_order_id']).update!(updated_at: Time.current)
+        end
         audit_item!(item, previous, reason, operation)
       end
       item
     rescue ActiveRecord::RecordNotUnique
-      raise Conflict, 'A device identifier or vendor purchase order number is already assigned. Refresh and review the existing record.'
+      raise Conflict, 'A device identifier is already assigned. Refresh and review the existing record.'
     end
 
     def update_purchase_order!(purchase_order:, attributes:, expected_version:, expected_item_versions:, reason:, confirmed_impact: false, impact_token: nil) # rubocop:disable Metrics/ParameterLists
@@ -71,61 +76,60 @@ module Equipment
         items = purchase_order.equipment_items.order(:id).lock.to_a
         require_membership!(items, membership, expected_item_versions)
         Mutation.version!(purchase_order, expected_version)
-        if items.size > 1 || items.any?(&:shipped_at?)
-          require_confirmation!(purchase_order, attributes, impact_token, confirmed_impact, item_versions: expected_item_versions)
-        end
         previous = purchase_order.attributes.slice(*PO_FIELDS)
-        purchase_order.assign_attributes(attributes.to_h.stringify_keys.slice(*PO_FIELDS))
+        values = attributes.to_h.stringify_keys
+        confirm_po_change!(purchase_order, items, values, expected_item_versions, impact_token, confirmed_impact)
+        purchase_order.assign_attributes(values.slice(*PO_FIELDS))
         purchase_order.save!
         items.each(&:validate!)
         changes = changed_values(previous, purchase_order.attributes.slice(*PO_FIELDS))
         if changes.any?
           Mutation.audit!(purchase_order, actor: @actor, action: 'equipment_purchase_order_corrected', changes: changes,
-                                          reason: reason, application_ids: membership.map(&:last).uniq)
+                                          reason: reason, application_ids: membership.map(&:last).compact.uniq, equipment_item_ids: items.map(&:id),
+                                          purchase_order_ids: [purchase_order.id])
         end
       end
       purchase_order
     rescue ActiveRecord::RecordNotUnique
-      raise Conflict, 'This vendor already has that purchase order number. Move the equipment to the existing purchase order.'
+      raise Conflict, 'This PO number is already recorded. Review the existing purchase order.'
     end
 
     private
+
+    def confirm_po_change!(purchase_order, items, attributes, versions, token, confirmed)
+      if items.size > 1 || items.any?(&:shipped_at?) || (purchase_order.sent_at && attributes['sent_at'].blank?)
+        require_confirmation!(purchase_order, attributes, token, confirmed, item_versions: versions)
+      end
+      return unless purchase_order.sent_at && attributes.key?('sent_at') && attributes['sent_at'].blank?
+      return if attributes['unsend'] == '1' && confirmed
+
+      raise Conflict, 'Explicitly acknowledge the constituent visibility change before clearing a false sent date.'
+    end
 
     def require_reason!(reason)
       raise Conflict, 'Provide a brief reason for this correction.' if reason.to_s.strip.blank?
     end
 
-    def require_unchanged_item_details!(item, attributes, new_purchase_order)
+    def require_unchanged_item_details!(item, attributes)
       draft = EquipmentItem.new(attributes)
       changed = attributes.keys.any? { |field| draft.public_send(field) != item.public_send(field) }
-      return unless changed || draft.rejected_shipped_at_input.present? || new_purchase_order.present?
+      return unless changed || draft.rejected_shipped_at_input.present?
 
       raise Conflict, 'Detach and withdraw do not change device details. Save device details separately.'
     end
 
-    def lock_item!(item, attributes, expected_version, new_order_attributes)
-      application = Mutation.lock_applications!([item.application_id]).fetch(0)
+    def lock_item!(item, expected_version)
+      original_application_id = item.application_id
+      original_order_id = item.purchase_order_id
+      Mutation.lock_applications!([original_application_id].compact)
+      PurchaseOrder.where(id: original_order_id).order(:id).lock.load
       item.reload
-      Mutation.version!(item, expected_version)
-      raise Conflict, 'Withdrawn equipment is retained as history.' if item.withdrawn_at?
-
-      orders = PurchaseOrder.where(id: [item.purchase_order_id, attributes['purchase_order_id'].presence].compact).order(:id).lock.index_by(&:id)
-      created_order = create_order!(new_order_attributes, application.id) if new_order_attributes.present?
       item.lock!
       Mutation.version!(item, expected_version)
-      raise Conflict, 'Refresh the equipment item before changing its purchase order.' unless orders.key?(item.purchase_order_id) || item.purchase_order_id.nil?
-
-      [application, orders, created_order]
-    end
-
-    def assign_purchase_order!(item, orders, versions, new_order)
-      if new_order.present?
-        item.purchase_order = new_order
-      elsif item.purchase_order_id.present?
-        selected = orders.fetch(item.purchase_order_id) { raise Conflict, 'The selected purchase order is unavailable.' }
-        Mutation.version!(selected, versions[selected.id.to_s] || versions[selected.id]) if item.will_save_change_to_purchase_order_id?
-        item.purchase_order = selected
+      unless original_application_id == item.application_id && original_order_id == item.purchase_order_id
+        raise Conflict, 'Device allocation changed. Refresh before correcting.'
       end
+      raise Conflict, 'Withdrawn equipment is retained as history.' if item.withdrawn_at?
     end
 
     def audit_item!(item, previous, reason, operation)
@@ -154,31 +158,34 @@ module Equipment
       raise Conflict, 'Review the current correction values and confirm their impact before saving.' unless confirmed && observed == expected
     end
 
-    def apply_item_operation!(item, operation, attributes, new_purchase_order:)
-      if operation == 'update'
-        if item.purchase_order_id? && attributes.key?('purchase_order_id') && attributes['purchase_order_id'].blank? && new_purchase_order.nil?
-          raise Conflict, 'Use the detach action to remove an unshipped device from its purchase order.'
-        end
+    def apply_item_operation!(item, operation, attributes)
+      return item.assign_attributes(attributes) if operation == 'update'
 
-        item.assign_attributes(attributes)
-      else
-        raise Conflict, 'Shipped equipment cannot be detached or withdrawn. Correct the ship date first with impact confirmation.' if item.shipped_at?
-        raise Conflict, 'Only detached equipment can be withdrawn.' if operation == 'withdraw' && item.purchase_order_id?
-
+      require_disposition_change!(item, operation)
+      if item.direct_vendor?
         item.purchase_order = nil
-        item.withdrawn_at = Time.current if operation == 'withdraw'
+        item.unfulfilled_since = Time.current if operation == 'detach'
       end
+      item.withdrawn_at = Time.current if operation == 'withdraw'
     end
 
-    def create_order!(attributes, application_id)
-      order = PurchaseOrder.create!(attributes.to_h.stringify_keys.slice(*PO_FIELDS))
-      Mutation.audit!(order, actor: @actor, action: 'equipment_purchase_order_recorded', changes: changed_values({}, order.attributes.slice(*PO_FIELDS)),
-                             application_ids: [application_id])
-      order
+    def require_disposition_change!(item, operation)
+      raise Conflict, 'Shipped equipment cannot be detached or withdrawn. Correct the ship date first with impact confirmation.' if item.shipped_at?
+      raise Conflict, 'Filed costs and shared invoice evidence must be corrected before removing this device.' if item.icc_financial_evidence_locked?
+      raise Conflict, 'Release stock allocation before withdrawing it.' if item.stock? && item.application_id?
+      raise Conflict, 'Stock acquisition POs cannot be detached.' if item.stock? && operation == 'detach'
+      raise Conflict, 'Only detached direct equipment can be withdrawn.' if operation == 'withdraw' && item.direct_vendor? && item.purchase_order_id?
+    end
+
+    def validate_product_correction!(item)
+      return unless item.will_save_change_to_product_id?
+      raise Conflict, 'Release the stock allocation before correcting its exact model.' if item.stock? && item.application_id?
+
+      require_available_product!(item)
     end
 
     def require_available_product!(item)
-      raise Conflict, 'Select an available catalog product.' unless item.product && !item.product.archived?
+      raise Conflict, 'Select an available catalog product.' unless item.product&.available?
     end
 
     def changed_values(previous, current)

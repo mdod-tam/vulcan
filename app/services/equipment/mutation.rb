@@ -10,7 +10,18 @@ module Equipment
     end
 
     def eligible!(application)
-      raise Conflict, 'Only approved equipment applications can receive new purchasing assignments.' unless application.equipment_procurement_eligible?
+      return if application.equipment_procurement_eligible?
+
+      raise Conflict, 'This application is not eligible for equipment purchasing.'
+    end
+
+    def eligible_for_funding!(application, source:)
+      eligible!(application)
+      if application.voucher_fulfillment? && source != 'icanconnect'
+        raise Conflict, 'Use iCanConnect funding for direct equipment purchases on a MAT voucher application.'
+      end
+
+      Icanconnect::Funding.validate!(application, source: source)
     end
 
     def version!(record, expected)
@@ -21,10 +32,21 @@ module Equipment
       Application.where(id: ids).order(:id).lock.to_a
     end
 
-    def audit!(record, actor:, action:, changes:, **metadata)
+    def profile_versions(applications)
+      applications.to_h { |application| [application.id.to_s, application.equipment_profile_version] }
+    end
+
+    def profile_versions!(applications, expected)
+      observed = expected.to_h.stringify_keys.transform_values(&:to_s)
+      return if observed == profile_versions(applications)
+
+      raise Conflict, 'Application details changed. Refresh the shipping/setup review before continuing.'
+    end
+
+    def audit!(record, actor:, action:, changes:, operation_id: SecureRandom.uuid, **metadata)
       AuditEventService.log(action: action, actor: actor, auditable: record,
                             metadata: metadata.reverse_merge(reason: nil, application_ids: [])
-                                              .merge(operation_id: SecureRandom.uuid, changes: changes))
+                                              .merge(operation_id: operation_id, changes: changes))
     end
   end
 end

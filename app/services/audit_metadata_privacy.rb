@@ -9,7 +9,8 @@ class AuditMetadataPrivacy
                    alternate_contact_name recipient_name assigned_to_name completed_by_name].freeze
   WITHHELD_FIELDS = %w[date_of_birth physical_address_1 physical_address_2 address_line1 address_line2
                        address city zip_code postal_code notes payment_notes identity_rationale rationale
-                       rejection_reason decline_reason].freeze
+                       rejection_reason decline_reason shipping_care_of shipping_address_1 shipping_address_2
+                       shipping_city shipping_state shipping_zip_code disability_setup_group supplier_setup_group program_disability_groups].freeze
   SECRET_FIELDS = %w[password password_confirmation current_password password_digest secret reset_password_token
                      token raw_token access_token refresh_token otp code verification_code
                      secure_upload_url reset_url password_reset_url invitation_url

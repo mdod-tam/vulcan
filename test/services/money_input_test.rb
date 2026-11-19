@@ -16,4 +16,12 @@ class MoneyInputTest < ActiveSupport::TestCase
       assert_nil MoneyInput.parse(input), input.inspect
     end
   end
+
+  test 'decimal inputs follow the same cents and nonnegative rules as typed amounts' do
+    assert_equal BigDecimal('12.30'), MoneyInput.parse(BigDecimal('12.30'))
+    assert_equal BigDecimal('0'), MoneyInput.parse(BigDecimal('0'))
+    [BigDecimal('12.345'), BigDecimal('-1'), BigDecimal('NaN'), BigDecimal('Infinity')].each do |amount|
+      assert_nil MoneyInput.parse(amount), amount.inspect
+    end
+  end
 end

@@ -1,0 +1,10 @@
+<div class="max-w-5xl mx-auto p-6 space-y-4">
+<div class="flex flex-wrap items-center justify-between gap-4">
+  <h1 class="text-2xl font-bold">PO <%= @purchase_order.number %> costs</h1>
+  <%= link_to 'Back to Purchase Order', admin_purchase_order_path(@purchase_order), class: 'btn btn-outline' %>
+</div>
+<%= render 'admin/equipment/form_errors',
+           errors: @form_errors %>
+<%= render 'form',
+           purchase_order: @purchase_order, rows: @cost_rows %>
+</div>

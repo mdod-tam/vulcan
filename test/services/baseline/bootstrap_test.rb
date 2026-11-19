@@ -92,6 +92,29 @@ module Baseline
       assert User.admins.exists?(email: 'bootstrap.admin@example.test')
     end
 
+    test 'real bootstrap refreshes seeded product metadata while preserving resources and discontinuation' do
+      retained_user = create(:constituent)
+      Bootstrap.run!(input: @input, out: @output)
+      assert_equal Seeds::Products.required_keys.sort, Product.where(catalog_key: Seeds::Products.required_keys).pluck(:catalog_key).sort
+      product = Product.find_by!(catalog_key: Seeds::Products.required_keys.first)
+      seeded_name = product.name
+      seeded_msrp = product.msrp
+      product.update!(name: 'Staff-maintained catalog label', msrp: '1199.50', archived_at: Time.current)
+      archived_at = product.archived_at
+      resource = create(:product_resource, product: product)
+      count = Product.count
+      Bootstrap.run!(input: @input, out: @output)
+      assert_equal count, Product.count
+      assert User.exists?(retained_user.id)
+      assert_equal seeded_name, product.reload.name
+      assert_equal seeded_msrp, product.msrp
+      assert product.archived?
+      assert_equal archived_at, product.archived_at
+      assert product.product_resources.exists?(resource.id)
+      assert_includes @output.string, "#{Seeds::Products.required_keys.size} catalog products"
+      assert_nil Bootstrap.verify!(@input)
+    end
+
     test 'verification reports every baseline problem it finds' do
       Policy.find_by!(key: 'max_proof_rejections').update_columns(value: 9)
       EmailTemplate.find_by!(name: 'user_mailer_password_reset').destroy!

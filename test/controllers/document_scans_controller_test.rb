@@ -65,6 +65,32 @@ class DocumentScansControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test 'private financial evidence has a PDF-only admin scan purpose and does not use public manual slots' do
+    admin = create(:admin)
+    sign_in_as(admin, bypass_mfa_enrollment: true)
+    post document_scans_path, params: { file: fixture_file_upload('income_proof.pdf', 'application/pdf'),
+                                        purpose: 'financial_evidence', slot: 'financial_document', context: 'invoice-test' }
+    assert_response :accepted
+    scan = DocumentScan.find(response.parsed_body.fetch('id'))
+    assert_equal 'financial_evidence', scan.purpose
+    assert_nil response.parsed_body['signed_id']
+    assert_no_difference 'DocumentScan.count' do
+      post document_scans_path, params: { file: fixture_file_upload('sample.png', 'image/png'),
+                                          purpose: 'financial_evidence', slot: 'financial_document' }
+    end
+    assert_response :unprocessable_content
+    post document_scans_path, params: { purpose: 'product_resource', slot: 'financial_document' }
+    assert_response :not_found
+    sign_in_as(@user)
+    post document_scans_path, params: { purpose: 'financial_evidence', slot: 'financial_document' }
+    assert_response :not_found
+    trainer = create(:trainer, :with_webauthn_credential)
+    assert trainer.second_factor_enabled?
+    sign_in_as(trainer)
+    post document_scans_path, params: { purpose: 'financial_evidence', slot: 'financial_document' }
+    assert_response :not_found
+  end
+
   test 'canceling a pending upload invalidates its lease and future work' do
     post document_scans_path, params: { file: fixture_file_upload('income_proof.pdf', 'application/pdf'),
                                         purpose: 'proof', slot: 'income_proof' }

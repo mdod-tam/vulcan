@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_19_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -69,6 +69,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.index ["application_id"], name: "index_application_notes_on_application_id"
     t.index ["assigned_to_id"], name: "index_application_notes_on_assigned_to_id"
     t.index ["completed_at"], name: "index_application_notes_on_completed_at"
+  end
+
+  create_table "application_service_expenses", force: :cascade do |t|
+    t.bigint "application_id", null: false
+    t.bigint "equipment_item_id", null: false
+    t.string "category", null: false
+    t.date "service_date", null: false
+    t.decimal "amount", precision: 12, scale: 2
+    t.string "vendor_invoice_number"
+    t.string "vendor_name"
+    t.string "funding_source", default: "icanconnect", null: false
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "icc_claim_period"
+    t.string "icc_external_filing_reference"
+    t.datetime "icc_claimed_at"
+    t.bigint "icc_claimed_by_id"
+    t.index ["application_id"], name: "index_application_service_expenses_on_application_id"
+    t.index ["equipment_item_id"], name: "index_application_service_expenses_on_equipment_item_id"
+    t.index ["icc_claimed_by_id"], name: "index_application_service_expenses_on_icc_claimed_by_id"
+    t.check_constraint "(category::text = ANY (ARRAY['installation'::character varying, 'interpretation'::character varying, 'travel'::character varying]::text[])) AND funding_source::text = 'icanconnect'::text", name: "icc_service_expense_category_and_fund"
+    t.check_constraint "amount IS NULL OR amount >= 0::numeric", name: "application_service_expenses_amount_nonnegative"
+    t.check_constraint "icc_claimed_at IS NULL AND icc_claimed_by_id IS NULL AND icc_claim_period IS NULL AND icc_external_filing_reference IS NULL OR icc_claimed_at IS NOT NULL AND icc_claimed_by_id IS NOT NULL AND icc_claim_period IS NOT NULL AND icc_external_filing_reference IS NOT NULL", name: "application_service_expenses_icc_claim_complete"
   end
 
   create_table "application_status_changes", force: :cascade do |t|
@@ -148,6 +172,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.jsonb "autosave_revisions", default: {}, null: false
     t.datetime "equipment_needs_initialized_at"
     t.bigint "assigned_trainer_id"
+    t.text "program_disability_groups", default: [], null: false, array: true
+    t.text "shipping_care_of"
+    t.text "shipping_address_1"
+    t.text "shipping_address_2"
+    t.text "shipping_city"
+    t.text "shipping_state"
+    t.text "shipping_zip_code"
+    t.datetime "equipment_needs_decided_at"
+    t.bigint "equipment_source_evaluation_id"
+    t.datetime "needs_evaluator_since"
+    t.datetime "report_wait_started_at"
     t.index ["assigned_trainer_id"], name: "index_applications_on_assigned_trainer_id"
     t.index ["certifying_professional_email", "status"], name: "index_applications_on_certifying_professional_email_and_status"
     t.index ["disability_certification_status"], name: "index_applications_on_disability_certification_status"
@@ -155,6 +190,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
+    t.index ["equipment_source_evaluation_id"], name: "index_applications_on_equipment_source_evaluation_id"
     t.index ["evaluation_requested_at"], name: "index_applications_on_evaluation_requested_at"
     t.index ["fulfillment_type"], name: "index_applications_on_fulfillment_type"
     t.index ["id_proof_status"], name: "idx_applications_on_id_proof_status"
@@ -182,6 +218,42 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.index ["expires_at"], name: "index_auth_rate_limit_counters_on_expires_at"
     t.index ["key"], name: "index_auth_rate_limit_counters_on_key", unique: true
     t.check_constraint "attempts >= 0", name: "auth_rate_limit_counters_attempts_nonnegative"
+  end
+
+  create_table "bid_group_lines", force: :cascade do |t|
+    t.bigint "bid_group_id", null: false
+    t.bigint "equipment_need_id"
+    t.bigint "equipment_item_id"
+    t.bigint "product_id", null: false
+    t.integer "quantity", null: false
+    t.string "supplier_setup_group"
+    t.datetime "released_at"
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["bid_group_id"], name: "index_bid_group_lines_on_bid_group_id"
+    t.index ["equipment_item_id"], name: "index_bid_group_lines_on_equipment_item_id"
+    t.index ["equipment_need_id"], name: "index_bid_group_lines_on_equipment_need_id"
+    t.index ["product_id"], name: "index_bid_group_lines_on_product_id"
+    t.check_constraint "NOT (equipment_need_id IS NOT NULL AND equipment_item_id IS NOT NULL)", name: "bid_line_one_source"
+    t.check_constraint "quantity > 0", name: "bid_line_positive_quantity"
+  end
+
+  create_table "bid_groups", force: :cascade do |t|
+    t.string "number", null: false
+    t.string "normalized_number", null: false
+    t.string "purpose", default: "direct_to_constituents", null: false
+    t.bigint "purchase_order_id"
+    t.datetime "cancelled_at"
+    t.datetime "membership_changed_at"
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "funding_source", default: "mat", null: false
+    t.index ["normalized_number"], name: "index_bid_groups_on_normalized_number", unique: true
+    t.index ["purchase_order_id"], name: "index_bid_groups_on_purchase_order_id"
+    t.check_constraint "funding_source::text = ANY (ARRAY['mat'::character varying, 'icanconnect'::character varying]::text[])", name: "bid_groups_funding_source"
+    t.check_constraint "purpose::text = ANY (ARRAY['direct_to_constituents'::character varying, 'program_stock'::character varying]::text[])", name: "bid_groups_purpose"
   end
 
   create_table "contact_change_requests", force: :cascade do |t|
@@ -387,7 +459,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
   end
 
   create_table "equipment_items", force: :cascade do |t|
-    t.bigint "application_id", null: false
+    t.bigint "application_id"
     t.bigint "product_id", null: false
     t.bigint "purchase_order_id"
     t.bigint "source_evaluation_id"
@@ -404,14 +476,53 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.integer "lock_version", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "shipping_care_of"
+    t.text "shipping_address_1"
+    t.text "shipping_address_2"
+    t.text "shipping_city"
+    t.text "shipping_state"
+    t.text "shipping_zip_code"
+    t.string "disability_setup_group"
+    t.string "fulfillment_source", default: "direct_vendor", null: false
+    t.date "stock_received_on"
+    t.datetime "stock_allocated_at"
+    t.text "intake_provenance"
+    t.datetime "po_assigned_at"
+    t.datetime "setup_confirmed_at"
+    t.bigint "acquisition_bid_group_line_id"
+    t.bigint "allocation_equipment_need_id"
+    t.bigint "replaced_by_equipment_item_id"
+    t.datetime "unfulfilled_since"
+    t.string "funding_source", default: "mat", null: false
+    t.decimal "unit_cost", precision: 12, scale: 2
+    t.date "delivered_on"
+    t.date "installed_on"
+    t.string "icc_claim_period"
+    t.string "icc_external_filing_reference"
+    t.datetime "icc_claimed_at"
+    t.bigint "icc_claimed_by_id"
+    t.index ["acquisition_bid_group_line_id"], name: "index_equipment_items_on_acquisition_bid_group_line_id"
+    t.index ["allocation_equipment_need_id"], name: "index_equipment_items_on_allocation_equipment_need_id"
     t.index ["application_id"], name: "index_equipment_items_on_application_id"
+    t.index ["icc_claimed_by_id"], name: "index_equipment_items_on_icc_claimed_by_id"
     t.index ["manufacturer_model_identity", "normalized_serial_number"], name: "active_equipment_model_serial", unique: true, where: "((withdrawn_at IS NULL) AND (normalized_serial_number IS NOT NULL))"
     t.index ["normalized_imei"], name: "active_equipment_imei", unique: true, where: "((withdrawn_at IS NULL) AND (normalized_imei IS NOT NULL))"
     t.index ["product_id"], name: "index_equipment_items_on_product_id"
     t.index ["purchase_order_id"], name: "index_equipment_items_on_purchase_order_id"
+    t.index ["replaced_by_equipment_item_id"], name: "index_equipment_items_on_replaced_by_equipment_item_id", unique: true
     t.index ["source_evaluation_id"], name: "index_equipment_items_on_source_evaluation_id"
-    t.check_constraint "shipped_at IS NULL OR purchase_order_id IS NOT NULL", name: "shipped_equipment_has_po"
-    t.check_constraint "withdrawn_at IS NULL OR purchase_order_id IS NULL AND shipped_at IS NULL", name: "withdrawn_equipment_detached"
+    t.check_constraint "fulfillment_source::text <> 'direct_vendor'::text OR application_id IS NOT NULL", name: "direct_equipment_beneficiary"
+    t.check_constraint "fulfillment_source::text <> 'existing_stock'::text OR purchase_order_id IS NULL", name: "existing_stock_no_po"
+    t.check_constraint "fulfillment_source::text <> 'existing_stock'::text OR stock_received_on IS NOT NULL AND intake_provenance IS NOT NULL", name: "existing_stock_provenance_required"
+    t.check_constraint "fulfillment_source::text <> 'program_stock_po'::text OR purchase_order_id IS NOT NULL AND acquisition_bid_group_line_id IS NOT NULL", name: "stock_acquisition_required"
+    t.check_constraint "fulfillment_source::text = 'direct_vendor'::text OR (application_id IS NULL) = (stock_allocated_at IS NULL)", name: "stock_allocation_beneficiary_paired"
+    t.check_constraint "fulfillment_source::text = 'direct_vendor'::text OR application_id IS NULL OR stock_received_on IS NOT NULL AND stock_allocated_at IS NOT NULL", name: "stock_allocation_received"
+    t.check_constraint "fulfillment_source::text = ANY (ARRAY['direct_vendor'::character varying, 'program_stock_po'::character varying, 'existing_stock'::character varying]::text[])", name: "equipment_source_allowed"
+    t.check_constraint "funding_source::text = ANY (ARRAY['mat'::character varying, 'icanconnect'::character varying]::text[])", name: "equipment_items_funding_source"
+    t.check_constraint "icc_claimed_at IS NULL AND icc_claimed_by_id IS NULL AND icc_claim_period IS NULL AND icc_external_filing_reference IS NULL OR icc_claimed_at IS NOT NULL AND icc_claimed_by_id IS NOT NULL AND icc_claim_period IS NOT NULL AND icc_external_filing_reference IS NOT NULL", name: "equipment_items_icc_claim_complete"
+    t.check_constraint "shipped_at IS NULL OR application_id IS NOT NULL AND (fulfillment_source::text = 'direct_vendor'::text AND purchase_order_id IS NOT NULL OR fulfillment_source::text <> 'direct_vendor'::text AND stock_received_on IS NOT NULL)", name: "shipped_equipment_has_source"
+    t.check_constraint "unit_cost IS NULL OR unit_cost >= 0::numeric", name: "equipment_items_unit_cost_nonnegative"
+    t.check_constraint "withdrawn_at IS NULL OR shipped_at IS NULL AND (fulfillment_source::text = 'direct_vendor'::text AND purchase_order_id IS NULL OR fulfillment_source::text <> 'direct_vendor'::text AND application_id IS NULL)", name: "withdrawn_equipment_source_resolved"
   end
 
   create_table "equipment_needs", force: :cascade do |t|
@@ -422,6 +533,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.integer "lock_version", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "disability_setup_group"
+    t.datetime "unfulfilled_since"
     t.index ["application_id", "product_id"], name: "index_equipment_needs_on_application_id_and_product_id", unique: true
     t.index ["application_id"], name: "index_equipment_needs_on_application_id"
     t.index ["product_id"], name: "index_equipment_needs_on_product_id"
@@ -452,11 +565,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.text "working_notes"
     t.string "assessment_source", default: "direct_assessment", null: false
     t.string "assignment_operation_id"
+    t.string "funding_source"
+    t.date "funding_service_on"
+    t.decimal "hourly_rate", precision: 12, scale: 2
+    t.decimal "billable_hours", precision: 8, scale: 2
+    t.decimal "mileage", precision: 8, scale: 2
+    t.decimal "mileage_rate", precision: 6, scale: 3
+    t.string "vendor_invoice_number"
+    t.integer "lock_version", default: 0, null: false
+    t.string "icc_claim_period"
+    t.string "icc_external_filing_reference"
+    t.datetime "icc_claimed_at"
+    t.bigint "icc_claimed_by_id"
     t.index ["application_id"], name: "index_evaluations_on_application_id"
     t.index ["application_id"], name: "index_evaluations_one_open_per_application", unique: true, where: "(status <> ALL (ARRAY[3, 4]))"
     t.index ["constituent_id"], name: "index_evaluations_on_constituent_id"
     t.index ["evaluator_id"], name: "index_evaluations_on_evaluator_id"
+    t.index ["icc_claimed_by_id"], name: "index_evaluations_on_icc_claimed_by_id"
     t.check_constraint "assessment_source::text = ANY (ARRAY['direct_assessment'::character varying::text, 'outside_specialist'::character varying::text])", name: "evaluation_assessment_source"
+    t.check_constraint "billable_hours IS NULL OR billable_hours >= 0::numeric", name: "evaluations_billable_hours_nonnegative"
+    t.check_constraint "funding_source IS NULL OR (funding_source::text = ANY (ARRAY['mat'::character varying, 'icanconnect'::character varying]::text[]))", name: "evaluations_funding_source"
+    t.check_constraint "hourly_rate IS NULL OR hourly_rate >= 0::numeric", name: "evaluations_hourly_rate_nonnegative"
+    t.check_constraint "icc_claimed_at IS NULL AND icc_claimed_by_id IS NULL AND icc_claim_period IS NULL AND icc_external_filing_reference IS NULL OR icc_claimed_at IS NOT NULL AND icc_claimed_by_id IS NOT NULL AND icc_claim_period IS NOT NULL AND icc_external_filing_reference IS NOT NULL", name: "evaluations_icc_claim_complete"
+    t.check_constraint "mileage IS NULL OR mileage >= 0::numeric", name: "evaluations_mileage_nonnegative"
+    t.check_constraint "mileage_rate IS NULL OR mileage_rate >= 0::numeric", name: "evaluations_mileage_rate_nonnegative"
   end
 
   create_table "evaluations_products", id: false, force: :cascade do |t|
@@ -563,6 +695,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.index ["vendor_id"], name: "index_invoices_on_vendor_id"
   end
 
+  create_table "mileage_rates", force: :cascade do |t|
+    t.date "effective_on", null: false
+    t.decimal "dollars_per_mile", precision: 6, scale: 3, null: false
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["effective_on"], name: "index_mileage_rates_on_effective_on", unique: true
+    t.check_constraint "dollars_per_mile >= 0::numeric", name: "mileage_rates_nonnegative"
+  end
+
   create_table "notifications", force: :cascade do |t|
     t.string "action"
     t.bigint "actor_id"
@@ -652,14 +794,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.string "name"
     t.decimal "price"
     t.datetime "updated_at", null: false
+    t.string "category", default: "devices", null: false
+    t.text "eligible_disability_groups", default: [], null: false, array: true
+    t.string "catalog_key"
+    t.boolean "model_confirmed", default: false, null: false
+    t.string "manufacturer_model_identity"
+    t.decimal "msrp", precision: 12, scale: 2
+    t.index ["catalog_key"], name: "index_products_on_catalog_key", unique: true
     t.index ["device_types"], name: "index_products_on_device_types", using: :gin
-  end
-
-  create_table "products_users", id: false, force: :cascade do |t|
-    t.bigint "product_id", null: false
-    t.bigint "user_id", null: false
-    t.index ["product_id"], name: "index_products_users_on_product_id"
-    t.index ["user_id"], name: "index_products_users_on_user_id"
+    t.index ["manufacturer_model_identity"], name: "index_products_on_confirmed_model_identity", unique: true, where: "(model_confirmed = true)"
+    t.check_constraint "NOT model_confirmed OR manufacturer_model_identity IS NOT NULL", name: "products_confirmed_identity_present"
+    t.check_constraint "msrp IS NULL OR msrp >= 0::numeric", name: "products_msrp_nonnegative"
   end
 
   create_table "proof_reviews", force: :cascade do |t|
@@ -691,15 +836,41 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
   end
 
   create_table "purchase_orders", force: :cascade do |t|
-    t.bigint "vendor_id", null: false
     t.string "number", null: false
     t.string "normalized_number", null: false
-    t.date "sent_at", null: false
+    t.date "sent_at"
     t.integer "lock_version", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["vendor_id", "normalized_number"], name: "index_purchase_orders_on_vendor_id_and_normalized_number", unique: true
-    t.index ["vendor_id"], name: "index_purchase_orders_on_vendor_id"
+    t.string "purpose", default: "direct_to_constituents", null: false
+    t.text "shipping_care_of"
+    t.text "shipping_address_1"
+    t.text "shipping_address_2"
+    t.text "shipping_city"
+    t.text "shipping_state"
+    t.text "shipping_zip_code"
+    t.string "funding_source", default: "mat", null: false
+    t.decimal "shipping_cost", precision: 12, scale: 2
+    t.decimal "other_cost", precision: 12, scale: 2
+    t.decimal "invoice_total", precision: 12, scale: 2
+    t.string "other_cost_category"
+    t.string "vendor_invoice_number"
+    t.string "vendor_name"
+    t.date "invoice_on"
+    t.string "icc_claim_period"
+    t.string "icc_external_filing_reference"
+    t.datetime "icc_claimed_at"
+    t.bigint "icc_claimed_by_id"
+    t.decimal "tax_cost", precision: 12, scale: 2
+    t.index ["icc_claimed_by_id"], name: "index_purchase_orders_on_icc_claimed_by_id"
+    t.index ["normalized_number"], name: "index_purchase_orders_on_unique_number", unique: true
+    t.check_constraint "funding_source::text = ANY (ARRAY['mat'::character varying, 'icanconnect'::character varying]::text[])", name: "purchase_orders_funding_source"
+    t.check_constraint "icc_claimed_at IS NULL AND icc_claimed_by_id IS NULL AND icc_claim_period IS NULL AND icc_external_filing_reference IS NULL OR icc_claimed_at IS NOT NULL AND icc_claimed_by_id IS NOT NULL AND icc_claim_period IS NOT NULL AND icc_external_filing_reference IS NOT NULL", name: "purchase_orders_icc_claim_complete"
+    t.check_constraint "invoice_total IS NULL OR invoice_total >= 0::numeric", name: "purchase_orders_invoice_total_nonnegative"
+    t.check_constraint "other_cost IS NULL OR other_cost >= 0::numeric", name: "purchase_orders_other_cost_nonnegative"
+    t.check_constraint "purpose::text = ANY (ARRAY['direct_to_constituents'::character varying, 'program_stock'::character varying]::text[])", name: "purchase_orders_purpose"
+    t.check_constraint "shipping_cost IS NULL OR shipping_cost >= 0::numeric", name: "purchase_orders_shipping_cost_nonnegative"
+    t.check_constraint "tax_cost IS NULL OR tax_cost >= 0::numeric", name: "purchase_orders_tax_cost_nonnegative"
   end
 
   create_table "recovery_requests", force: :cascade do |t|
@@ -874,6 +1045,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.index ["user_id"], name: "index_totp_credentials_on_user_id"
   end
 
+  create_table "training_session_equipment_items", force: :cascade do |t|
+    t.bigint "training_session_id", null: false
+    t.bigint "equipment_item_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["equipment_item_id"], name: "index_training_session_equipment_items_on_equipment_item_id"
+    t.index ["training_session_id", "equipment_item_id"], name: "unique_training_equipment_link", unique: true
+    t.index ["training_session_id"], name: "index_training_session_equipment_items_on_training_session_id"
+  end
+
   create_table "training_sessions", force: :cascade do |t|
     t.bigint "application_id", null: false
     t.integer "cancellation_initiator"
@@ -895,10 +1076,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
     t.string "summary_locale"
     t.datetime "report_submitted_at"
     t.string "assignment_operation_id"
+    t.string "funding_source"
+    t.date "funding_service_on"
+    t.decimal "hourly_rate", precision: 12, scale: 2
+    t.decimal "billable_hours", precision: 8, scale: 2
+    t.decimal "mileage", precision: 8, scale: 2
+    t.decimal "mileage_rate", precision: 6, scale: 3
+    t.string "vendor_invoice_number"
+    t.integer "lock_version", default: 0, null: false
+    t.string "icc_claim_period"
+    t.string "icc_external_filing_reference"
+    t.datetime "icc_claimed_at"
+    t.bigint "icc_claimed_by_id"
     t.index ["application_id"], name: "index_training_sessions_on_application_id"
     t.index ["application_id"], name: "index_training_sessions_one_open_per_application", unique: true, where: "(status = ANY (ARRAY[0, 1, 2]))"
+    t.index ["icc_claimed_by_id"], name: "index_training_sessions_on_icc_claimed_by_id"
     t.index ["product_trained_on_id"], name: "index_training_sessions_on_product_trained_on_id"
     t.index ["trainer_id"], name: "index_training_sessions_on_trainer_id"
+    t.check_constraint "billable_hours IS NULL OR billable_hours >= 0::numeric", name: "training_sessions_billable_hours_nonnegative"
+    t.check_constraint "funding_source IS NULL OR (funding_source::text = ANY (ARRAY['mat'::character varying, 'icanconnect'::character varying]::text[]))", name: "training_sessions_funding_source"
+    t.check_constraint "hourly_rate IS NULL OR hourly_rate >= 0::numeric", name: "training_sessions_hourly_rate_nonnegative"
+    t.check_constraint "icc_claimed_at IS NULL AND icc_claimed_by_id IS NULL AND icc_claim_period IS NULL AND icc_external_filing_reference IS NULL OR icc_claimed_at IS NOT NULL AND icc_claimed_by_id IS NOT NULL AND icc_claim_period IS NOT NULL AND icc_external_filing_reference IS NOT NULL", name: "training_sessions_icc_claim_complete"
+    t.check_constraint "mileage IS NULL OR mileage >= 0::numeric", name: "training_sessions_mileage_nonnegative"
+    t.check_constraint "mileage_rate IS NULL OR mileage_rate >= 0::numeric", name: "training_sessions_mileage_rate_nonnegative"
   end
 
   create_table "user_email_search_tokens", force: :cascade do |t|
@@ -1151,13 +1351,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
   add_foreign_key "application_notes", "applications"
   add_foreign_key "application_notes", "users", column: "admin_id"
   add_foreign_key "application_notes", "users", column: "assigned_to_id"
+  add_foreign_key "application_service_expenses", "applications"
+  add_foreign_key "application_service_expenses", "equipment_items"
+  add_foreign_key "application_service_expenses", "users", column: "icc_claimed_by_id"
   add_foreign_key "application_status_changes", "applications"
   add_foreign_key "application_status_changes", "users"
+  add_foreign_key "applications", "evaluations", column: "equipment_source_evaluation_id"
   add_foreign_key "applications", "users"
   add_foreign_key "applications", "users", column: "assigned_trainer_id"
   add_foreign_key "applications", "users", column: "disability_certification_verified_by_id"
   add_foreign_key "applications", "users", column: "income_verified_by_id"
   add_foreign_key "applications", "users", column: "managing_guardian_id"
+  add_foreign_key "bid_group_lines", "bid_groups"
+  add_foreign_key "bid_group_lines", "equipment_items"
+  add_foreign_key "bid_group_lines", "equipment_needs"
+  add_foreign_key "bid_group_lines", "products"
+  add_foreign_key "bid_groups", "purchase_orders"
   add_foreign_key "contact_change_requests", "sessions", on_delete: :nullify
   add_foreign_key "contact_change_requests", "users"
   add_foreign_key "document_scans", "active_storage_blobs", column: "blob_id", on_delete: :cascade
@@ -1174,15 +1383,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
   add_foreign_key "email_delivery_receipts", "email_delivery_attempts", on_delete: :cascade
   add_foreign_key "email_templates", "users", column: "updated_by_id"
   add_foreign_key "equipment_items", "applications"
+  add_foreign_key "equipment_items", "bid_group_lines", column: "acquisition_bid_group_line_id"
+  add_foreign_key "equipment_items", "equipment_items", column: "replaced_by_equipment_item_id"
+  add_foreign_key "equipment_items", "equipment_needs", column: "allocation_equipment_need_id"
   add_foreign_key "equipment_items", "evaluations", column: "source_evaluation_id"
   add_foreign_key "equipment_items", "products"
   add_foreign_key "equipment_items", "purchase_orders"
+  add_foreign_key "equipment_items", "users", column: "icc_claimed_by_id"
   add_foreign_key "equipment_needs", "applications"
   add_foreign_key "equipment_needs", "evaluations", column: "source_evaluation_id"
   add_foreign_key "equipment_needs", "products"
   add_foreign_key "evaluations", "applications"
   add_foreign_key "evaluations", "users", column: "constituent_id"
   add_foreign_key "evaluations", "users", column: "evaluator_id"
+  add_foreign_key "evaluations", "users", column: "icc_claimed_by_id"
   add_foreign_key "events", "users"
   add_foreign_key "guardian_relationships", "users", column: "dependent_id"
   add_foreign_key "guardian_relationships", "users", column: "guardian_id"
@@ -1200,7 +1414,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
   add_foreign_key "product_resources", "products"
   add_foreign_key "proof_reviews", "applications"
   add_foreign_key "proof_reviews", "users", column: "admin_id"
-  add_foreign_key "purchase_orders", "users", column: "vendor_id"
+  add_foreign_key "purchase_orders", "users", column: "icc_claimed_by_id"
   add_foreign_key "recovery_requests", "users"
   add_foreign_key "registration_verifications", "users", column: "created_user_id"
   add_foreign_key "role_capabilities", "users"
@@ -1211,8 +1425,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200200) do
   add_foreign_key "sessions", "users"
   add_foreign_key "sms_credentials", "users"
   add_foreign_key "totp_credentials", "users"
+  add_foreign_key "training_session_equipment_items", "equipment_items"
+  add_foreign_key "training_session_equipment_items", "training_sessions"
   add_foreign_key "training_sessions", "applications"
   add_foreign_key "training_sessions", "products", column: "product_trained_on_id"
+  add_foreign_key "training_sessions", "users", column: "icc_claimed_by_id"
   add_foreign_key "training_sessions", "users", column: "trainer_id"
   add_foreign_key "user_email_search_tokens", "users", on_delete: :cascade
   add_foreign_key "users", "users", column: "certifying_professional_id"

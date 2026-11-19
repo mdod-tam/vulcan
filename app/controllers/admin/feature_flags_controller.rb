@@ -1,7 +1,7 @@
 module Admin
   class FeatureFlagsController < BaseController
     def index
-      @feature_flags = FeatureFlag.general
+      @feature_flags = FeatureFlag.general.order(:name)
     end
 
     def update

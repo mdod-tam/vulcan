@@ -13,6 +13,15 @@
       </h1>
     </header>
 
+    <% if @equipment_history.groups.any? %>
+      <section id="equipment-summary" aria-labelledby="equipment-summary-heading" class="mb-6">
+        <h2 id="equipment-summary-heading" class="text-xl font-semibold"><%= t('product_resources.devices.dashboard_heading') %></h2>
+        <%= render 'constituent_portal/products/history', groups: @equipment_history.groups, heading_tag: 'h3' %>
+      </section>
+    <% elsif @equipment_history.fulfillment_in_progress? %>
+      <p class="mb-6 rounded bg-primary-50 p-4"><%= t('product_resources.devices.in_progress_details') %></p>
+    <% end %>
+
     <section aria-labelledby="details-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="details-heading" class="text-xl font-semibold mb-4 text-gray-900">Application Details</h2>
       <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -192,7 +201,7 @@
     <section aria-labelledby="documents-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="documents-heading" class="text-xl font-semibold mb-4 text-gray-900">Uploaded Documents</h2>
 
-      <% if @application.income_proof_required? %>
+      <% if @application.income_proof_review_applicable? %>
       <div class="mb-6">
         <h3 class="text-lg font-medium text-gray-900 mb-3">Income Proof</h3>
         <% if @application.income_proof.attached? %>

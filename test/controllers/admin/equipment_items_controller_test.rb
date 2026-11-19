@@ -10,6 +10,20 @@ module Admin
       sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
     end
 
+    test 'blank optional shipping fields do not add unchanged details to a tracking correction review' do
+      @item.update!(shipped_at: Date.current, tracking_number: 'Original')
+      attributes = @item.shipping_snapshot.transform_values { |value| value || '' }.merge('tracking_number' => 'Corrected')
+      assert_no_difference 'Event.count' do
+        patch admin_equipment_item_path(@item), params: {
+          review: '1', expected_version: @item.lock_version, reason: 'Correct the parcel reference', equipment_item: attributes
+        }
+      end
+      assert_response :success
+      assert_select '.bg-warning-50 dt', count: 1, text: 'Tracking number:'
+      assert_nil @item.reload.shipping_care_of
+      assert_nil @item.shipping_address_2
+    end
+
     test 'item forms and writes require an administrator' do
       sign_in_for_integration_test(create(:evaluator), bypass_mfa_enrollment: true)
       get edit_admin_equipment_item_path(@item)
@@ -22,11 +36,26 @@ module Admin
       assert_nil @item.reload.tracking_number
     end
 
+    test 'device editor shows linked shared history without another device unrelated events' do
+      other = create(:equipment_item)
+      shared = Equipment::Mutation.audit!(other, actor: @admin, action: 'equipment_stock_swapped',
+                                                 changes: { replaced_unit_id: [@item.id, other.id] },
+                                                 equipment_item_ids: [@item.id, other.id], reason: 'Shared replacement history')
+      unrelated = Equipment::Mutation.audit!(other, actor: @admin, action: 'equipment_item_corrected',
+                                                    changes: { carrier: [nil, 'ups'] }, reason: 'Unrelated device history')
+      get edit_admin_equipment_item_path(@item)
+      assert_response :success
+      assert_select 'details', text: /Shared replacement history/
+      assert_select 'details', text: /Unrelated device history/, count: 0
+      assert_includes @item.equipment_history, shared
+      assert_not_includes @item.equipment_history, unrelated
+    end
+
     test 'invalid shipment re-renders every entered field and validated return context' do
       patch admin_equipment_item_path(@item), headers: { 'Accept' => Mime[:turbo_stream].to_s }, params: {
-        equipment_item: { product_id: @item.product_id, purchase_order_id: @item.purchase_order_id, shipped_at: '13/45/2026',
+        equipment_item: { product_id: @item.product_id, shipped_at: '13/45/2026',
                           tracking_number: 'RetryPackage', carrier: 'fedex', serial_number: 'RetrySerial', imei: '123456789012345' },
-        expected_version: 0, reason: 'Record shipment', return_context: { tab: 'ordered', product_id: @item.product_id, vendor_id: @item.purchase_order.vendor_id }
+        expected_version: 0, reason: 'Record shipment', return_context: { tab: 'ordered', product_id: @item.product_id }
       }
       assert_response :unprocessable_entity
       assert_equal Mime[:html].to_s, response.media_type
@@ -47,8 +76,8 @@ module Admin
       replacement = create(:product)
       patch admin_equipment_item_path(@item), params: { review: '1', equipment_item: { product_id: replacement.id, shipped_at: Date.current, carrier: 'usps',
                                                                                        imei: '123456789012345' }, expected_version: 0, reason: 'Review replacement model' }
-      original_label = "#{@item.product.manufacturer} / #{@item.product.name} / #{@item.product.model_number}"
-      replacement_label = "#{replacement.manufacturer} / #{replacement.name} / #{replacement.model_number}"
+      original_label = @item.product.catalog_label
+      replacement_label = replacement.catalog_label
       assert_response :success
       assert_equal Mime[:html].to_s, response.media_type
       assert_select '#equipment-correction form input[name=impact_token]'
@@ -64,31 +93,31 @@ module Admin
 
     test 'identity conflict links are available only in the authorized correction form' do
       conflict = create(:equipment_item, imei: '123456789012345')
-      context = { tab: 'ordered', product_id: @item.product_id.to_s, vendor_id: @item.purchase_order.vendor_id.to_s }
+      context = { tab: 'ordered', product_id: @item.product_id.to_s }
       patch admin_equipment_item_path(@item), params: { equipment_item: { imei: '123456789012345' }, expected_version: 0, reason: 'Identify device', return_context: context }
       assert_response :unprocessable_entity
-      assert_select 'a[href=?]', edit_admin_equipment_item_path(conflict, return_context: context), text: "Review equipment item ##{conflict.id}"
+      assert_select 'a[href=?]', edit_admin_equipment_item_path(conflict, return_context: context), text: "Review device ##{conflict.id}"
       assert_select '[role=alert]', text: /IMEI/
       assert_nil @item.reload.imei
     end
 
     test 'a linked device can be detached only through the explicit correction action' do
       get edit_admin_equipment_item_path(@item)
-      assert_select '#equipment_item_purchase_order_id option[value=""]', count: 0
-      assert_select '#operation option[value=detach]', text: 'Detach an unshipped device for reorder'
+      assert_select '#equipment_item_purchase_order_id', count: 0
+      assert_select '#operation option[value=detach]', text: 'Remove unshipped device from PO for reorder'
 
       Equipment::Correction.new(actor: @admin).update_item!(item: @item, attributes: {}, expected_version: 0, reason: 'Await a replacement order', operation: 'detach')
       get edit_admin_equipment_item_path(@item)
-      assert_select '#equipment_item_purchase_order_id option[value=""]', text: 'No current purchase order'
+      assert_select '#equipment_item_purchase_order_id', count: 0
+      assert_includes response.body, 'Assign purchase orders through a bid award.'
     end
 
     test 'expired shipment review retains its draft and filters until a fresh review is confirmed' do
       @item.update!(shipped_at: Date.current, tracking_number: 'OriginalPackage')
       original = @item.attributes
-      context = { tab: 'shipped', product_id: @item.product_id.to_s, vendor_id: @item.purchase_order.vendor_id.to_s }
+      context = { tab: 'shipped', product_id: @item.product_id.to_s }
       submitted = { equipment_item: { shipped_at: Date.current.iso8601, tracking_number: 'Package' }, operation: 'update',
-                    expected_version: @item.lock_version, reason: 'Record actual shipment', return_context: context,
-                    purchase_order_versions: { @item.purchase_order_id.to_s => @item.purchase_order.lock_version.to_s } }
+                    expected_version: @item.lock_version, reason: 'Record actual shipment', return_context: context }
       headers = { 'Accept' => Mime[:turbo_stream].to_s }
       assert_no_difference 'Event.count' do
         patch admin_equipment_item_path(@item), headers: headers, params: submitted.merge(review: '1')
@@ -122,9 +151,6 @@ module Admin
         assert_select '#equipment_item_shipped_at[value=?]', @item.shipped_at.strftime('%m/%d/%Y')
         assert_select '#reason', text: submitted[:reason]
         assert_select '#expected_version[value=?]', submitted[:expected_version].to_s
-        submitted[:purchase_order_versions].each do |id, version|
-          assert_select 'input[name=?][value=?]', "purchase_order_versions[#{id}]", version
-        end
         context.each { |key, value| assert_select 'input[name=?][value=?]', "return_context[#{key}]", value }
         assert_select 'input[name=impact_token], input[name=reviewing], input[name=confirmed_impact]', count: 0
         assert_select '#equipment-correction-impact-heading', count: 0
@@ -155,9 +181,9 @@ module Admin
 
     test 'mixed detach edits retain the rejected draft until details are saved separately' do
       original = @item.attributes
-      context = { tab: 'ordered', product_id: @item.product_id.to_s, vendor_id: @item.purchase_order.vendor_id.to_s }
+      context = { tab: 'ordered', product_id: @item.product_id.to_s }
       submitted = {
-        equipment_item: { product_id: @item.product_id.to_s, purchase_order_id: @item.purchase_order_id.to_s,
+        equipment_item: { product_id: @item.product_id.to_s,
                           shipped_at: '', tracking_number: '', carrier: '', serial_number: 'CorrectedSerial', imei: '' },
         operation: 'detach', expected_version: '0', reason: 'Correct identity before reorder', return_context: context
       }
@@ -186,8 +212,7 @@ module Admin
     test 'stale form retains its submitted fences and an unchanged retry cannot overwrite another administrator' do
       @item.update!(shipped_at: Date.current, tracking_number: 'OriginalPackage')
       submitted_version = @item.lock_version.to_s
-      params = { equipment_item: { tracking_number: 'StaleDraft' }, expected_version: submitted_version, reason: 'Old browser tab',
-                 purchase_order_versions: { @item.purchase_order_id.to_s => '0' } }
+      params = { equipment_item: { tracking_number: 'StaleDraft' }, expected_version: submitted_version, reason: 'Old browser tab' }
       headers = { 'Accept' => Mime[:turbo_stream].to_s }
       patch admin_equipment_item_path(@item), headers: headers, params: params.merge(review: '1')
       assert_response :success
@@ -211,20 +236,18 @@ module Admin
       end
     end
 
-    test 'stale selected PO versions stay stale on an unchanged retry' do
-      target = create(:purchase_order)
-      original_order_id = @item.purchase_order_id
-      Equipment::Correction.new(actor: @admin).update_purchase_order!(purchase_order: target, attributes: { number: 'Revised target header' },
-                                                                      expected_version: 0, expected_item_versions: {}, reason: 'Another tab revised the target')
-      2.times do
-        assert_no_difference 'Event.count' do
-          patch admin_equipment_item_path(@item), params: { equipment_item: { purchase_order_id: target.id }, reason: 'Old target selection',
-                                                            expected_version: '0', purchase_order_versions: { target.id.to_s => '0' } }
-        end
-        assert_response :unprocessable_entity
-        assert_select "input[name='purchase_order_versions[#{target.id}]'][value='0']"
-        assert_equal original_order_id, @item.reload.purchase_order_id
-      end
+    test 'unallocated existing stock correction has no application or ad hoc PO controls' do
+      stock = Equipment::StockReceipt.new(actor: @admin).existing!(product: @item.product, quantity: 1,
+                                                                   received_on: Date.current, provenance: 'Verified program shelf count').sole
+      get edit_admin_equipment_item_path(stock)
+      assert_response :success
+      assert_select '#equipment_item_purchase_order_id, #new_purchase_order_vendor_id, #create_purchase_order', count: 0
+      assert_select 'a', text: 'Program stock'
+      assert_select '#operation option[value=withdraw]', text: 'Cancel incoming stock or remove unusable stock'
+      patch admin_equipment_item_path(stock), params: { equipment_item: { serial_number: 'STOCK-RECORDED' }, expected_version: stock.lock_version, reason: 'Physical identity verified' }
+      assert_redirected_to admin_stock_index_path
+      assert_equal 'STOCK-RECORDED', stock.reload.serial_number
+      assert_nil stock.application_id
     end
   end
 end

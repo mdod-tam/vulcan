@@ -16,137 +16,103 @@ module Applications
 
     teardown { travel_back }
 
-    test 'equipment groups reuse the fulfillment owner and keep partial work at its earliest unfinished stage' do
-      awaiting_order = equipment_application
-      create(:equipment_need, application: awaiting_order, remaining_quantity: 2)
-      create(:equipment_item, application: awaiting_order, shipped_at: Date.current, tracking_number: 'PARTIAL-SHIPMENT')
-      awaiting_tracking = equipment_application
-      create(:equipment_item, application: awaiting_tracking, tracking_number: 'TRACKING-BEFORE-SHIPMENT')
-      create(:equipment_item, application: awaiting_tracking, shipped_at: Date.current, tracking_number: 'PARTIAL-TRACKING')
-      tracking_only = equipment_application
-      create(:equipment_item, application: tracking_only, tracking_number: 'SAVED-TRACKING')
-      recorded = equipment_application
-      create(:equipment_item, application: recorded, shipped_at: Date.current, tracking_number: 'RECORDED')
+    test 'earliest unfinished stage keeps secondary overdue shipment visible' do
+      application = equipment_application(equipment_needs_initialized_at: 40.days.ago)
+      need = create(:equipment_need, application:, remaining_quantity: 2, disability_setup_group: nil, unfulfilled_since: 2.days.ago)
+      order = create(:purchase_order, sent_at: 35.days.ago.to_date)
+      create(:equipment_item, application:, purchase_order: order)
 
-      rows = projection(awaiting_order, awaiting_tracking, tracking_only, recorded).rows.index_by { |row| row.application.id }
+      row = projection(application).rows.sole
 
-      assert_equal :po, rows.fetch(awaiting_order.id).stage
-      assert_equal '1 of 3 items ordered · 1 shipped', rows.fetch(awaiting_order.id).progress
-      assert_equal :tracking, rows.fetch(awaiting_tracking.id).stage
-      assert_equal '2 of 2 items ordered · 1 shipped', rows.fetch(awaiting_tracking.id).progress
-      assert_equal :tracking, rows.fetch(tracking_only.id).stage
-      assert_equal '1 of 1 item ordered · 0 shipped', rows.fetch(tracking_only.id).progress
-      assert_equal :recorded, rows.fetch(recorded.id).stage
-      assert(rows.values.all? { |row| row.group == :equipment })
+      assert_equal :needs_fulfillment, row.stage
+      assert_equal [need], Equipment::FulfillmentStage.new(application).requests_to_fulfill
+      assert_equal 'Prepare bid', row.action_label
+      assert_equal 2, row.days
+      assert_equal '0 of 3 units shipped', row.progress
+      assert_equal :awaiting_shipment, row.secondary.sole.stage
+      assert_equal 1, row.secondary.sole.quantity
+      assert_equal order.sent_at.to_time, row.secondary.sole.entered_at
+      assert_equal :needs_fulfillment, row.application.admin_fulfillment_responsibility_state
     end
 
-    test 'an assigned evaluator waits for a report while an application without one needs assignment' do
-      unassigned = equipment_application
-      assigned = equipment_application
+    test 'report waiting uses the current assignment cycle and transfer keeps its clock' do
+      unassigned = equipment_application(needs_evaluator_since: 9.days.ago)
+      assigned = equipment_application(report_wait_started_at: 12.days.ago)
       evaluation = create(:evaluation, application: assigned)
-      log(assigned, 'evaluator_assigned', at: 12.days.ago)
-      log(evaluation, 'evaluator_reassigned', at: 2.days.ago, metadata: { application_id: assigned.id })
 
       rows = projection(unassigned, assigned).rows.index_by { |row| row.application.id }
 
-      assert_equal :evaluator, rows.fetch(unassigned.id).stage
-      assert_equal 45, rows.fetch(unassigned.id).days
-      assert_equal :report, rows.fetch(assigned.id).stage
+      assert_equal :needs_evaluator, rows.fetch(unassigned.id).stage
+      assert_equal 9, rows.fetch(unassigned.id).days
+      assert_equal :awaiting_report, rows.fetch(assigned.id).stage
       assert_equal evaluation, rows.fetch(assigned.id).evaluation
       assert_equal 12, rows.fetch(assigned.id).days
-      assert_equal 'Open evaluation', rows.fetch(assigned.id).action_label
+      assert_equal 'Enter evaluation report', rows.fetch(assigned.id).action_label
     end
 
-    test 'cancelled evaluator assignment restarts the needs-evaluator clock and reassignment starts report waiting again' do
-      application = equipment_application
-      evaluation = create(:evaluation, application:, status: :cancelled)
-      log(application, 'evaluator_assigned', at: 30.days.ago)
-      log(evaluation, 'evaluation_cancelled', at: 9.days.ago, metadata: { application_id: application.id })
+    test 'report card preloads the assigned evaluator only for its displayed oldest record' do
+      oldest = equipment_application(report_wait_started_at: 12.days.ago)
+      newer = equipment_application(report_wait_started_at: 3.days.ago)
+      evaluator = create(:evaluator, first_name: 'Morgan', last_name: 'Evaluator')
+      create(:evaluation, application: oldest, evaluator:)
+      create(:evaluation, application: newer)
+      pipeline = projection(oldest, newer)
 
-      assert_equal 9, projection(application).rows.sole.days
+      card = pipeline.summaries(:equipment).find { |entry| entry.stage == :awaiting_report }
 
-      evaluation.update!(status: :requested)
-      log(application, 'evaluator_assigned', at: 4.days.ago)
-      log(application, 'evaluator_assigned', at: 2.days.ago)
+      assert_equal oldest, card.oldest.application
+      assert_no_queries { assert_equal 'Morgan Evaluator', card.oldest.evaluation.evaluator.full_name }
+      assert_not pipeline.rows.find { |row| row.application.id == newer.id }.evaluation.association(:evaluator).loaded?
+    end
 
+    test 'both unresolved report outcomes stay actionable until an explicit empty decision' do
+      %i[outside_catalog no_suitable_product].each do |outcome|
+        application = equipment_application
+        report = build(:evaluation, :completed, application:, recommendation_outcome: outcome,
+                                                recommendation_notes: 'Review equipment with staff')
+        report.recommended_products = []
+        report.products_tried = []
+        report.save!
+        EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
+        row = projection(application).rows.sole
+        assert_equal :needs_fulfillment, row.stage
+        assert_equal 'Choose equipment for bid', row.action_label
+
+        application.update!(equipment_needs_decided_at: Time.current)
+        row = projection(application).rows.sole
+        assert_equal :none, row.group
+        assert_equal :no_equipment, row.stage
+      end
+    end
+
+    test 'unsent PO assignment and sent PO dates are separate stage boundaries' do
+      application = equipment_application(equipment_needs_initialized_at: 30.days.ago)
+      order = create(:purchase_order, sent_at: nil)
+      item = create(:equipment_item, application:, purchase_order: order, po_assigned_at: 6.days.ago)
+      assert_equal :ready_to_send_po, projection(application).rows.sole.stage
+      assert_equal 6, projection(application).rows.sole.days
+
+      order.update!(sent_at: 3.days.ago.to_date)
       row = projection(application).rows.sole
-      assert_equal :report, row.stage
+      assert_equal :awaiting_shipment, row.stage
+      assert_equal 3.days.ago.to_date.to_time, row.entered_at
+
+      item.update!(shipped_at: Date.current, tracking_number: 'ACTUAL-SHIPMENT')
+      row = projection(application).rows.sole
+      assert_equal :shipment_recorded, row.stage
+      assert_equal Date.current.to_time, row.entered_at
+    end
+
+    test 'bid reservations count once and use the current line reservation date' do
+      application = equipment_application(equipment_needs_initialized_at: 30.days.ago)
+      need = create(:equipment_need, application:, remaining_quantity: 3, unfulfilled_since: 30.days.ago)
+      group = BidGroup.create!(number: 'MIXED-BID', purpose: 'direct_to_constituents', created_at: 20.days.ago)
+      group.bid_group_lines.create!(equipment_need: need, product: need.product, quantity: 3, created_at: 4.days.ago)
+      row = projection(application).rows.sole
+      assert_equal :awaiting_bid_award, row.stage
       assert_equal 4, row.days
-    end
-
-    test 'outside catalog reports require a purchasing decision instead of disappearing as no equipment' do
-      application = equipment_application
-      report = build(:evaluation, :completed, application:, recommendation_outcome: :outside_catalog,
-                                              recommendation_notes: 'Choose a catalog alternative')
-      report.recommended_products = []
-      report.products_tried = []
-      report.save!
-      EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
-
-      row = projection(application).rows.sole
-
-      assert_equal :equipment, row.group
-      assert_equal :po, row.stage
-      assert_equal 'Review equipment', row.action_label
-      assert_equal 'Choose equipment to order', row.progress
-    end
-
-    test 'no equipment requires an explicit decision and retains requested training' do
-      undecided = equipment_application
-      no_equipment = equipment_application(equipment_needs_initialized_at: 10.days.ago, training_requested_at: 5.days.ago)
-      log(no_equipment, 'equipment_needs_initialized', at: 10.days.ago)
-
-      rows = projection(undecided, no_equipment).rows.index_by { |row| row.application.id }
-
-      assert_equal :evaluator, rows.fetch(undecided.id).stage
-      row = rows.fetch(no_equipment.id)
-      assert_equal :none, row.group
-      assert_equal :none, row.stage
-      assert_equal 10, row.days
-      assert_equal 'Open training', row.action_label
-      assert_includes row.progress, 'training requested'
-    end
-
-    test 'normal ordering and recorded shipments use audit times rather than backdated order and ship dates' do
-      application = equipment_application(equipment_needs_initialized_at: 30.days.ago)
-      order = create(:purchase_order, sent_at: 25.days.ago.to_date)
-      item = create(:equipment_item, application:, purchase_order: order, shipped_at: 10.days.ago.to_date, tracking_number: 'BACKDATED')
-      log(application, 'equipment_needs_initialized', at: 30.days.ago)
-      log(item.purchase_order, 'equipment_order_recorded', at: 20.days.ago, metadata: { application_ids: [application.id] })
-      log(item, 'equipment_item_corrected', at: 3.days.ago,
-                                            metadata: { application_ids: [application.id], changes: { shipped_at: { old: nil, new: item.shipped_at.iso8601 } } })
-
-      row = projection(application).rows.sole
-
-      assert_equal :recorded, row.stage
-      assert_equal 3, row.days
-    end
-
-    test 'partial shipments and ordinary device edits do not reset the awaiting-tracking clock' do
-      application = equipment_application(equipment_needs_initialized_at: 30.days.ago)
-      item = create(:equipment_item, application:)
-      shipped = create(:equipment_item, application:, purchase_order: item.purchase_order, shipped_at: Date.current, tracking_number: 'PARTIAL')
-      log(item.purchase_order, 'equipment_order_recorded', at: 20.days.ago, metadata: { application_ids: [application.id] })
-      log(shipped, 'equipment_item_corrected', at: 5.days.ago,
-                                               metadata: { application_ids: [application.id], changes: { shipped_at: { old: nil, new: shipped.shipped_at.iso8601 } } })
-      log(item, 'equipment_item_corrected', at: 1.day.ago,
-                                            metadata: { application_ids: [application.id], changes: { serial_number: { old: nil, new: 'RECORDED-SERIAL' } } })
-
-      assert_equal 20, projection(application).rows.sole.days
-    end
-
-    test 'ambiguous reopened equipment dates remain unavailable rather than guessing from updated at' do
-      application = equipment_application(equipment_needs_initialized_at: 30.days.ago)
-      create(:equipment_need, application:, remaining_quantity: 1)
-      log(application, 'equipment_needs_initialized', at: 30.days.ago)
-      log(application, 'equipment_needs_updated', at: 3.days.ago,
-                                                  metadata: { changes: { equipment_needs: { old: [], new: [{ remaining_quantity: 1 }] } } })
-
-      row = projection(application).rows.sole
-
-      assert_equal :po, row.stage
-      assert_nil row.entered_at
-      assert_nil row.days
+      assert_equal '0 of 3 units shipped', row.progress
+      assert_empty row.secondary
     end
 
     test 'expired positive voucher value is a follow-up even before the expiration job updates status' do
@@ -219,78 +185,39 @@ module Applications
       end
     end
 
-    test 'summaries count applications once and exclude missing dates from oldest and average' do
+    test 'summaries count applications once and leave unknown clocks unavailable' do
       early = equipment_application
       recent = equipment_application
       unknown = equipment_application
-      create(:equipment_need, application: early)
-      create(:equipment_need, application: recent)
-      create(:equipment_need, application: unknown)
-      log(early, 'equipment_needs_initialized', at: 20.days.ago)
-      log(recent, 'equipment_needs_initialized', at: 4.days.ago)
+      create(:equipment_need, application: early, unfulfilled_since: 20.days.ago)
+      create(:equipment_need, application: recent, unfulfilled_since: 23.hours.ago)
+      create(:equipment_need, application: unknown, unfulfilled_since: nil)
 
       pipeline = projection(early, recent, unknown)
-      summary = pipeline.summaries(:equipment).find { |entry| entry.stage == :po }
-
+      summary = pipeline.summaries(:equipment).find { |entry| entry.stage == :needs_fulfillment }
       assert_equal 3, summary.count
       assert_equal early.id, summary.oldest.application.id
-      assert_equal 12, summary.average_days
+      assert_equal 0, pipeline.rows.find { |row| row.application.id == recent.id }.days
+      assert_equal 10, summary.average_days
       assert_equal 1, summary.unknown_dates
-      assert_equal 5, pipeline.summaries(:equipment).length
+      assert_equal 7, pipeline.summaries(:equipment).length
       assert_no_queries do
         pipeline.rows
         pipeline.groups
         pipeline.summaries(:equipment)
+        pipeline.rows.each { |row| row.application.admin_fulfillment_responsibility_state }
       end
     end
 
-    test 'pipeline preloads its fulfillment inputs without unrelated display associations or later queries' do
-      application = equipment_application
-      report = create(:evaluation, :completed, application:)
-      EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
-      create(:equipment_item, application:)
-
-      pipeline = projection(application)
-      row = pipeline.rows.sole
-      loaded = row.application
-      need = loaded.equipment_needs.first
-      source = need.source_evaluation
-      item = loaded.equipment_items.first
-
-      assert loaded.association(:equipment_needs).loaded?
-      assert loaded.association(:equipment_items).loaded?
-      assert need.association(:source_evaluation).loaded?
-      assert_not need.association(:product).loaded?
-      assert_not source.association(:recommended_products).loaded?
-      assert_not source.association(:evaluator).loaded?
-      assert_not item.association(:product).loaded?
-      assert_not item.association(:purchase_order).loaded?
-      assert_no_queries do
-        assert_equal :needs_action, loaded.admin_fulfillment_responsibility_state
-        assert_equal report.id, loaded.equipment_source_report.id
-        assert_equal :po, row.stage
-        pipeline.summaries(:equipment)
-      end
-    end
-
-    test 'an application awaiting its first report does not preload unused fulfillment history' do
-      application = equipment_application
-      evaluation = create(:evaluation, application:)
-      pipeline = projection(application)
-      row = pipeline.rows.sole
-      loaded = row.application
-
-      assert_equal :report, row.stage
-      assert_equal evaluation, row.evaluation
-      assert loaded.association(:equipment_needs).loaded?
-      assert loaded.association(:equipment_items).loaded?
-      assert_not loaded.association(:equipment_needs_events).loaded?
-      assert_not loaded.association(:completed_equipment_reports).loaded?
-      assert_no_queries do
-        assert_equal :pending_evaluation, loaded.admin_fulfillment_responsibility_state
-        pipeline.groups
-        pipeline.summaries(:equipment)
-      end
+    test 'all stage sorting leaves completed work last and terminal lists newest first' do
+      pending = equipment_application
+      create(:equipment_need, application: pending, unfulfilled_since: 2.days.ago)
+      older = equipment_application
+      newer = equipment_application
+      create(:equipment_item, application: older, shipped_at: 6.days.ago.to_date, tracking_number: 'OLD', purchase_order: create(:purchase_order, sent_at: 8.days.ago.to_date))
+      create(:equipment_item, application: newer, shipped_at: 1.day.ago.to_date, tracking_number: 'NEW')
+      rows = ApprovedPipeline.sort_rows(projection(older, newer, pending).rows)
+      assert_equal([pending.id, newer.id, older.id], rows.map { |row| row.application.id })
     end
 
     private

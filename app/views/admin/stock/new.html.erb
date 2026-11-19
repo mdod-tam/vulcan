@@ -1,0 +1,20 @@
+<div class="max-w-3xl mx-auto p-6 space-y-4">
+  <h1 class="text-2xl font-bold">Record existing stock</h1>
+<%= render 'admin/equipment/form_errors', errors: @form_errors %>
+<%= form_with url: admin_stock_index_path, scope: :stock, class: 'space-y-4' do |form| %>
+<%= form.hidden_field :operation_id, value: @operation_id %>
+<%= form.label :product_id, 'Device model', class: 'form-label' %>
+<%= form.select :product_id,
+                options_for_select(equipment_catalog_options(@products), params.dig(:stock, :product_id)), {}, class: 'form-input' %>
+<%= form.label :quantity, class: 'form-label' %>
+<%= form.number_field :quantity, value: params.dig(:stock, :quantity) || 1, min: 1, step: 1, required: true, autocomplete: 'off',
+                                 class: 'form-input' %>
+<%= form.label :received_on, 'Date stock was confirmed on hand', class: 'form-label' %>
+<%= form.text_field :received_on, typed_date_field_options(value: accessible_date_value(params.dig(:stock, :received_on)),
+                                                           required: true, autocomplete: 'off', class: 'form-input') %>
+<%= form.label :provenance, 'Where the stock came from', class: 'form-label' %>
+<%= form.text_area :provenance, value: params.dig(:stock, :provenance), required: true,
+                                class: 'form-input' %>
+<%= form.submit 'Record existing stock', class: 'btn btn-primary' %>
+<% end %>
+</div>

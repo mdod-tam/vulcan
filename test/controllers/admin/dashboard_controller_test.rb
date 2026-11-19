@@ -52,16 +52,22 @@ module Admin
       @app_with_disability_cert.update_columns(disability_certification_status: Application.disability_certification_statuses[:received])
     end
 
-    def test_dashboard_still_reports_proof_and_disability_certification_review_metrics
-      get admin_dashboard_path
+    def test_review_card_counts_match_their_queues
+      get admin_applications_path, params: { view: 'review' }
       assert_response :success
 
-      expected_proofs_count = Application.with_proofs_needing_review.count
-      expected_disability_certs_count = Application.where(disability_certification_status: 'received').count
+      expected_proofs_count = Application.staff_review_queue.awaiting_proof_review.count
+      expected_certifications_count = Application.certifications_needing_review.count
 
-      assert_equal expected_proofs_count, assigns(:metrics)[:proofs_needing_review_count]
-      assert_includes Application.with_proofs_needing_review, @app_with_id_proof
-      assert_equal expected_disability_certs_count, assigns(:metrics)[:disability_certs_to_review_count]
+      assert_equal expected_proofs_count, assigns(:review_summaries).fetch(:proofs).count
+      assert_not Application.awaiting_proof_review.exists?(@app_with_id_proof.id), 'An absent file is not ready for proof review'
+      assert_equal expected_certifications_count, assigns(:review_summaries).fetch(:certifications).count
+
+      expected_counts = { proofs_needing_review: expected_proofs_count, certifications_needing_review: expected_certifications_count }
+      expected_counts.each do |filter, expected|
+        get admin_applications_path, params: { view: 'review', filter: filter }
+        assert_equal expected, assigns(:pagy).count, "#{filter} count must match its review shortcut"
+      end
     end
 
     def test_filter_by_proofs_needing_review
@@ -72,24 +78,26 @@ module Admin
       assert_not_empty applications, 'Expected applications needing proof review, but found none.'
       applications.each do |app|
         assert(
-          Application.with_proofs_needing_review.exists?(id: app.id),
+          Application.awaiting_proof_review.exists?(id: app.id),
           "Application #{app.id} (status: #{app.status}, income: #{app.income_proof_status}, residency: #{app.residency_proof_status}, id: #{app.id_proof_status}) does not have a proof needing review"
         )
       end
     end
 
     def test_filter_by_disability_certs_to_review
+      @app_with_disability_cert.update_columns(status: Application.statuses[:awaiting_dcf])
       get admin_applications_path, params: { filter: 'disability_certs_to_review' }
       assert_response :success
 
       applications = assigns(:applications)
+      assert_includes applications.map(&:id), @app_with_disability_cert.id
       applications.each do |app|
         assert_equal 'received', app.disability_certification_status,
                      "Application #{app.id} does not have a received disability certification"
       end
     end
 
-    def test_dashboard_count_matches_pending_training_request_filter
+    def test_pending_training_filter_ignores_fulfilled_requests_and_notification_only_records
       pending_request = create_reviewed_application(user: create(:constituent, email: 'dashboard_pending_training@example.com'))
       pending_request.update!(training_requested_at: 1.hour.ago)
 
@@ -104,23 +112,18 @@ module Admin
              notifiable: notification_only,
              action: 'training_requested')
 
-      get admin_dashboard_path
-      assert_response :success
-      dashboard_count = assigns(:metrics)[:training_requests_count]
-
       get admin_applications_path, params: { filter: 'training_requests' }
       assert_response :success
 
       apps = assigns(:applications)
 
-      assert_equal 1, dashboard_count
       assert_includes apps.map(&:id), pending_request.id
       assert_not_includes apps.map(&:id), fulfilled_request.id
       assert_not_includes apps.map(&:id), notification_only.id
-      assert_equal dashboard_count, apps.size
+      assert_equal 1, apps.size
     end
 
-    def test_reassignment_counts_are_fresh_distinct_applications_and_match_their_filters
+    def test_reassignment_filters_follow_current_professional_coverage
       trainer = create(:trainer)
       stranded = create_reviewed_application(user: create(:constituent, email: 'dashboard_stranded_training@example.com'))
       stranded.update!(assigned_trainer: trainer)
@@ -133,14 +136,13 @@ module Admin
       stranded_evaluation = create_reviewed_application(user: create(:constituent, email: 'dashboard_stranded_evaluation@example.com'))
       create(:evaluation, application: stranded_evaluation, constituent: stranded_evaluation.user, evaluator: evaluator, status: :scheduled)
 
-      get admin_dashboard_path
-      assert_equal [0, 0], assigns(:metrics).values_at(:training_needing_reassignment_count, :evaluations_needing_reassignment_count)
+      get admin_applications_path, params: { filter: 'training_needing_reassignment' }
+      assert_empty assigns(:applications)
+      get admin_applications_path, params: { filter: 'evaluations_needing_reassignment' }
+      assert_empty assigns(:applications)
 
       trainer.update_columns(status: User.statuses[:suspended])
       evaluator.update_columns(status: User.statuses[:suspended])
-      get admin_dashboard_path
-      assert_equal [1, 1], assigns(:metrics).values_at(:training_needing_reassignment_count, :evaluations_needing_reassignment_count)
-
       get admin_applications_path, params: { filter: 'training_needing_reassignment' }
       assert_equal [stranded.id], assigns(:applications).map(&:id)
       get admin_applications_path, params: { filter: 'evaluations_needing_reassignment' }
@@ -149,9 +151,13 @@ module Admin
       replacement = create(:trainer)
       stranded.update!(assigned_trainer: replacement)
       stranded.open_training_assignments.update_all(trainer_id: replacement.id)
-      get admin_dashboard_path
-      assert_equal 0, assigns(:metrics)[:training_needing_reassignment_count]
-      assert_select 'a[href=?]', admin_applications_path(filter: 'training_needing_reassignment'), text: /Training Needing Reassignment \(0\)/
+      get admin_applications_path, params: { filter: 'training_needing_reassignment' }
+      assert_empty assigns(:applications)
+      get admin_applications_path, params: { view: 'review' }
+      assert_select '#service-assignments', count: 0
+      get admin_applications_path, params: { view: 'pipeline' }
+      assert_select '#service-assignments', count: 0
+      assert_select '#training-summary-card a[href=?]', trainers_dashboard_path
     end
 
     def teardown

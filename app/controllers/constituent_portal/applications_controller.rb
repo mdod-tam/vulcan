@@ -28,6 +28,7 @@ module ConstituentPortal
     end
 
     def show
+      @equipment_history = Applications::ProductHistory.new(applications: Application.accessible_by(current_user).where(id: @application.id), mode: :portal_visible)
       @certification_requests = Notification.where(
         notifiable: @application,
         action: 'disability_certification_requested'

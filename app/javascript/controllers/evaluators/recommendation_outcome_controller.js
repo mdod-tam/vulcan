@@ -2,14 +2,28 @@ import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
 
 export default class extends Controller {
-  static targets = ["catalog", "noSuitable", "notes", "trialRow", "triedRequired", "notesRequired", "source", "location", "locationRequired"]
+  static targets = ["catalog", "noSuitable", "notes", "trialRow", "triedRequired", "notesRequired", "source", "location", "locationRequired", "group", "search", "showAll", "productRow"]
   static values = { conflict: String }
 
   connect() {
     this.update()
+    this.filter()
+  }
+
+  filter() {
+    const groups = this.groupTargets.filter(input => input.checked).map(input => input.value)
+    const search = this.hasSearchTarget ? this.searchTarget.value.toLocaleLowerCase().trim() : ""
+    const showAll = this.hasShowAllTarget && this.showAllTarget.checked
+    this.productRowTargets.forEach(row => {
+      const selected = row.querySelector("input[type=checkbox]").checked
+      const eligible = showAll || row.dataset.productGroups.split(" ").some(group => groups.includes(group))
+      row.hidden = !selected && (!eligible || !row.dataset.productSearch.includes(search))
+      setVisible(row, !row.hidden, { inlineStyleFallback: false })
+    })
   }
 
   update() {
+    this.filter()
     const catalog = this.catalogTargets.some(input => input.checked)
     const outsideSpecialist = this.hasSourceTarget && this.sourceTarget.value !== "direct_assessment"
     const needsDetails = this.noSuitableTarget.checked || !catalog

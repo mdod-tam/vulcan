@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
 module Reports
-  # The admin dashboard's counts. Most are cached for five minutes to reduce queries. The print queue and the
-  # reassignment queues are read on every call so they stay current. The trainer assignment writers and the
-  # training request service call expire! because they change the training request count; other writers, such as
-  # Application#request_evaluation!, leave the cached counts to the TTL. The cache key lives here and nowhere else.
+  # Report data is cached for five minutes; operational queue and stage counts are read on every call.
   class AdminDashboardMetrics
     CACHE_KEY = 'admin_dashboard_metrics'
     CACHE_TTL = 5.minutes
@@ -21,6 +18,10 @@ module Reports
       new.call
     end
 
+    def self.approved_training_waiting_count
+      Application.approved_awaiting_training.count
+    end
+
     # Cache expiry runs after the write it follows has committed, so a failure here must not fail that write.
     def self.expire!
       Rails.cache.delete(CACHE_KEY)
@@ -30,34 +31,36 @@ module Reports
 
     # @return [Hash{Symbol => Object}] Counts and chart data keyed by metric name
     def call
-      Rails.cache.fetch(CACHE_KEY, expires_in: CACHE_TTL) { cached_metrics }.merge(current_metrics)
+      Rails.cache.fetch(CACHE_KEY, expires_in: CACHE_TTL) { reporting_metrics }.merge(current_metrics)
     end
 
     private
 
-    def cached_metrics
-      metrics = {
+    def current_metrics
+      stage_counts = approved_stage_counts
+      {
         open_applications_count: Application.active.count,
-        pending_services_count: Application.where(status: :approved).count
+        pending_services_count: Application.status_approved.count,
+        active_awaiting_proofs_count: Application.awaiting_proofs.count,
+        active_cert_requests_needed_count: Application.certifications_needing_request.count,
+        active_awaiting_certifications_count: Application.active.certifications_awaiting_provider.count,
+        active_proofs_needing_review_count: Application.active.awaiting_proof_review.count,
+        active_disability_certs_to_review_count: Application.active.certifications_needing_review.count,
+        approved_stage_counts: stage_counts,
+        approved_stage_group_counts: Applications::ApprovedPipeline::STAGE_FILTERS.transform_values do |filter|
+          filter.fetch(:stages).sum { |stage| stage_counts[stage] }
+        end,
+        approved_training_waiting_count: self.class.approved_training_waiting_count,
+        print_queue_pending_count: PrintQueueItem.unreleased.count
       }
-      metrics.merge!(reporting_metrics)
-      metrics.merge!(
-        proofs_needing_review_count: Application.with_proofs_needing_review.distinct.count,
-        disability_certs_to_review_count: Application.where.not(status: %i[rejected archived])
-                                                     .where(disability_certification_status: :received).count,
-        digitally_signed_needs_review_count: Application.where(document_signing_status: :signed)
-                                                        .where.not(disability_certification_status: :approved).count,
-        training_requests_count: Application.with_pending_training_request.count,
-        evaluation_requests_count: Application.with_pending_evaluation_request.count
-      )
     end
 
-    def current_metrics
-      {
-        print_queue_pending_count: PrintQueueItem.unreleased.count,
-        evaluations_needing_reassignment_count: Application.needing_evaluator_reassignment.count,
-        training_needing_reassignment_count: Application.needing_trainer_reassignment.count
-      }
+    def approved_stage_counts
+      applications = Application.status_approved.fulfillment_type_equipment.to_a
+      Application.preload_equipment_fulfillment(applications, include_display_details: false)
+      applications.each_with_object(Hash.new(0)) do |application, counts|
+        counts[application.equipment_fulfillment_stage.stage] += 1
+      end
     end
 
     def reporting_metrics

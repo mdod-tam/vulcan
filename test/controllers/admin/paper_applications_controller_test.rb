@@ -185,6 +185,20 @@ module Admin
                     'a submitted "0" must not come back checked'
     end
 
+    test 'an income-off retry keeps submitted values without rendering income proof requirements' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      Applications::PaperApplicationService.any_instance.stubs(:create).returns(false)
+      Applications::PaperApplicationService.any_instance.stubs(:errors).returns(['Review the residency document.'])
+
+      post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
+
+      assert_response :unprocessable_content
+      assert_select "input[name='income_proof_action']", count: 0
+      assert_select "input[name='no_income_information']", count: 0
+      assert_select '[data-controller~="income-validation"]', count: 0
+      assert_select "input[name='constituent[first_name]'][value='RollbackProbe']"
+    end
+
     # Use VA because the MD default could mask a lost guardian state.
     # A rebuilt guardian must supply the model readers that fields_for requires.
     test 'a failed inline-guardian submission renders and restores its guardian fields' do
@@ -805,10 +819,11 @@ module Admin
       @unique_email = "rejectedproofs.#{SecureRandom.hex(6)}@example.com"
 
       stub_mailers
+      review_started_at = Time.current
 
       assert_difference 'User.count', 1, 'User.count should increase by 1' do
         assert_difference 'Application.count', 1, 'Application.count should increase by 1' do
-          assert_difference 'ProofReview.count', 1, 'ProofReview.count should increase by 1' do
+          assert_difference 'ProofReview.count', 2, 'Accepted income and rejected residency each record one decision' do
             # Other audit actions may also occur. Count only the application actions under test.
             post admin_paper_applications_path,
                  headers: default_headers,
@@ -821,6 +836,14 @@ module Admin
 
       assert_redirected_to admin_application_path(app)
       assert_equal 'approved', app.reload.income_proof_status
+      assert_equal [%w[income approved], %w[residency rejected]], app.proof_reviews.order(:proof_type).pluck(:proof_type, :status)
+
+      income_review = app.proof_reviews.find_by!(proof_type: :income, status: :approved)
+      assert_equal @admin, income_review.admin
+      assert_equal app.income_proof.blob.id, income_review.reviewed_blob_id
+      assert_equal 'paper', income_review.submission_method
+      assert_operator income_review.reviewed_at, :>=, review_started_at
+      assert_operator income_review.reviewed_at, :<=, Time.current
 
       residency_review = app.proof_reviews.find_by!(proof_type: :residency, status: :rejected)
       assert_equal 'address_mismatch', residency_review.rejection_reason_code
@@ -1234,7 +1257,7 @@ module Admin
       assert_nil event.auditable
       assert_equal '2', event.metadata['household_size']
       assert_equal '100000', event.metadata['income']
-      assert_predicate event.metadata['threshold'], :positive?
+      assert_equal IncomeThresholdCalculationService.call(2).data.fetch(:threshold), event.metadata.fetch('threshold').to_d
       assert_equal 'j***@e***.com', event.metadata['constituent_email'], 'the applicant contact is masked in the audit record'
       assert_equal 'J*** D***', event.metadata['constituent_name']
     end

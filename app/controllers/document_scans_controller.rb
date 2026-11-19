@@ -80,7 +80,8 @@ class DocumentScansController < ApplicationController
                 when 'w9' then { 'w9' => ['w9_form'] }
                 end
               elsif @scan_user.admin?
-                { 'proof' => %w[id_proof income_proof residency_proof], 'certification' => ['disability_certification'], 'product_resource' => ['document'] }
+                { 'proof' => %w[id_proof income_proof residency_proof], 'certification' => ['disability_certification'],
+                  'product_resource' => ['document'], 'financial_evidence' => ['financial_document'] }
               elsif @scan_user.vendor?
                 { 'w9' => ['w9_form'] }
               else

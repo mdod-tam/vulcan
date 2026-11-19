@@ -1,0 +1,16 @@
+<%# locals: (product:, batch_index:) -%>
+<div class="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
+  <%= hidden_field_tag 'stock[][product_id]', product.id, id: nil %>
+  <div>
+    <%= label_tag "stock-quantity-#{product.id}-#{batch_index}", 'Quantity', class: 'form-label text-sm' %>
+    <%= number_field_tag 'stock[][quantity]', 0,
+                         min: 0, step: 1, autocomplete: 'off',
+                         id: "stock-quantity-#{product.id}-#{batch_index}", class: 'form-input w-full' %>
+  </div>
+  <div>
+    <%= label_tag "stock-setup-#{product.id}-#{batch_index}", 'Disability group', class: 'form-label text-sm' %>
+    <%= select_tag 'stock[][supplier_setup_group]', options_for_select(Product::PROGRAM_GROUPS.invert),
+                   include_blank: 'Unassigned', id: "stock-setup-#{product.id}-#{batch_index}",
+                   aria: { describedby: 'stock-setup-help' }, class: 'form-input w-full' %>
+  </div>
+</div>

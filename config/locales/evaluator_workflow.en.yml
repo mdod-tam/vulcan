@@ -1,0 +1,22 @@
+en:
+  evaluator_workflow:
+    dashboard:
+      assign_evaluator: "Assign evaluator"
+      assign_evaluator_for: "Assign evaluator for %{name}"
+      assignment_help: "Approved applications awaiting an evaluator"
+      longest_wait: "Longest wait"
+      longest_known_wait: "Longest known wait"
+      date_unavailable: "Wait date unavailable"
+      unknown_waits:
+        one: "1 application without a wait date."
+        other: "%{count} applications without a wait date."
+      view_unassigned: "View unassigned requests"
+      view_unassigned_aria: "View unassigned requests for evaluator assignment"
+      waiting_since: "Waiting since"
+      constituent: "Constituent"
+      actions: "Actions"
+      assignment_window_ended: "The service window has ended. An evaluator cannot be assigned."
+      no_assignable_evaluators: "No active evaluators are available."
+      select_evaluator: "Select evaluator…"
+      select_evaluator_for: "Select evaluator for %{name}"
+      empty_unassigned: "No applications awaiting an evaluator."

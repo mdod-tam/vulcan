@@ -107,6 +107,10 @@ Rails.application.routes.draw do
   end
 
   namespace :admin do
+    namespace :icanconnect do
+      resource :filing_prep, only: %i[show update]
+      resources :financial_records, only: %i[new edit update create], constraints: { id: %r{[^/]+} }
+    end
     resource :dashboard, only: [:show], controller: :dashboards
     root to: 'dashboards#show'
 
@@ -213,9 +217,16 @@ Rails.application.routes.draw do
       end
     end
 
+    resources :bid_groups, only: %i[index show new create update]
+    resources :stock, only: %i[index new create]
+    resources :stock_allocations, only: %i[new create update]
+    resources :equipment_shipments, only: %i[new create]
     resources :equipment, only: [:index]
     resources :equipment_items, only: %i[edit update]
     resources :purchase_orders, only: %i[index show new create] do
+      patch :send_order, on: :member
+      resource :cost, only: :update, controller: 'purchase_order_costs'
+      resource :stock_receipt, only: %i[new create]
       resource :correction, only: %i[edit update], controller: 'purchase_order_corrections'
     end
 
@@ -244,6 +255,8 @@ Rails.application.routes.draw do
         patch :mark_synced
       end
     end
+
+    resources :mileage_rates, only: %i[create update]
 
     resources :policies, only: %i[index show edit update create] do
       collection do

@@ -49,7 +49,19 @@ Each task runs in one transaction as the system audit administrator and reapplie
 
 These tasks overwrite staff changes. Routine policy changes belong in the [policy-management workflow](../features/application_workflow_guide.md#program-policies). The general `db:seed` task is the development and test demo seed: it needs FactoryBot and deletes existing records. In production it loads the same initialization as `db:bootstrap`, without the earlier input check or migration, so use `db:bootstrap`.
 
-Products come from [products.yml](../../test/fixtures/products.yml) in the demo seed. There is no standalone product seed task; production products can be entered through the admin product workflow.
+Products come from the shared [catalog seed](../../db/seeds/products.yml). Catalog refresh behavior is described in [product pricing and seed behavior](../operations/product_catalog_pricing.md#price-basis-and-seed-behavior).
+
+### Equipment catalog rollout
+
+An empty environment gets the catalog through bootstrap. For an initialized environment, run `bin/rails db:seed_products` after the equipment migration and before staff use voucher redemption or evaluator catalog selection. On Heroku, run `heroku run bin/rails db:seed_products --app "$MAT_APP"`. The task updates managed products by catalog key, adds missing entries, and reports unmanaged drafts for staff review. Accounts, policies, flags, and email templates are outside the task. It is safe to rerun with the same catalog.
+
+Compare reported drafts with the confirmed catalog in **Manage Products**. Confirm a retained model only after checking its manufacturer and exact model. Where an existing confirmed model collides with an incoming catalog entry, the refresh rolls back. Review the two records and resolve the duplicate with the catalog owner before retrying. Keep product IDs and records that support past purchases.
+
+Before enabling ICC income outreach, review the English and Spanish `application_notifications_proof_requested` templates against their [checked-in definitions](../../db/seeds/email_templates). For an initialized environment, update these two templates in one maintenance transaction. Their bodies should use the `request_explanation` variable for the eligibility message, and both variable definitions must include it. Preserve staff-authored wording where it still applies. Preview both an initial request and an approved applicant’s ICC income update in each language. Check `fpl_additional_person` in Policies if the environment uses household sizes above eight. Verify that a vendor and an evaluator can both select a confirmed product.
+
+The mileage migration expects the unreleased annual rate table to be empty. If reverting from a database with saved effective dates, back up the database first. Restore a compatible snapshot for the prior release, or use a forward repair to keep effective dates and recorded rates. Multiple rates in one year cannot be represented by the previous schema.
+
+The development example builder also fills missing application disability groups for its known demo identities. It checks both email and name, preserves groups already recorded, and leaves user accounts and application lifecycle data intact. This metadata refresh is part of `Seeds::DevelopmentApplications`, not a reason to run the destructive full demo seed against a database you want to keep.
 
 The system audit account is required at runtime: without it, public audit events and metrics alerts are skipped, expiration audits remain pending, secure-link recovery cannot issue a replacement without its original requester, certification uploads fail before storage, and DocuSeal callbacks return HTTP 503 for retry. Registrations requiring duplicate review roll back. Profile/contact changes and voucher status changes also fail when their required system attribution is unavailable.
 

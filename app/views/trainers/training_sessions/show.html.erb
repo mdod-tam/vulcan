@@ -65,7 +65,11 @@
       <h2 id="training-capacity-heading" class="mb-3 text-lg font-semibold"><%= t('trainer_workflow.capacity.heading') %></h2>
       <p><strong><%= t('trainer_workflow.capacity.completed', count: @completed_training_sessions_count) %></strong>,
         <%= t('trainer_workflow.capacity.reserved', count: @reserved_training_sessions_count - @completed_training_sessions_count) %>,
-        <%= t('trainer_workflow.capacity.remaining', count: @remaining_training_session_slots, max: @max_training_sessions) %></p>
+        <% if @application.unlimited_training_sessions? %>
+          <%= t('icanconnect.unlimited') %>
+        <% else %>
+          <%= t('trainer_workflow.capacity.remaining', count: @remaining_training_session_slots, max: @max_training_sessions) %>
+        <% end %></p>
       <% @open_training_sessions.each do |session| %>
         <% unless session.id == @training_session.id %>
           <p class="mt-2">

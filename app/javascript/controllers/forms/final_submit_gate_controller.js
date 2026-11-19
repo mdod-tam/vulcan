@@ -113,8 +113,7 @@ export default class extends Controller {
   // Forms can supply a detail template to name incomplete groups.
   // Without that template, preserve the base message so JavaScript does not bypass the portal view's localization.
   _incompleteMessage() {
-    const base = this.element.dataset.finalSubmitGateIncompleteMessage ||
-      "Complete all required confirmations before submitting."
+    const base = this.element.dataset.finalSubmitGateIncompleteMessage
     const template = this.element.dataset.finalSubmitGateIncompleteDetailMessage
     if (!template) return base
 

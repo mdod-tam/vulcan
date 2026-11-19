@@ -10,14 +10,14 @@ module Equipment
     setup do
       @admin = create(:admin)
       @first = create(:equipment_item)
-      other_model = create(:product, manufacturer: " #{@first.product.manufacturer.upcase} ", model_number: 'Different model')
+      other_model = create(:product, manufacturer: " #{@first.product.manufacturer.upcase} ", model_number: "Different model #{SecureRandom.hex(5)}")
       @second = create(:equipment_item, product: other_model)
     end
 
     teardown do
       items = [@first, @second].compact
       orders = items.filter_map(&:purchase_order)
-      users = [@admin, *items.map { |item| item.application.user }, *orders.map(&:vendor)].compact
+      users = [@admin, *items.map { |item| item.application.user }].compact
       Event.where(auditable: items).delete_all
       EquipmentItem.where(id: items.map(&:id)).delete_all
       PurchaseOrder.where(id: orders.map(&:id)).delete_all
@@ -28,7 +28,8 @@ module Equipment
     test 'competing IMEI assignments on different applications cannot both become active' do
       race_corrections!({ imei: '123456789012345' }, { imei: '123456789012345' })
 
-      assert_kind_of Conflict, @contender_error
+      assert_kind_of ActiveRecord::RecordInvalid, @contender_error
+      assert_includes @contender_error.record.errors[:imei].join, 'is already assigned'
       assert_equal 1, EquipmentItem.active.where(normalized_imei: '123456789012345').count
       assert_nil @second.reload.imei
       assert_equal 1, Event.where(action: 'equipment_item_corrected', user: @admin).count

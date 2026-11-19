@@ -184,8 +184,13 @@ class Voucher < ApplicationRecord
   end
 
   def process_product_data(product_data, transaction)
+    products = Product.where(id: product_data.keys).order(:id).lock.index_by { |product| product.id.to_s }
     product_data.each do |product_id, quantity|
-      product = Product.find(product_id)
+      product = products.fetch(product_id.to_s) { raise ActiveRecord::RecordNotFound, 'Selected catalog product no longer exists.' }
+      unless product.available?
+        errors.add(:base, 'Selected products must be confirmed and available. Review the equipment selection.')
+        raise ActiveRecord::RecordInvalid, self
+      end
 
       transaction.voucher_transaction_products.create!(
         product: product,

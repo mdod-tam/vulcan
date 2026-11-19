@@ -23,7 +23,7 @@ module TrainingSessions
         @training_session.save!
         AuditEventService.log(
           actor: @actor, action: 'training_rescheduled', auditable: @training_session,
-          metadata: { application_id: @training_session.application_id, training_session_id: @training_session.id,
+          metadata: { operation_id: SecureRandom.uuid, application_id: @training_session.application_id, training_session_id: @training_session.id,
                       old_scheduled_for: old_scheduled_for.iso8601, new_scheduled_for: @training_session.scheduled_for.iso8601,
                       initiator: 'constituent' }
         )

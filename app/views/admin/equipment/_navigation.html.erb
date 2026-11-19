@@ -1,0 +1,52 @@
+<% section = equipment_navigation_section # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% views = equipment_navigation_views(tab: (@context.fetch(:tab) if section == :fulfillment)) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% summary = equipment_navigation_summary # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<div class="my-4 space-y-3">
+  <div class="text-sm text-gray-600">
+    <p class="font-medium">Equipment totals</p>
+    <p>These cards show totals for all applications and program stock.</p>
+  </div>
+  <nav aria-label="Equipment sections" class="grid gap-3 sm:grid-cols-3">
+    <% [
+         [admin_equipment_index_path(tab: 'needs_ordering'), :fulfillment],
+         [admin_bid_groups_path, :purchasing],
+         [admin_stock_index_path, :stock]
+       ].each do |path, key| %>
+      <article class="card summary-card <%= 'border-primary-600 bg-primary-50' if section == key %>">
+        <%= link_to equipment_navigation_label(key), path,
+                    class: class_names('summary-card-content summary-card-title rounded-t-lg text-primary-700 hover:underline',
+                                       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600'),
+                    aria: { current: ('location' if section == key) }, data: { turbo_frame: '_top' } %>
+        <div class="summary-card-details space-y-3">
+          <% if key == :fulfillment %>
+            <%= render 'admin/equipment/navigation_metric', metric: summary.requests, noun: 'device request', suffix: 'to fulfill', tab: 'needs_ordering' %>
+            <%= render 'admin/equipment/navigation_metric', metric: summary.shipments, noun: 'device', suffix: 'awaiting shipment', tab: 'ordered' %>
+          <% elsif key == :purchasing %>
+            <%= render 'admin/equipment/navigation_metric', metric: summary.bids, noun: 'bid', suffix: 'awaiting award' %>
+            <%= render 'admin/equipment/navigation_metric', metric: summary.purchase_orders, noun: 'purchase order', suffix: 'missing a sent date' %>
+          <% elsif key == :stock %>
+            <% [[:available, 'available'], [:reserved, 'reserved for dispatch'], [:incoming, 'awaiting receipt']].each do |stock_key, stock_label| %>
+              <p class="text-sm">
+                <strong class="text-2xl font-semibold text-primary-700"><%= summary.stock_counts.fetch(stock_key) %></strong>
+                <%= 'device'.pluralize(summary.stock_counts.fetch(stock_key)) %> <%= stock_label %>
+              </p>
+            <% end %>
+          <% end %>
+        </div>
+      </article>
+    <% end %>
+  </nav>
+  <% if views.any? %>
+    <nav aria-label="<%= equipment_navigation_label(section) %> views" class="flex flex-wrap gap-x-6 border-b border-gray-200">
+      <% views.each do |label, path, active| %>
+        <%= link_to label, path,
+                    class: class_names('border-b-2 px-1 py-2 text-sm font-medium',
+                                       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600',
+                                       active ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-600 hover:text-primary-700'),
+                    aria: { current: (if active
+                                        action_name == 'index' ? 'page' : 'location'
+                                      end) }, data: { turbo_frame: '_top' } %>
+      <% end %>
+    </nav>
+  <% end %>
+</div>

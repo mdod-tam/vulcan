@@ -1,13 +1,17 @@
-<a href="#main-content" class="skip-link">
-  <%= t('trainer_workflow.dashboard.skip') %>
-</a>
-<main id="main-content" class="min-w-0 container mx-auto px-4 py-8" role="main" aria-labelledby="trainer-dashboard-title" tabindex="-1">
-  <div class="flex justify-between items-center mb-6">
-    <h1 id="trainer-dashboard-title" class="text-2xl font-bold"><%= t('trainer_workflow.dashboard.title') %></h1>
-  </div>
+<% content_for :skip_link do %>
+  <a href="#main-content" class="skip-link"><%= t('trainer_workflow.dashboard.skip') %></a>
+<% end %>
+<div id="main-content" class="min-w-0 max-w-7xl mx-auto px-4 py-6" aria-labelledby="trainer-dashboard-title" tabindex="-1">
+  <% if current_user.admin? %>
+    <%= render 'admin/shared/index_header', title: t('trainer_workflow.dashboard.title'), title_id: 'trainer-dashboard-title' %>
+  <% else %>
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <h1 id="trainer-dashboard-title" class="text-2xl font-bold"><%= t('trainer_workflow.dashboard.title') %></h1>
+    </div>
+  <% end %>
 
   <% if @overdue_sessions.any? %>
-    <section class="mb-6 rounded-lg border border-warning-300 bg-warning-50 p-6" aria-labelledby="overdue-training-heading">
+    <section class="mb-6 rounded-lg border border-warning-300 bg-warning-50 p-4" aria-labelledby="overdue-training-heading">
       <h2 id="overdue-training-heading" class="text-lg font-semibold"><%= t('trainer_workflow.dashboard.overdue_heading') %></h2>
       <p class="mt-2"><%= t('trainer_workflow.dashboard.overdue_count', count: @overdue_sessions_count) %></p>
       <% if @overdue_sessions_display.size < @overdue_sessions_count %>
@@ -23,142 +27,211 @@
                   class: 'mt-2 inline-block text-primary-700 underline' %>
     </section>
   <% end %>
-  <section aria-labelledby="trainer-summary-heading" class="mb-8">
+  <section aria-labelledby="trainer-summary-heading" class="mb-6">
     <h2 id="trainer-summary-heading" class="sr-only"><%= t('trainer_workflow.dashboard.summary') %></h2>
-    <ul class="grid grid-cols-1 md:grid-cols-4 gap-6" role="list">
-      <li class="card p-5">
-        <h3 id="card-needs-scheduling" class="text-lg font-semibold text-gray-700 mb-3"><%= t('trainer_workflow.dashboard.needs_scheduling') %></h3>
-        <p class="text-3xl font-bold text-purple-600"><%= @needs_scheduling_count %><span class="sr-only"><%= t('trainer_workflow.dashboard.scheduling_count_suffix') %></span></p>
-        <p class="text-sm text-gray-500 mt-1">
-          <%= t('trainer_workflow.dashboard.scheduling_help') %>
-        </p>
-        <div class="mt-3">
+    <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" role="list">
+      <% if current_user.admin? %>
+        <li id="needs-trainer-card" class="card summary-card summary-card-compact">
+          <div class="summary-card-content">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="summary-card-title"><%= t('trainer_workflow.dashboard.needs_trainer') %></h3>
+              <p class="summary-card-count"><%= @needs_trainer_summary.count %></p>
+            </div>
+            <p class="text-xs text-gray-600"><%= t('trainer_workflow.dashboard.needs_trainer_help') %></p>
+          </div>
+          <div class="summary-card-details">
+            <% if @needs_trainer_summary.oldest %>
+              <p>
+                <span class="text-gray-600"><%= t('service_dashboard.waiting_since.request') %>:</span>
+                <%= t('service_dashboard.days', count: @needs_trainer_summary.oldest.days, value: @needs_trainer_summary.oldest.days) %>
+              </p>
+              <%= link_to "#training-request-#{@needs_trainer_summary.oldest.application.id}", class: 'block text-primary-700 underline' do %>
+                <%= @needs_trainer_summary.oldest.application.user.full_name %> — <%= service_dashboard_disabilities(@needs_trainer_summary.oldest.application) %>
+              <% end %>
+            <% end %>
+            <p class="text-xs text-gray-600">
+              <%= t('trainer_workflow.dashboard.average_assignment') %>: <%= service_dashboard_average(@needs_trainer_summary.average_assignment_days) %>
+            </p>
+            <% if @needs_trainer_summary.assignment_sample_count.positive? %>
+              <p class="text-xs text-gray-600"><%= t('trainer_workflow.dashboard.recorded_assignments', count: @needs_trainer_summary.assignment_sample_count) %></p>
+            <% end %>
+          </div>
+          <div class="summary-card-actions">
+            <%= link_to t('trainer_workflow.dashboard.view_unassigned'), '#needs-trainer-section', class: 'btn btn-outline',
+                                                                                                   aria: { label: t('trainer_workflow.dashboard.view_unassigned_aria') } %>
+          </div>
+        </li>
+      <% end %>
+      <li class="card summary-card summary-card-compact">
+        <div class="summary-card-content">
+          <div class="flex items-center justify-between gap-2">
+            <h3 id="card-needs-scheduling" class="summary-card-title"><%= t('trainer_workflow.dashboard.needs_scheduling') %></h3>
+            <p class="summary-card-count"><%= @needs_scheduling_count %><span class="sr-only"><%= t('trainer_workflow.dashboard.scheduling_count_suffix') %></span></p>
+          </div>
+          <p class="text-xs text-gray-600"><%= t('trainer_workflow.dashboard.scheduling_help') %></p>
+        </div>
+        <%= render 'shared/service_wait_summary', summary: @scheduling_summary,
+                                                  oldest_path: training_dashboard_entry_path(@scheduling_summary.oldest, request_sessions: @pending_request_sessions),
+                                                  average_label: t('service_dashboard.average_to_schedule'), sample_key: 'service_dashboard.recorded_schedules' %>
+        <div class="summary-card-actions">
           <%= link_to t('trainer_workflow.dashboard.view_requested'), trainers_dashboard_path(anchor: 'needs-scheduling-section'),
-                      class: 'btn btn-primary min-h-[44px]',
-                      aria: { label: t('trainer_workflow.dashboard.view_requested_aria') } %>
+                      class: 'btn btn-outline', aria: { label: t('trainer_workflow.dashboard.view_requested_aria') } %>
         </div>
       </li>
 
-      <li class="card p-5">
-        <h3 id="card-scheduled" class="text-lg font-semibold text-gray-700 mb-3"><%= t('trainer_workflow.dashboard.scheduled') %></h3>
-        <p class="text-3xl font-bold text-info-600"><%= @scheduled_sessions_count %><span class="sr-only"><%= t('trainer_workflow.dashboard.scheduled_count_suffix') %></span></p>
-        <p class="text-sm text-gray-500 mt-1">
-          <% if current_user.admin? %>
-            <%= t('trainer_workflow.dashboard.assigned_to_you', count: @my_scheduled_sessions_count) %>
-          <% else %>
+      <li class="card summary-card summary-card-compact">
+        <div class="summary-card-content">
+          <div class="flex items-center justify-between gap-2">
+            <h3 id="card-scheduled" class="summary-card-title"><%= t('trainer_workflow.dashboard.scheduled') %></h3>
+            <p class="summary-card-count"><%= @scheduled_summary.count %><span class="sr-only"><%= t('trainer_workflow.dashboard.scheduled_count_suffix') %></span></p>
+          </div>
+          <p class="text-xs text-gray-600">
             <%= t('trainer_workflow.dashboard.upcoming_help') %>
-          <% end %>
-        </p>
-        <% if current_user.admin? %>
-          <div class="mt-3 flex flex-wrap gap-2">
+            <% if current_user.admin? %> · <%= t('trainer_workflow.dashboard.assigned_to_you', count: @my_scheduled_sessions_count) %><% end %>
+          </p>
+        </div>
+        <%= render 'shared/service_wait_summary', summary: @scheduled_summary,
+                                                  oldest_path: training_dashboard_entry_path(@scheduled_summary.oldest, request_sessions: @pending_request_sessions),
+                                                  average_label: t('service_dashboard.average_to_visit'), sample_key: 'service_dashboard.recorded_visits' %>
+        <div class="summary-card-actions">
+          <% if current_user.admin? %>
             <%= link_to t('trainer_workflow.dashboard.my_scheduled'), trainers_training_sessions_path(scope: 'mine', status: 'scheduled'),
-                        class: 'btn btn-secondary min-h-[44px]',
-                        aria: { label: t('trainer_workflow.dashboard.my_scheduled_aria') } %>
-            <%= link_to t('trainer_workflow.dashboard.view_scheduled'), trainers_training_sessions_path(status: 'scheduled'),
-                        class: 'btn btn-primary min-h-[44px]',
-                        aria: { label: t('trainer_workflow.dashboard.all_scheduled_aria') } %>
-          </div>
-        <% else %>
-          <div class="mt-3">
-            <%= link_to t('trainer_workflow.dashboard.view_scheduled'), trainers_training_sessions_path(status: 'scheduled'),
-                        class: 'btn btn-primary min-h-[44px]',
-                        aria: { label: t('trainer_workflow.dashboard.all_scheduled_aria') } %>
-          </div>
-        <% end %>
-      </li>
-
-      <li class="card p-5">
-        <h3 id="card-completed" class="text-lg font-semibold text-gray-700 mb-3"><%= t('trainer_workflow.dashboard.completed') %></h3>
-        <p class="text-3xl font-bold text-success-700"><%= @completed_sessions.count %><span class="sr-only"><%= t('trainer_workflow.dashboard.completed_count_suffix') %></span></p>
-        <p class="text-sm text-gray-500 mt-1"><%= t('trainer_workflow.dashboard.completed_help') %></p>
-        <div class="mt-3">
-          <%= link_to t('trainer_workflow.dashboard.view_completed'), trainers_training_sessions_path(status: 'completed'),
-                      class: 'btn btn-primary min-h-[44px]',
-                      aria: { label: t('trainer_workflow.dashboard.completed_aria') } %>
+                        class: 'btn btn-outline', aria: { label: t('trainer_workflow.dashboard.my_scheduled_aria') } %>
+          <% end %>
+          <%= link_to t('trainer_workflow.dashboard.view_scheduled'), trainers_training_sessions_path(status: 'scheduled'),
+                      class: 'btn btn-outline', aria: { label: t('trainer_workflow.dashboard.all_scheduled_aria') } %>
         </div>
       </li>
 
-      <li class="card p-5">
-        <h3 id="card-followup" class="text-lg font-semibold text-gray-700 mb-3"><%= t('trainer_workflow.dashboard.followup') %></h3>
-        <p class="text-3xl font-bold text-warning-700"><%= @followup_sessions_count %><span class="sr-only"><%= t('trainer_workflow.dashboard.followup_count_suffix') %></span></p>
-        <p class="text-sm text-gray-500 mt-1"><%= t('trainer_workflow.dashboard.followup_help') %></p>
-        <div class="mt-3">
+      <li class="card summary-card summary-card-compact">
+        <div class="summary-card-content">
+          <div class="flex items-center justify-between gap-2">
+            <h3 id="card-followup" class="summary-card-title"><%= t('trainer_workflow.dashboard.followup') %></h3>
+            <p class="summary-card-count"><%= @followup_sessions_count %><span class="sr-only"><%= t('trainer_workflow.dashboard.followup_count_suffix') %></span></p>
+          </div>
+          <p class="text-xs text-gray-600"><%= t('service_dashboard.followup_help') %></p>
+        </div>
+        <div class="summary-card-actions">
           <%= link_to t('trainer_workflow.dashboard.view_followup'), trainers_training_sessions_path(status: 'needs_followup'),
-                      class: 'btn btn-primary min-h-[44px]',
-                      aria: { label: t('trainer_workflow.dashboard.followup_aria') } %>
+                      class: 'btn btn-outline', aria: { label: t('trainer_workflow.dashboard.followup_aria') } %>
         </div>
       </li>
     </ul>
   </section>
 
-    <div id="needs-scheduling-section" class="card p-6 mb-8">
+  <% if current_user.admin? %>
+    <section id="needs-trainer-section" class="card p-4 mb-6" aria-labelledby="needs-trainer-heading" tabindex="-1">
+      <h2 id="needs-trainer-heading" class="text-lg font-semibold mb-4"><%= t('trainer_workflow.dashboard.needs_trainer') %></h2>
+      <% if @unassigned_training_requests.any? %>
+        <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="needs-trainer-heading" tabindex="0">
+          <table class="min-w-full divide-y divide-gray-200" aria-labelledby="needs-trainer-heading">
+            <thead class="bg-gray-50"><tr>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date') %></th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
+            </tr></thead>
+            <tbody class="divide-y divide-gray-200">
+              <% @unassigned_training_requests.each do |application| %>
+                <tr id="training-request-<%= application.id %>" tabindex="-1">
+                  <td class="px-4 py-3 text-sm"><%= l(application.training_requested_at.to_date, format: :long) %></td>
+                  <td class="px-4 py-3 text-sm"><%= application.user.full_name %> — <%= service_dashboard_disabilities(application) %></td>
+                  <td class="px-4 py-3 text-sm">
+                    <% if !application.service_window_active? %>
+                      <p class="text-sm text-gray-600"><%= t('trainer_workflow.dashboard.assignment_window_ended') %></p>
+                    <% elsif @assignable_trainers.empty? %>
+                      <p class="text-sm text-gray-600"><%= t('trainer_workflow.dashboard.no_assignable_trainers') %></p>
+                    <% else %>
+                      <%= form_with url: assign_trainer_admin_application_path(application), method: :post, local: true,
+                                    class: 'flex min-w-56 flex-col gap-2 sm:flex-row sm:items-center' do %>
+                        <%= hidden_field_tag :return_context, 'training_dashboard' %>
+                        <%= label_tag "trainer_id_#{application.id}", t('trainer_workflow.dashboard.select_trainer_for', name: application.user.full_name),
+                                      class: 'sr-only' %>
+                        <%= select_tag :trainer_id,
+                                       options_from_collection_for_select(@assignable_trainers, :id, method(:practitioner_assignment_option_label)),
+                                       id: "trainer_id_#{application.id}", include_blank: t('trainer_workflow.dashboard.select_trainer'), required: true,
+                                       class: 'form-input w-full min-w-0 text-sm sm:w-72' %>
+                        <%= submit_tag(
+                              t('trainer_workflow.dashboard.assign_trainer'),
+                              class: 'btn btn-primary btn-sm',
+                              aria: { label: t('trainer_workflow.dashboard.assign_trainer_for', name: application.user.full_name) }
+                            ) %>
+                      <% end %>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="text-gray-600"><%= t('trainer_workflow.dashboard.empty_unassigned') %></p>
+      <% end %>
+    </section>
+  <% end %>
+
+    <div id="needs-scheduling-section" class="card p-4 mb-6" tabindex="-1">
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
-        <h2 id="needs-scheduling-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.needs_scheduling') %></h2>
+        <h2 id="needs-scheduling-table-heading" class="text-lg font-semibold text-gray-900"><%= t('trainer_workflow.dashboard.needs_scheduling') %></h2>
         <%= link_to t('trainer_workflow.dashboard.all_assigned_requests'), trainers_training_sessions_path(status: 'requested'),
-                    class: 'text-primary-600 hover:text-primary-800',
+                    class: 'text-primary-700 underline',
                     aria: { label: t('trainer_workflow.dashboard.all_requested_aria') } %>
       </div>
 
       <% if @pending_training_requests.any? || @requested_sessions_display.any? %>
-        <div class="max-w-full overflow-x-auto">
+        <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="needs-scheduling-table-heading" tabindex="0">
           <table class="min-w-full divide-y divide-gray-200" aria-labelledby="needs-scheduling-table-heading">
             <thead class="bg-gray-50">
               <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.trainer') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <% @pending_training_requests.each do |application| %>
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= l(application.training_requested_at.to_date, format: :long) %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= application.constituent_full_name %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900"><%= application.assigned_trainer.full_name %></td>
+                  <td class="px-4 py-3 whitespace-nowrap">
                     <span class="badge badge-warning">
-                      <%= if application.assigned_trainer_id.present?
-                            t('trainer_workflow.dashboard.awaiting_scheduling')
-                          else
-                            t('trainer_workflow.dashboard.awaiting_assignment')
-                          end %>
+                      <%= t('trainer_workflow.dashboard.awaiting_scheduling') %>
                     </span>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                     <% if application.current_trainer?(current_user) %>
                       <%= link_to t('trainer_workflow.dashboard.review_request'), trainers_training_session_path(@pending_request_sessions.fetch(application.id)),
                                   class: 'btn btn-primary btn-sm',
                                   aria: { label: t('trainer_workflow.dashboard.review_request_for', name: application.constituent_full_name) } %>
-                    <% elsif application.assigned_trainer_id.present? %>
+                    <% elsif current_user.admin? %>
                       <%= link_to t('trainer_workflow.dashboard.review_coverage'), admin_application_path(application),
                                   class: 'btn btn-primary btn-sm',
                                   aria: { label: t('trainer_workflow.dashboard.review_coverage_for', name: application.constituent_full_name) } %>
-                    <% else %>
-                      <%= link_to t('trainer_workflow.dashboard.assign_trainer'), admin_application_path(application),
-                                  class: 'btn btn-primary btn-sm',
-                                  aria: { label: t('trainer_workflow.dashboard.assign_trainer_for', name: application.constituent_full_name) } %>
                     <% end %>
                   </td>
                 </tr>
               <% end %>
               <% @requested_sessions_display.each do |session| %>
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= l(session.created_at.to_date, format: :long) %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= session.application.constituent_full_name %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900"><%= session.trainer.full_name %></td>
+                  <td class="px-4 py-3 whitespace-nowrap">
                     <span class="badge badge-accent">
                       <%= t('trainer_workflow.dashboard.assigned_scheduling') %>
                     </span>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                     <%= link_to t('trainer_workflow.dashboard.view_schedule'), trainers_training_session_path(session),
                                 class: 'btn btn-primary btn-sm',
                                 aria: { label: t('trainer_workflow.dashboard.view_schedule_for', name: session.application.constituent_full_name) } %>
@@ -169,45 +242,47 @@
           </table>
         </div>
       <% else %>
-        <p class="text-gray-500 text-center py-4"><%= t('trainer_workflow.dashboard.empty_scheduling') %></p>
+        <p class="text-gray-600 text-center py-4"><%= t('trainer_workflow.dashboard.empty_scheduling') %></p>
       <% end %>
     </div>
 
     <% if current_user.admin? %>
-      <div id="my-upcoming-sessions-section" class="card p-6 mb-8">
+      <div id="my-upcoming-sessions-section" class="card p-4 mb-6">
         <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
-          <h2 id="my-upcoming-sessions-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.my_upcoming') %></h2>
+          <h2 id="my-upcoming-sessions-table-heading" class="text-lg font-semibold text-gray-900"><%= t('trainer_workflow.dashboard.my_upcoming') %></h2>
           <%= link_to t('trainer_workflow.dashboard.view_my_scheduled'), trainers_training_sessions_path(scope: 'mine', status: 'scheduled'),
-                      class: 'text-primary-600 hover:text-primary-800',
+                      class: 'text-primary-700 underline',
                       aria: { label: t('trainer_workflow.dashboard.my_scheduled_aria') } %>
         </div>
 
         <% if @my_scheduled_sessions_display.any? %>
-          <div class="max-w-full overflow-x-auto">
+          <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="my-upcoming-sessions-table-heading" tabindex="0">
             <table class="min-w-full divide-y divide-gray-200" aria-labelledby="my-upcoming-sessions-table-heading">
               <thead class="bg-gray-50">
                 <tr>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date_time') %></th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
+                  <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date_time') %></th>
+                  <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
+                  <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.trainer') %></th>
+                  <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
+                  <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
                 <% @my_scheduled_sessions_display.each do |session| %>
                   <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       <%= l(session.scheduled_for, format: :long) %>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       <%= session.application.constituent_full_name %>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900"><%= session.trainer.full_name %></td>
+                    <td class="px-4 py-3 whitespace-nowrap">
                       <span class="<%= badge_class_for(:training_session, session.status) %>">
                         <span class="sr-only"><%= t('trainer_workflow.dashboard.status_prefix') %></span><%= t("trainer_workflow.statuses.#{session.status}") %>
                       </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                       <%= link_to t('trainer_workflow.dashboard.view_details'), trainers_training_session_path(session),
                                   class: 'btn btn-primary btn-sm',
                                   aria: { label: t('trainer_workflow.dashboard.details_aria', name: session.application.constituent_full_name) } %>
@@ -218,45 +293,47 @@
             </table>
           </div>
         <% else %>
-          <p class="text-gray-500 text-center py-4"><%= t('trainer_workflow.dashboard.empty_my_upcoming') %></p>
+          <p class="text-gray-600 text-center py-4"><%= t('trainer_workflow.dashboard.empty_my_upcoming') %></p>
         <% end %>
       </div>
     <% end %>
 
-    <div id="upcoming-sessions-section" class="card p-6 mb-8">
+    <div id="upcoming-sessions-section" class="card p-4 mb-6">
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
-        <h2 id="upcoming-sessions-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.upcoming') %></h2>
+        <h2 id="upcoming-sessions-table-heading" class="text-lg font-semibold text-gray-900"><%= t('trainer_workflow.dashboard.upcoming') %></h2>
         <%= link_to t('trainer_workflow.dashboard.view_all'), trainers_training_sessions_path(status: 'scheduled'),
-                    class: 'text-primary-600 hover:text-primary-800',
-                    aria: { label: t('trainer_workflow.dashboard.all_scheduled_aria') } %>
+                    class: 'text-primary-700 underline',
+                    aria: { label: "#{t('trainer_workflow.dashboard.view_all')}: #{t('trainer_workflow.dashboard.scheduled')}" } %>
       </div>
 
       <% if @upcoming_sessions_display.any? %>
-        <div class="max-w-full overflow-x-auto">
+        <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="upcoming-sessions-table-heading" tabindex="0">
           <table class="min-w-full divide-y divide-gray-200" aria-labelledby="upcoming-sessions-table-heading">
             <thead class="bg-gray-50">
               <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date_time') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date_time') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.trainer') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <% @upcoming_sessions_display.each do |session| %>
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= l(session.scheduled_for, format: :long) %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= session.application.constituent_full_name %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900"><%= session.trainer.full_name %></td>
+                  <td class="px-4 py-3 whitespace-nowrap">
                     <span class="<%= badge_class_for(:training_session, session.status) %>">
                       <span class="sr-only"><%= t('trainer_workflow.dashboard.status_prefix') %></span><%= t("trainer_workflow.statuses.#{session.status}") %>
                     </span>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                     <%= link_to t('trainer_workflow.dashboard.view_details'), trainers_training_session_path(session),
                                 class: 'btn btn-primary btn-sm',
                                 aria: { label: t('trainer_workflow.dashboard.details_aria', name: session.application.constituent_full_name) } %>
@@ -267,44 +344,44 @@
           </table>
         </div>
       <% else %>
-        <p class="text-gray-500 text-center py-4"><%= t('trainer_workflow.dashboard.empty_upcoming') %></p>
+        <p class="text-gray-600 text-center py-4"><%= t('trainer_workflow.dashboard.empty_upcoming') %></p>
       <% end %>
     </div>
 
-    <div class="card p-6 mb-8">
+    <div class="card p-4 mb-6">
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
-      <h2 id="followup-sessions-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.recent_followup') %></h2>
+      <h2 id="followup-sessions-table-heading" class="text-lg font-semibold text-gray-900"><%= t('trainer_workflow.dashboard.recent_followup') %></h2>
       <%= link_to t('trainer_workflow.dashboard.view_all'), trainers_training_sessions_path(status: 'needs_followup'),
-                  class: 'text-primary-600 hover:text-primary-800',
-                  aria: { label: t('trainer_workflow.dashboard.followup_aria') } %>
+                  class: 'text-primary-700 underline',
+                  aria: { label: "#{t('trainer_workflow.dashboard.view_all')}: #{t('trainer_workflow.dashboard.followup')}" } %>
       </div>
 
       <% if @recent_followup_sessions.any? %>
-        <div class="max-w-full overflow-x-auto">
+        <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="followup-sessions-table-heading" tabindex="0">
           <table class="min-w-full divide-y divide-gray-200" aria-labelledby="followup-sessions-table-heading">
             <thead class="bg-gray-50">
               <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.date') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.constituent') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.status') %></th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('trainer_workflow.dashboard.actions') %></th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <% @recent_followup_sessions.each do |session| %>
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= l(session.updated_at.to_date, format: :long) %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= session.application.constituent_full_name %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
+                  <td class="px-4 py-3 whitespace-nowrap">
                     <span class="<%= badge_class_for(:training_session, session.status) %>">
                       <span class="sr-only"><%= t('trainer_workflow.dashboard.status_prefix') %></span><%= t("trainer_workflow.statuses.#{session.status}") %>
                     </span>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                     <%= link_to t('trainer_workflow.dashboard.view_details'), trainers_training_session_path(session),
                                 class: 'btn btn-primary btn-sm',
                                 aria: { label: t('trainer_workflow.dashboard.details_aria', name: session.application.constituent_full_name) } %>
@@ -315,16 +392,16 @@
           </table>
         </div>
       <% else %>
-        <p class="text-gray-500 text-center py-4"><%= t('trainer_workflow.dashboard.empty_followup') %></p>
+        <p class="text-gray-600 text-center py-4"><%= t('trainer_workflow.dashboard.empty_followup') %></p>
       <% end %>
     </div>
 
-  <section aria-labelledby="recent-completed-heading" class="card p-6">
+  <section aria-labelledby="recent-completed-heading" class="card p-4">
     <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
-      <h2 id="recent-completed-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.recent_completed') %></h2>
+      <h2 id="recent-completed-heading" class="text-lg font-semibold text-gray-900"><%= t('trainer_workflow.dashboard.recent_completed') %></h2>
         <%= link_to t('trainer_workflow.dashboard.view_all'), trainers_training_sessions_path(status: 'completed'),
-                    class: 'text-primary-600 hover:text-primary-800',
-                    aria: { label: t('trainer_workflow.dashboard.completed_aria') } %>
+                    class: 'text-primary-700 underline',
+                    aria: { label: "#{t('trainer_workflow.dashboard.view_all')}: #{t('trainer_workflow.dashboard.completed')}" } %>
     </div>
 
     <% if @recent_completed_sessions.any? %>
@@ -334,10 +411,11 @@
             <div class="flex justify-between items-start">
               <div>
                 <p class="font-medium"><%= session.application.constituent_full_name %></p>
-                <p class="text-sm text-gray-500">
+                <p class="text-sm text-gray-600"><%= t('trainer_workflow.dashboard.trainer') %>: <%= session.trainer.full_name %></p>
+                <p class="text-sm text-gray-600">
                   <%= t('trainer_workflow.dashboard.completed_prefix') %> <%= l(session.completed_at.to_date, format: :long) %>
                 </p>
-                <p class="text-sm text-gray-500">
+                <p class="text-sm text-gray-600">
                   <%= t('trainer_workflow.dashboard.duration_prefix') %> <%= training_duration_hours_label(session.duration_hours) %>
                 </p>
               </div>
@@ -349,11 +427,11 @@
         <% end %>
       </ul>
     <% else %>
-      <p class="text-gray-500 text-center py-4"><%= t('trainer_workflow.dashboard.empty_completed') %></p>
+      <p class="text-gray-600 text-center py-4"><%= t('trainer_workflow.dashboard.empty_completed') %></p>
     <% end %>
   </section>
 
-  <div class="mt-8">
+  <div class="mt-6">
     <%= render 'shared/activity_history', activity_logs: @activity_logs, title: t('trainer_workflow.dashboard.recent_activity'), show_subject: true %>
   </div>
-</main>
+</div>

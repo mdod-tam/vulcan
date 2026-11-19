@@ -1,0 +1,14 @@
+<%# locals: (form:, application:, values:) -%>
+<fieldset class="rounded border p-4 space-y-3">
+  <legend class="font-semibold">Program groups and shipping address</legend>
+  <% Product::PROGRAM_GROUPS.each do |key, label| %>
+    <label class="inline-flex items-center gap-2 mr-4"><%= form.check_box :program_disability_groups, { multiple: true }, key, nil %><%= label %></label>
+  <% end %>
+  <%= form.hidden_field :program_disability_groups, value: '', multiple: true %>
+  <p>Enter the shipping address you know. You can save an unfinished address here; it must be complete before ordering or shipping. Use Care of for a contact name and Address 2 for an apartment or unit.</p>
+  <div class="grid gap-3 sm:grid-cols-2">
+    <% EquipmentShipping::FIELDS.each do |field| %>
+      <div><%= form.label field, class: 'form-label' %><%= form.text_field field, value: values[field], class: 'form-input' %></div>
+    <% end %>
+  </div>
+</fieldset>

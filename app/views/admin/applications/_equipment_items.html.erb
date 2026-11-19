@@ -1,38 +1,41 @@
-<%# locals: (items:, audit_records:, return_context:) -%>
+<%# locals: (items:, audit_records:, return_context:, title: 'Devices') -%>
 <section aria-labelledby="equipment-items-title" class="space-y-4">
-  <h3 id="equipment-items-title" class="text-lg font-semibold">Actual equipment devices</h3>
+  <h3 id="equipment-items-title" class="text-lg font-semibold"><%= title %></h3>
+  <p class="text-sm text-gray-600">Each device has its own shipment, serial number and correction history.</p>
   <% items.each do |item| %>
     <article id="equipment-item-<%= item.id %>" class="rounded border border-gray-300 p-4 space-y-3">
-      <h4 class="font-semibold">Device #<%= item.id %> — <%= equipment_catalog_label(item.product) %></h4>
+      <h4 class="font-semibold">
+        Device #<%= item.id %> — <%= equipment_catalog_label(item.product) %> (<%= equipment_funding_label(item, abbreviated: true) %>)
+      </h4>
       <p><%= equipment_queue_badge(item) %></p>
       <dl class="grid gap-3 sm:grid-cols-2 text-sm">
         <div>
           <dt class="font-medium">Application</dt>
-          <dd><%= link_to "##{item.application_id}",
-                          admin_application_path(item.application_id, anchor: "equipment-item-#{item.id}", return_context: return_context),
-                          class: 'text-primary-700 underline' %></dd>
+          <dd><%= equipment_item_context_link(item, return_context: return_context) %></dd>
         </div>
         <div>
           <dt class="font-medium">Purchase order</dt>
           <dd>
             <% if item.purchase_order %>
-              <%= link_to "#{item.purchase_order.vendor.business_name} / #{item.purchase_order.number}",
+              <%= link_to item.purchase_order.number,
                           admin_purchase_order_path(item.purchase_order, return_context: return_context), class: 'text-primary-700 underline' %>
-              — sent <%= accessible_date_value(item.purchase_order.sent_at) %>
+              — <%= item.purchase_order.sent_at ? "Sent #{accessible_date_value(item.purchase_order.sent_at)}" : 'PO sent date needed' %>
             <% else %>No current purchase order<% end %>
           </dd>
         </div>
+        <div><dt class="font-medium">Where it came from</dt><dd><%= equipment_source_label(item) %></dd></div>
+        <div><dt class="font-medium">Funding</dt><dd><%= equipment_funding_label(item) %></dd></div>
+        <div><dt class="font-medium">Required setup</dt><dd><%= Product::PROGRAM_GROUPS[item.disability_setup_group] || 'Setup needed' %></dd></div>
+        <div><dt class="font-medium">Onward destination</dt><dd class="whitespace-pre-line"><%= item.shipping_label.presence || 'Destination needed' %></dd></div>
         <div><dt class="font-medium">Date shipped</dt><dd><%= accessible_date_value(item.shipped_at) || 'Not recorded' %></dd></div>
+        <div><dt class="font-medium">Date received</dt><dd><%= accessible_date_value(item.delivered_on) || 'Not recorded' %></dd></div>
         <div><dt class="font-medium">Tracking number</dt><dd class="break-all"><%= item.tracking_number.presence || 'Not recorded' %> <%= equipment_tracking_link(item) %></dd></div>
         <div><dt class="font-medium">Serial number</dt><dd class="break-all"><%= item.serial_number.presence || 'Not recorded' %></dd></div>
         <div><dt class="font-medium">IMEI</dt><dd class="break-all"><%= item.imei.presence || 'Not recorded' %></dd></div>
       </dl>
-      <% unless item.withdrawn_at? %>
-        <p><%= link_to 'Correct device / record shipment',
-                       edit_admin_equipment_item_path(item, return_context: return_context), class: 'text-primary-700 underline' %></p>
-      <% end %>
+      <%= render 'admin/equipment_items/actions', item: item, return_context: return_context %>
       <%= render 'admin/equipment_items/history', events: item.events.sort_by(&:created_at).reverse, audit_records: audit_records %>
     </article>
   <% end %>
-  <% if items.empty? %><p class="text-sm text-gray-600">No physical device records are currently linked.</p><% end %>
+  <% if items.empty? %><p class="text-sm text-gray-600">No devices have been assigned yet.</p><% end %>
 </section>

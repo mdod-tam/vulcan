@@ -1,111 +1,110 @@
-<div class="min-h-screen bg-gray-100 py-12">
-  <div class="form-container max-w-2xl mx-auto">
-    <div class="card p-4 sm:p-8">
-      <h1 class="text-2xl font-semibold mb-6 text-center" id="form-title">New Product</h1>
-
-      <%= form_with(model: [:admin, @product], local: true, class: "space-y-6", "aria-labelledby": "form-title") do |f| %>
-        <% if @product.errors.any? %>
-          <div class="bg-danger-50 p-4 rounded mb-6" role="alert" aria-atomic="true">
-            <h2 class="text-danger-700 font-medium">
-              <%= pluralize(@product.errors.count, "error") %> prohibited this product from being saved:
-            </h2>
-            <ul class="list-disc list-inside text-danger-700">
-              <% @product.errors.full_messages.each do |msg| %>
-                <li><%= msg %></li>
-              <% end %>
-            </ul>
-          </div>
+<%= form_with(model: [:admin, @product], local: true, class: 'space-y-6', html: { aria: { labelledby: 'form-title' } },
+              data: { controller: 'product-classification', product_classification_choices_value: Product::CATEGORY_DEVICE_TYPES }) do |f| %>
+  <p class="text-sm text-gray-700">Name, category, device types, and disability groups are required. A verified product also needs its manufacturer and model number. The remaining details are optional.</p>
+  <% if @product.errors.any? %>
+    <div class="bg-danger-50 p-4 rounded mb-6" role="alert" aria-atomic="true">
+      <h2 class="text-danger-700 font-medium">
+        Please correct <%= pluralize(@product.errors.count, 'error') %> before saving this product:
+      </h2>
+      <ul class="list-disc list-inside text-danger-700">
+        <% @product.errors.full_messages.each do |msg| %>
+          <li><%= msg %></li>
         <% end %>
-
-        <section aria-labelledby="basic-info-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="basic-info-title" class="text-lg font-medium text-gray-900">Basic Information</h2>
-          
-          <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
-            <div>
-              <%= f.label :manufacturer, class: "form-label" %>
-              <%= f.text_field :manufacturer, class: "form-input mt-1" %>
-            </div>
-
-            <div>
-              <%= f.label :name, class: "form-label" %>
-              <%= f.text_field :name, class: "form-input mt-1" %>
-            </div>
-
-            <div>
-              <%= f.label :model_number, class: "form-label" %>
-              <%= f.text_field :model_number, class: "form-input mt-1" %>
-            </div>
-            <div class="space-y-2">
-              <%= f.label :device_types, "Device Types", class: "form-label" %>
-              <div class="grid grid-cols-2 gap-4">
-                <% Product::DEVICE_TYPES.sort.each do |device_type| %>
-                  <div class="flex items-center">
-                    <%= f.check_box :device_types, 
-                        { multiple: true, class: "h-4 w-4 text-primary-600 border-gray-300 rounded" },
-                        device_type, 
-                        nil %>
-                    <%= f.label "device_types_#{device_type.parameterize}", device_type, class: "ml-2 text-sm text-gray-700" %>
-                  </div>
-                <% end %>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="details-section-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="details-section-title" class="text-lg font-medium text-gray-900">Product Details</h2>
-
-          <div class="space-y-4">
-            <div>
-              <%= f.label :description, class: "form-label" %>
-              <%= f.text_area :description, rows: 3, class: "form-input mt-1" %>
-            </div>
-
-            <div>
-              <%= f.label :features, class: "form-label" %>
-              <%= f.text_area :features, rows: 3, class: "form-input mt-1" %>
-            </div>
-
-            <div>
-              <%= f.label :compatibility_notes, class: "form-label" %>
-              <%= f.text_area :compatibility_notes, rows: 2, class: "form-input mt-1" %>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="additional-info-title" class="space-y-4 p-4 bg-gray-50 rounded">
-          <h2 id="additional-info-title" class="text-lg font-medium text-gray-900">Additional Information</h2>
-          
-          <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
-            <div>
-              <%= f.label :documentation_url, class: "form-label" %>
-              <%= f.url_field :documentation_url, class: "form-input mt-1" %>
-            </div>
-            <div class="sm:col-span-2">
-              <%= f.label :vendor_ids, "Vendors", class: "form-label mb-2" %>
-              <div class="grid grid-cols-2 gap-4">
-                <%= f.collection_check_boxes :vendor_ids,
-                                             @vendors,
-                                             :id, :full_name do |b| %>
-                  <div class="flex items-center">
-                    <%= b.check_box(class: "h-4 w-4 text-primary-600 border-gray-300 rounded") %>
-                    <%= b.label(class: "ml-2 text-sm text-gray-700") %>
-                  </div>
-                <% end %>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
-          <%= link_to "Cancel",
-              admin_products_path,
-              class: "btn btn-outline" %>
-              
-          <%= f.submit "Save Product",
-              class: "btn btn-primary" %>
-        </div>
-      <% end %>
+      </ul>
     </div>
+  <% end %>
+
+  <section aria-labelledby="basic-info-title" class="space-y-4">
+    <h2 id="basic-info-title" class="text-lg font-medium text-gray-900">Product information</h2>
+
+    <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+      <div>
+        <%= f.label :manufacturer, class: 'form-label' %>
+        <%= f.text_field :manufacturer, class: 'form-input mt-1', aria: { describedby: 'model-identity-hint' } %>
+      </div>
+
+      <div>
+        <%= f.label :name, class: 'form-label' %>
+        <%= f.text_field :name, required: true, class: 'form-input mt-1' %>
+      </div>
+
+      <div>
+        <%= f.label :model_number, class: 'form-label' %>
+        <%= f.text_field :model_number, class: 'form-input mt-1', aria: { describedby: 'model-identity-hint' } %>
+      </div>
+      <div>
+        <%= f.label :msrp, 'MSRP (USD)', class: 'form-label' %>
+        <%= f.number_field :msrp, min: 0, step: '0.01', class: 'form-input mt-1', aria: { describedby: 'product-msrp-hint' } %>
+        <p id="product-msrp-hint" class="form-hint">Leave blank when unknown. Actual device cost is recorded on the purchase order.</p>
+      </div>
+      <div>
+        <%= f.label :category, class: 'form-label' %>
+        <%= f.select :category, @product.category_choices.map { |key, label| [label, key] }, { include_blank: 'Select category' },
+                     required: true, class: 'form-select form-input mt-1', data: { product_classification_target: 'category', action: 'product-classification#update' } %>
+      </div>
+      <div class="sm:col-span-2">
+        <%= f.label :model_confirmed, class: 'flex items-center gap-2' do %>
+          <%= f.check_box :model_confirmed %> I have verified the manufacturer and exact model
+        <% end %>
+        <p id="model-identity-hint" class="form-hint">Verified products need a manufacturer and model number. Leave this unchecked to save a draft. Drafts cannot be selected for equipment. Once a product is used, add another product to change its manufacturer or model.</p>
+      </div>
+      <fieldset class="space-y-2 sm:col-span-2">
+        <legend class="form-label">Device types (required)</legend>
+        <%= hidden_field_tag 'product[device_types][]', '', id: nil %>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <% @product.device_type_choices.each do |device_type| %>
+            <div class="flex items-center <%= 'hidden' unless @product.device_type_offered?(device_type) %>"
+                 data-product-classification-target="type" data-device-type="<%= device_type %>">
+              <%= f.check_box :device_types,
+                              { multiple: true, id: "product-type-#{device_type.parameterize}", class: 'h-4 w-4 rounded border-gray-300' }, device_type, nil %>
+              <%= label_tag "product-type-#{device_type.parameterize}", device_type, class: 'ml-2 text-sm text-gray-700' %>
+            </div>
+          <% end %>
+        </div>
+      </fieldset>
+      <fieldset class="space-y-2 sm:col-span-2" aria-describedby="product-disability-groups-hint">
+        <legend class="form-label">Disability groups (required)</legend>
+        <p id="product-disability-groups-hint" class="form-hint">Select every disability group this product is suitable for.</p>
+        <%= f.collection_check_boxes :eligible_disability_groups, @product.program_group_choices, :first, :last do |box| %>
+          <label class="flex items-center gap-2"><%= box.check_box %><%= box.text %></label>
+        <% end %>
+      </fieldset>
+    </div>
+  </section>
+
+  <section aria-labelledby="details-section-title" class="space-y-4">
+    <h2 id="details-section-title" class="text-lg font-medium text-gray-900">Product details (optional)</h2>
+
+    <div class="space-y-4">
+      <div>
+        <%= f.label :description, class: 'form-label' %>
+        <%= f.text_area :description, rows: 3, class: 'form-textarea form-input mt-1' %>
+      </div>
+
+      <div>
+        <%= f.label :features, class: 'form-label' %>
+        <%= f.text_area :features, rows: 3, class: 'form-textarea form-input mt-1' %>
+      </div>
+
+      <div>
+        <%= f.label :compatibility_notes, class: 'form-label' %>
+        <%= f.text_area :compatibility_notes, rows: 2, class: 'form-textarea form-input mt-1' %>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="additional-info-title" class="space-y-4">
+    <h2 id="additional-info-title" class="text-lg font-medium text-gray-900">Documentation (optional)</h2>
+
+    <div>
+      <%= f.label :documentation_url, 'Documentation URL', class: 'form-label' %>
+      <%= f.url_field :documentation_url, class: 'form-input mt-1' %>
+    </div>
+  </section>
+
+  <div class="flex flex-wrap items-center justify-end gap-3 border-t border-gray-200 pt-6">
+    <%= link_to 'Cancel', admin_products_path, class: 'btn btn-outline' %>
+
+    <%= f.submit 'Save Product', class: 'btn btn-primary' %>
   </div>
-</div>
+<% end %>

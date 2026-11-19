@@ -47,7 +47,6 @@ es:
         idle_other: "Su sesión vence en %{minutes} minutos. Seleccione Seguir trabajando para mantener la sesión iniciada."
     form:
       contact_label: "Correo electrónico o número de teléfono"
-      contact_hint: "Use el correo electrónico o número de teléfono de su cuenta. Los enlaces de acceso por texto solo se envían a números con capacidad de recibir textos."
       error_heading: "Corrija los siguientes errores:"
       password_label: "Contraseña"
       password_hint: "Ingrese su contraseña"
@@ -276,9 +275,10 @@ es:
         duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
     submit_gate:
-      incomplete: "Complete todas las confirmaciones obligatorias antes de enviar."
+      incomplete: "Complete todos los campos obligatorios antes de enviar."
       ready: "La solicitud está lista para enviar."
       detail: "Falta completar: %{items}."
+    income_proof_required: "Este comprobante es obligatorio para enviar su solicitud."
     form_labels:
       maryland_resident: "Certifico que soy residente de Maryland"
       household_size: "Tamaño del hogar"

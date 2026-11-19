@@ -39,11 +39,21 @@ module Evaluators
       options
     end
 
+    def evaluation_recommendation_visible?(product, groups, selected_ids)
+      product.eligible_for?(groups) || selected_ids.map(&:to_s).include?(product.id.to_s)
+    end
+
+    def evaluation_equipment_profile_values(evaluation, form_values)
+      values = evaluation.application.suggested_shipping_snapshot
+      values.merge(form_values.slice(*EquipmentShipping::FIELDS.map(&:to_s)))
+    end
+
     def evaluation_report_error_targets
       {
         products_tried_inputs: 'products-tried-group',
         recommended_product_ids: 'catalog-recommendations-group',
-        no_suitable_product: 'recommendation-outcome-group'
+        no_suitable_product: 'recommendation-outcome-group',
+        program_disability_groups: 'program-groups-group'
       }
     end
   end

@@ -11,6 +11,7 @@ module ConstituentPortal
 
     def index
       @product_groups = product_history.groups
+      @equipment_fulfillment_in_progress = product_history.fulfillment_in_progress?
     end
 
     def show
@@ -24,7 +25,7 @@ module ConstituentPortal
     private
 
     def product_history
-      @product_history ||= Applications::ProductHistory.new(applications: Application.accessible_by(current_user))
+      @product_history ||= Applications::ProductHistory.new(applications: Application.accessible_by(current_user), mode: :portal_visible)
     end
   end
 end

@@ -26,8 +26,8 @@ FactoryBot.define do
       ipad_mini = create(:product, name: 'iPad Mini')
 
       evaluation.products_tried = [
-        { 'product_id' => ipad_air.id, 'reaction' => 'Satisfied' },
-        { 'product_id' => ipad_mini.id, 'reaction' => 'Neutral' }
+        { 'product_id' => ipad_air.id.to_s, 'reaction' => 'Satisfied' },
+        { 'product_id' => ipad_mini.id.to_s, 'reaction' => 'Neutral' }
       ]
 
       evaluation.recommended_product_ids = [ipad_air.id, ipad_mini.id]
@@ -65,6 +65,9 @@ FactoryBot.define do
           product.compatibility_notes = 'Compatible with all iOS accessibility features'
           product.documentation_url = 'https://support.apple.com/guide/iphone'
           product.device_types = ['Smartphone']
+          product.category = 'devices'
+          product.eligible_disability_groups = Product::PROGRAM_GROUPS.keys
+          product.model_confirmed = true
         end
 
         pixel = Product.find_or_create_by(name: 'Pixel') do |product|
@@ -75,12 +78,15 @@ FactoryBot.define do
           product.compatibility_notes = 'Compatible with Android accessibility services'
           product.documentation_url = 'https://support.google.com/pixel'
           product.device_types = ['Smartphone']
+          product.category = 'devices'
+          product.eligible_disability_groups = Product::PROGRAM_GROUPS.keys
+          product.model_confirmed = true
         end
 
         evaluation.update!(
           products_tried: [
-            { 'product_id' => iphone.id, 'reaction' => 'Very Satisfied' },
-            { 'product_id' => pixel.id, 'reaction' => 'Satisfied' }
+            { 'product_id' => iphone.id.to_s, 'reaction' => 'Very Satisfied' },
+            { 'product_id' => pixel.id.to_s, 'reaction' => 'Satisfied' }
           ],
           recommended_product_ids: [iphone.id, pixel.id]
         )
@@ -91,7 +97,7 @@ FactoryBot.define do
       after(:build) do |evaluation|
         ipad = create(:product, name: 'iPad Air')
         evaluation.products_tried = [
-          { 'product_id' => ipad.id, 'reaction' => 'Very Satisfied' }
+          { 'product_id' => ipad.id.to_s, 'reaction' => 'Very Satisfied' }
         ]
         evaluation.recommended_product_ids = [ipad.id]
       end

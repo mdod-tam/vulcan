@@ -1,0 +1,33 @@
+<%# locals: (purchase_order:, rows: nil) -%>
+<section class="space-y-3">
+  <h2 class="text-xl font-semibold">Device costs</h2>
+<p>MSRP = catalog price. Actual unit cost = price we paid for it in this PO. Don’t enter guesses.</p>
+<%= form_with url: admin_purchase_order_cost_path(purchase_order), method: :patch, scope: :costs, class: 'space-y-3' do |form| %>
+<%= form.hidden_field :expected_version, value: purchase_order.lock_version %>
+<div>
+<%= form.label :vendor_name, 'Supplier name', class: 'form-label' %>
+<%= form.text_field :vendor_name, value: purchase_order.vendor_name, disabled: purchase_order.icc_financial_evidence_locked?, class: 'form-input' %>
+</div>
+<% purchase_order.equipment_items.each do |item| %>
+<% row = rows&.fetch(item.id.to_s, nil) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<div class="border rounded p-3">
+        <p>Device #<%= item.id %>
+ · <%= equipment_catalog_label(item.product) %> · MSRP: <%= item.product.msrp.nil? ? 'Not recorded' : number_to_currency(item.product.msrp) %>
+</p>
+<%= hidden_field_tag 'costs[rows][][id]', item.id, id: nil %>
+<%= hidden_field_tag 'costs[rows][][lock_version]', row ? row['lock_version'] : item.lock_version,
+                     id: nil %>
+<%= label_tag "unit-cost-#{item.id}", 'Enter price we paid in this PO.' %>
+<%= text_field_tag 'costs[rows][][unit_cost]', row ? row['unit_cost'] : item.unit_cost,
+                   inputmode: 'decimal', autocomplete: 'off',
+                   id: "unit-cost-#{item.id}", disabled: item.icc_financial_evidence_locked?,
+                   class: 'form-input' %>
+<% if item.icc_financial_evidence_locked? %>
+<%= link_to 'Correct filed/shared invoice cost with reason', edit_admin_icanconnect_financial_record_path("EquipmentItem:#{item.id}"),
+            class: 'underline' %>
+<% end %>
+</div>
+<% end %>
+<%= form.submit 'Save actual device costs', class: 'btn btn-primary' %>
+<% end %>
+</section>

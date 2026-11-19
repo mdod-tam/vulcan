@@ -69,7 +69,7 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
   end
 
   test 'transfer preserves the appointment and report context and records both evaluator identities' do
-    before = @evaluation.attributes.except('evaluator_id', 'updated_at', 'assignment_operation_id')
+    before = @evaluation.attributes.except('evaluator_id', 'updated_at', 'assignment_operation_id', 'lock_version')
     previous_operation = @evaluation.assignment_operation_id
     products = @evaluation.recommended_product_ids
 
@@ -80,7 +80,7 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     end
 
     assert_equal @replacement.id, @evaluation.reload.evaluator_id
-    assert_equal before, @evaluation.attributes.except('evaluator_id', 'updated_at', 'assignment_operation_id')
+    assert_equal before, @evaluation.attributes.except('evaluator_id', 'updated_at', 'assignment_operation_id', 'lock_version')
     assert_equal products, @evaluation.recommended_product_ids
     event = Event.find_by!(action: 'evaluator_reassigned', auditable: @evaluation)
     assert_equal @evaluation.assignment_operation_id, event.metadata['operation_id']

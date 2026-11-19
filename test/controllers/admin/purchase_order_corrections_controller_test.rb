@@ -15,14 +15,14 @@ module Admin
     test 'expired shared header review retains its draft until a fresh read-only review is confirmed' do
       original = @order.attributes
       original_items = [@item, @sibling].map(&:attributes)
-      context = { tab: 'ordered', product_id: @item.product_id.to_s, vendor_id: @order.vendor_id.to_s }
+      context = { tab: 'ordered', product_id: @item.product_id.to_s }
       submitted = { purchase_order: { number: 'Reviewed Number' }, reason: 'Wrong PO reference', expected_version: 0,
                     item_versions: versions, return_context: context }
       assert_no_difference 'Event.count' do
         patch admin_purchase_order_correction_path(@order), params: submitted.merge(review: '1')
       end
       assert_response :success
-      assert_select 'h2', text: 'Review old and new header values'
+      assert_select 'h2', text: 'Review purchase order changes'
       assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
       assert_equal Mime[:html].to_s, response.media_type
       assert_select '#equipment-correction form input[name=impact_token]'
@@ -113,13 +113,12 @@ module Admin
       assert_select '#purchase_order_sent_at-error', text: /Date PO sent is invalid/
     end
 
-    test 'an inactive recorded vendor remains visible for historical header correction' do
-      @order.vendor.update!(status: :inactive)
-
+    test 'PO corrections expose global number and sending facts without a vendor association' do
       get edit_admin_purchase_order_correction_path(@order)
-
       assert_response :success
-      assert_select '#purchase_order_vendor_id option[selected][value=?]', @order.vendor_id.to_s
+      assert_select '#purchase_order_vendor_id', count: 0
+      assert_select '#purchase_order_number[value=?]', @order.number
+      assert_select 'input[name="purchase_order[unsend]"]'
     end
 
     test 'stale header form retains original versions and unchanged retries cannot overwrite a newer correction' do

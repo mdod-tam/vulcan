@@ -12,7 +12,8 @@ module Admin
 
       finish(result, pass: t('admin.applications.assign_trainer.trainer_assign_pass'),
                      fail: t('admin.applications.assign_trainer.trainer_assign_fail'),
-                     warning: 'Saved. A training notice could not be queued. Do not repeat the assignment.')
+                     warning: 'Saved. A training notice could not be queued. Do not repeat the assignment.',
+                     return_to_dashboard: params[:return_context] == 'training_dashboard')
     end
 
     def reassign_trainer
@@ -36,12 +37,13 @@ module Admin
     private
 
     # A saved change whose notice could not be queued still succeeds, with a warning not to repeat it.
-    def finish(result, pass:, fail:, warning:)
+    def finish(result, pass:, fail:, warning:, return_to_dashboard: false)
+      destination = return_to_dashboard ? trainers_dashboard_path(anchor: 'needs-trainer-section') : admin_application_path(@application)
       if result.success?
         flash[:alert] = warning if result.data[:notification_outcomes].any?(&:warning?)
-        redirect_to admin_application_path(@application), notice: pass
+        redirect_to destination, notice: pass
       else
-        redirect_to admin_application_path(@application), alert: result.message.presence || fail
+        redirect_to destination, alert: result.message.presence || fail
       end
     end
   end

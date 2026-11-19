@@ -7,6 +7,7 @@ en:
         purchase_order: Current purchase order
         purchase_order_id: Current purchase order
         shipped_at: Date shipped
+        delivered_on: Date received
         imei: IMEI (15 digits)
         normalized_imei: IMEI (15 digits)
         serial_duplicate_reason: Serial warning acknowledgment

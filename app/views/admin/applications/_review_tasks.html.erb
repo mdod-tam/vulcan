@@ -1,0 +1,74 @@
+<%# locals: (summaries:) -%>
+<section id="common-tasks" aria-labelledby="common-tasks-heading" class="mb-6">
+  <h2 id="common-tasks-heading" class="text-lg font-semibold text-gray-900 mb-4">Application review</h2>
+  <nav class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Application review tasks">
+    <% [['Proofs awaiting review', 'proofs_needing_review', :proofs],
+        ['Certifications awaiting review', 'certifications_needing_review', :certifications],
+        ['Awaiting provider signature', 'certifications_awaiting_provider', :providers]].each do |label, filter, key| %>
+      <% summary = summaries.fetch(key) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <% count = summary.count # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <% selected = params[:filter] == filter || # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments.
+                    (filter == 'certifications_needing_review' && params[:filter].in?(%w[disability_certs_to_review digitally_signed_needs_review])) %>
+      <article class="card summary-card summary-card-compact <%= 'border-primary-600 bg-primary-50' if selected %>">
+        <%= link_to admin_applications_path(view: 'review', filter: filter),
+                    class: 'summary-card-content rounded-t-lg text-primary-700 hover:underline', data: { turbo: false },
+                    aria: { current: ('page' if selected), label: "#{label}: #{pluralize(count, 'application')}" } do %>
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="summary-card-title text-primary-700"><%= label %></h3>
+            <p class="summary-card-count"><%= count %></p>
+          </div>
+          <p class="text-xs text-gray-600"><%= 'application'.pluralize(count) %></p>
+        <% end %>
+        <div class="summary-card-details">
+          <% if count.positive? %>
+            <% if summary.oldest %>
+              <p>
+                <span class="text-gray-600"><%= summary.unknown_dates.positive? ? 'Longest recorded wait:' : 'Longest wait:' %></span>
+                <%= pluralize(summary.oldest.days, 'day') %>
+              </p>
+              <%= link_to admin_application_path(summary.oldest.application, anchor: key == :proofs ? 'attachments-section' : 'disability-certification-section'),
+                          class: 'block text-primary-700 underline', data: { turbo_frame: '_top' } do %>
+                <%= summary.oldest.application.user.full_name %> — <%= summary.oldest.documents.to_sentence %>
+              <% end %>
+            <% else %>
+              <p>Longest wait: Not recorded</p>
+            <% end %>
+            <p class="text-xs text-gray-600">
+              Next:
+              <% if key == :providers %>Follow up with provider<% elsif key == :proofs %>Review proofs<% else %>Review certification<% end %>
+            </p>
+          <% else %>
+            <p class="text-gray-600">No applications waiting.</p>
+          <% end %>
+          <% unless key == :providers %>
+            <p class="text-xs text-gray-600">
+              Average wait to approve:
+              <% if summary.average_approval_days %>
+                <%= pluralize(number_with_precision(summary.average_approval_days, precision: 1, strip_insignificant_zeros: true), 'day') %>
+              <% else %>
+                Not recorded
+              <% end %>
+            </p>
+          <% end %>
+          <% if summary.approval_sample_count.positive? %>
+            <p class="mt-1 text-xs text-gray-600">Based on <%= pluralize(summary.approval_sample_count, 'recorded document approval') %>.</p>
+          <% end %>
+          <% if summary.unknown_dates.positive? %>
+            <p class="text-xs text-gray-600"><%= pluralize(summary.unknown_dates, 'application') %> without a recorded <%= key == :providers ? 'send' : 'receipt' %> date.</p>
+          <% end %>
+        </div>
+      </article>
+    <% end %>
+  </nav>
+  <% if params[:filter].in?(%w[certifications_needing_review disability_certs_to_review digitally_signed_needs_review]) %>
+    <nav class="mt-4 flex flex-wrap gap-3" aria-label="Certification review filters">
+      <% [['All certifications', 'certifications_needing_review'], ['Received documents', 'disability_certs_to_review'],
+          ['Digitally signed', 'digitally_signed_needs_review']].each do |label, filter| %>
+        <%= link_to label,
+                    admin_applications_path(view: 'review', filter: filter),
+                    class: class_names('btn btn-outline', 'border-primary-600 bg-primary-50 text-primary-700' => params[:filter] == filter),
+                    aria: { current: params[:filter] == filter ? 'page' : nil }, data: { turbo: false } %>
+      <% end %>
+    </nav>
+  <% end %>
+</section>

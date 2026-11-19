@@ -4,8 +4,9 @@ module Evaluations
   class SubmissionService < BaseService
     REPORT_PARAMETERS = [
       :assessment_source, :appointment_completed_at, :location, :notes, :attendees_field,
-      :no_suitable_product, :recommendation_notes,
-      { recommended_product_ids: [].freeze, products_tried_inputs: [%i[selected reaction].freeze].freeze }.freeze
+      :no_suitable_product, :recommendation_notes, :shipping_confirmed,
+      :shipping_care_of, :shipping_address_1, :shipping_address_2, :shipping_city, :shipping_state, :shipping_zip_code,
+      { program_disability_groups: [].freeze, recommended_product_ids: [].freeze, products_tried_inputs: [%i[selected reaction].freeze].freeze }.freeze
     ].freeze
     REPORT_FIELDS = REPORT_PARAMETERS.flat_map { |parameter| parameter.is_a?(Hash) ? parameter.keys : parameter }.freeze
 
@@ -13,6 +14,7 @@ module Evaluations
       attributes = params.expect(evaluation: REPORT_PARAMETERS)
       raise ActionController::BadRequest, 'Product trials must be keyed by catalog product ID.' if attributes[:products_tried_inputs].is_a?(Array)
 
+      attributes[:products_tried_inputs] = {} unless attributes[:products_tried_inputs].respond_to?(:each_pair)
       attributes
     end
 
@@ -50,10 +52,25 @@ module Evaluations
     def prepare_evaluation
       @evaluation.errors.clear
       attributes = submission_params
+      @evaluation.appointment_completed_at = attributes[:appointment_completed_at]
       validate_status!(attributes[:assessment_source])
+      save_equipment_profile!(attributes)
       @evaluation.assign_attributes(attributes)
       @evaluation.status = :completed
       @evaluation.report_submitted_at = Time.current
+      Icanconnect::ServiceFunding.snapshot!(@evaluation, service_date: @evaluation.appointment_completed_at) if @evaluation.appointment_completed_at
+    end
+
+    def save_equipment_profile!(attributes)
+      application = @evaluation.application
+      profile = {}
+      profile[:program_disability_groups] = Array(attributes.delete(:program_disability_groups)).compact_blank.uniq if attributes.key?(:program_disability_groups)
+      confirmed = ActiveModel::Type::Boolean.new.cast(attributes.delete(:shipping_confirmed))
+      shipping = attributes.extract!(*EquipmentShipping::FIELDS)
+      profile.merge!(shipping) if confirmed
+      return if profile.empty? && !confirmed
+
+      application.update_equipment_profile!(profile, actor: @actor, shipping_confirmed: confirmed, evaluation_id: @evaluation.id)
     end
 
     def validate_status!(source)
@@ -101,7 +118,6 @@ module Evaluations
         raise ActiveRecord::RecordInvalid, @evaluation
       end
       attributes[:recommended_product_ids] = Array(attributes[:recommended_product_ids]).compact_blank
-      attributes[:products_tried_inputs] ||= {}
       no_suitable_product = ActiveModel::Type::Boolean.new.cast(attributes.delete(:no_suitable_product).presence)
       if no_suitable_product && attributes[:recommended_product_ids].any?
         @evaluation.errors.add(:no_suitable_product, 'cannot be combined with catalog recommendations')

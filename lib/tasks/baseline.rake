@@ -16,6 +16,15 @@ namespace :db do
     load Rails.root.join('db/seeds/production.rb')
   end
 
+  desc 'Refresh the checked-in product catalog without changing other settings'
+  task seed_products: :environment do
+    require Rails.root.join('db/seeds/products')
+    Seeds::Products.call
+    puts "Catalog refreshed. #{Product.available.count} confirmed products are available."
+    drafts = Product.active.where(catalog_key: nil, model_confirmed: false)
+    drafts.find_each { |product| puts "Review draft product ##{product.id}: #{product.name}" }
+  end
+
   desc 'Reset program policies to the checked-in defaults'
   task seed_policies: :environment do
     as_system_actor.call { |actor| Baseline::Policies.reset!(actor: actor) }

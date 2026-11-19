@@ -35,6 +35,74 @@ module Admin
       assert_selector 'input[type="hidden"][name="income_proof"], input[type="hidden"][name="income_proof_signed_id"]', visible: :all
     end
 
+    test 'benefits proof removes numeric income requirements and survives a missing proof retry' do
+      fill_complete_paper_application('Benefits', 'Retry')
+      choose 'upload_only_disability_certification', allow_label_click: true
+      fill_in 'application[household_size]', with: '9'
+      fill_in 'application[annual_income]', with: '999999'
+      assert_selector '#application_household_size[required][aria-required=true]'
+      assert_selector '#application_annual_income[required][aria-required=true]'
+      assert_selector '#admin-income-threshold-warning'
+      assert_button 'Submit Paper Application', disabled: true
+      check 'no_income_information', allow_label_click: true
+      assert_no_selector '[data-income-validation-target=incomeFieldsContainer]'
+      assert_selector '#admin-income-threshold-warning[hidden]', visible: :all
+      %w[household_size annual_income].each do |field|
+        assert_no_selector "#application_#{field}[required], #application_#{field}[aria-required=true]", visible: :all
+      end
+      within(upload_control('income_proof')) { click_button I18n.t('documents.upload.remove') }
+      capture_upload_state('paper-benefits-income-proof-still-needed')
+
+      assert_no_difference ['User.count', 'Application.count'] do
+        click_button 'Submit Paper Application'
+        assert_text 'Please upload a file for income proof before approving', wait: 20
+      end
+      assert_checked_field 'no_income_information'
+      assert_selector 'input[name=applicant_type][value=self]:checked', visible: :all
+      assert_field 'constituent[first_name]', with: 'Benefits', disabled: false
+      assert_field 'constituent[last_name]', with: 'Retry', disabled: false
+      assert_checked_field 'accept_income_proof'
+      assert_checked_field 'upload_only_disability_certification'
+      assert_no_selector '[data-income-validation-target=incomeFieldsContainer]'
+      assert_field 'application[annual_income]', with: '999999', visible: :all
+      assert_selector '#admin-income-threshold-warning[hidden]', visible: :all
+      %w[household_size annual_income].each do |field|
+        assert_no_selector "#application_#{field}[required], #application_#{field}[aria-required=true]", visible: :all
+      end
+      capture_upload_state('paper-benefits-income-422-restored')
+
+      uncheck 'no_income_information', allow_label_click: true
+      assert_selector '[data-income-validation-target=incomeFieldsContainer]'
+      assert_field 'application[household_size]', with: '9'
+      assert_selector '#admin-income-threshold-warning'
+      assert_button 'Submit Paper Application', disabled: true
+      capture_upload_state('paper-benefits-income-warning-restored')
+      %w[household_size annual_income].each do |field|
+        assert_selector "#application_#{field}[required][aria-required=true]"
+        fill_in "application[#{field}]", with: ''
+      end
+      check 'no_income_information', allow_label_click: true
+      assert_no_selector '[data-income-validation-target=incomeFieldsContainer]'
+      %w[household_size annual_income].each do |field|
+        assert_field "application[#{field}]", with: '', visible: :all
+      end
+      attach_cleared_document 'income_proof', file_fixture('income_proof.pdf')
+      assert_button 'Submit Paper Application', disabled: false
+      capture_upload_state('paper-benefits-income-proof-ready-after-change')
+      assert_difference 'Application.count', 1 do
+        click_button 'Submit Paper Application'
+        assert_selector 'h1', text: 'Application #', wait: 20
+      end
+      application = Application.order(:id).last
+      assert_equal %w[Benefits Retry], [application.user.first_name, application.user.last_name]
+      assert_nil application.household_size
+      assert_nil application.annual_income
+      assert application.income_proof.attached?
+      assert application.income_proof_status_approved?
+      assert application.disability_certification_status_received?
+      capture_upload_state('paper-benefits-income-recorded-without-guessed-numbers')
+    end
+
     test 'an invalid replacement keeps the cleared upload removable and named' do
       fill_complete_paper_application('Cleared', 'Selection')
       original = certification_blob

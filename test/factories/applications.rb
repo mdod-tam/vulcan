@@ -20,6 +20,11 @@ FactoryBot.define do
     certifying_professional_phone { generate(:certifying_professional_phone) }
     certifying_professional_fax { generate(:certifying_professional_fax) }
     certifying_professional_email { generate(:certifying_professional_email) }
+    program_disability_groups { ['deaf'] }
+    shipping_address_1 { '123 Main St' }
+    shipping_city { 'Baltimore' }
+    shipping_state { 'MD' }
+    shipping_zip_code { '21201' }
     household_size { 4 }
     annual_income  { 50_000 }
 

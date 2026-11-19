@@ -65,11 +65,14 @@ module Evaluators
         assert_selector 'span', text: 'Needs Scheduling'
         assert_selector "span.#{ApplicationController.helpers.badge_class_for(:evaluation, requested.status).split.join('.')}"
       end
+      within(find_by_id('recent-completed-heading').find(:xpath, '..')) { click_link 'View All' }
+      assert_current_path evaluators_evaluations_path(status: 'completed')
+      assert_selector 'tbody tr', text: completed.constituent.full_name
+      visit evaluators_dashboard_path
       page.execute_script('window.evaluatorShortcutDocument = "same-document"')
       {
-        'View requested' => 'needs-scheduling-heading',
-        'View scheduled' => 'upcoming-evaluations-heading',
-        'View completed' => 'recent-completed-heading'
+        'Schedule evaluation' => 'needs-scheduling-heading',
+        'Enter evaluation report' => 'upcoming-evaluations-heading'
       }.each do |text, heading|
         assert_selector "a[href='##{heading}']", text: text
         page.execute_script("document.querySelector('a[href=\"##{heading}\"]').focus()")

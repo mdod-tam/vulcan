@@ -8,7 +8,8 @@ module ApplicationFormHandling
   end
 
   def render_form_errors(form, application = nil)
-    @application = application || Application.new(filtered_application_params)
+    @application = application || Application.new
+    @application.assign_attributes(filtered_application_params)
 
     @application.errors.merge!(form.errors) if form.respond_to?(:errors)
 

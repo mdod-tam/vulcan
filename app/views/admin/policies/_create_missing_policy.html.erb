@@ -1,28 +1,30 @@
-<% if policy.nil? %>
-  <div class="bg-warning-50 border-l-4 border-warning-400 p-4 mb-4">
-    <div class="flex items-center">
-      <div class="flex-shrink-0">
-        <svg class="h-5 w-5 text-warning-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-        </svg>
-      </div>
-      <div class="ml-3">
-        <p class="text-sm text-warning-700">
-          Missing required policy: <strong><%= key %></strong>
-        </p>
-      </div>
+<%# locals: (key:, default_value:) -%>
+<div class="bg-warning-50 border-l-4 border-warning-400 p-4 mb-4">
+  <div class="flex items-center">
+    <div class="flex-shrink-0">
+      <svg class="h-5 w-5 text-warning-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+      </svg>
     </div>
-    
-    <%= form_with model: Policy.new, url: admin_policies_path, class: "mt-2 flex items-center space-x-2" do |form| %>
-      <%= form.hidden_field :key, value: key %>
+    <div class="ml-3">
+      <p class="text-sm text-warning-700">
+        Missing required policy: <strong><%= key %></strong>
+      </p>
+    </div>
+  </div>
+
+  <%= form_with model: Policy.new, url: admin_policies_path, data: { turbo_frame: '_top' }, class: 'mt-2 flex flex-wrap items-end gap-3' do |form| %>
+    <%= form.hidden_field :key, value: key, id: nil %>
+    <div>
+      <%= form.label :value, 'Starting value', for: "missing-policy-#{key}-value", class: 'form-label' %>
       <div class="relative rounded-md shadow-elevation-1">
         <% if key.include?('fpl_modifier_percentage') %>
-          <%= form.number_field :value, 
-              value: default_value || 400,
-              class: "form-input w-24 pr-8",
-              required: true,
-              min: 100,
-              step: 100 %>
+          <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
+                                        value: default_value || 400,
+                                        class: 'form-input w-24 pr-8',
+                                        required: true,
+                                        min: 100,
+                                        step: 100 %>
           <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
             <span class="text-gray-500 sm:text-sm">%</span>
           </div>
@@ -30,54 +32,54 @@
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <span class="text-gray-500 sm:text-sm">$</span>
           </div>
-          <%= form.number_field :value, 
-              value: default_value || 15000,
-              class: "form-input w-32 pl-7",
-              required: true,
-              min: 0 %>
+          <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
+                                        value: default_value || 15_000,
+                                        class: 'form-input w-32 pl-7',
+                                        required: true,
+                                        min: 0 %>
         <% elsif key.start_with?('voucher_value_') %>
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <span class="text-gray-500 sm:text-sm">$</span>
           </div>
-          <%= form.number_field :value, 
-              value: default_value || 500,
-              class: "form-input w-32 pl-7",
-              required: true,
-              min: 0 %>
+          <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
+                                        value: default_value || 500,
+                                        class: 'form-input w-32 pl-7',
+                                        required: true,
+                                        min: 0 %>
         <% elsif key.include?('rate_limit') %>
-          <%= form.number_field :value, 
-              value: default_value || 5,
-              class: "form-input w-24",
-              required: true,
-              min: 1,
-              max: 100 %>
+          <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
+                                        value: default_value || 5,
+                                        class: 'form-input w-24',
+                                        required: true,
+                                        min: 1,
+                                        max: 100 %>
         <% elsif key == 'voucher_validity_period_months' %>
-          <%= form.number_field :value, 
-              value: default_value || 6,
-              class: "form-input w-24",
-              required: true,
-              min: 1,
-              max: 12 %>
+          <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
+                                        value: default_value || 6,
+                                        class: 'form-input w-24',
+                                        required: true,
+                                        min: 1,
+                                        max: 12 %>
         <% elsif key == 'voucher_minimum_redemption_amount' %>
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <span class="text-gray-500 sm:text-sm">$</span>
           </div>
-          <%= form.number_field :value, 
-              value: default_value || 10,
-              class: "form-input w-32 pl-7",
-              required: true,
-              min: 1,
-              max: 1000 %>
+          <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
+                                        value: default_value || 10,
+                                        class: 'form-input w-32 pl-7',
+                                        required: true,
+                                        min: 1,
+                                        max: 1000 %>
         <% else %>
-          <%= form.number_field :value, 
-              value: default_value || 1,
-              class: "form-input w-24",
-              required: true,
-              min: 0 %>
+          <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
+                                        value: default_value || 1,
+                                        class: 'form-input w-24',
+                                        required: true,
+                                        min: 0 %>
         <% end %>
       </div>
-      <%= form.submit "Create Policy", 
-          class: "btn btn-primary" %>
-    <% end %>
-  </div>
-<% end %>
+    </div>
+    <%= form.submit 'Create Policy',
+                    class: 'btn btn-primary' %>
+  <% end %>
+</div>

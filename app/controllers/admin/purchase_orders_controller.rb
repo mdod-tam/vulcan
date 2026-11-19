@@ -6,11 +6,17 @@ module Admin
 
     def index
       @return_context = Equipment::RequestParameters.return_context(params)
-      @purchase_orders = PurchaseOrder.includes(:vendor, equipment_items: :application).recent_first
+      @purchase_orders = PurchaseOrder.includes(:bid_groups, equipment_items: :application).recent_first
+      if params[:application_id].present?
+        @purchase_orders = @purchase_orders.where(id: EquipmentItem.where(application_id: params[:application_id]).select(:purchase_order_id))
+      end
+      @purchase_orders = @purchase_orders.ready_to_send if params[:state] == 'unsent'
+      @purchase_orders = @purchase_orders.where(purpose: 'program_stock') if params[:purpose] == 'program_stock'
     end
 
     def show
-      @purchase_order = PurchaseOrder.includes(:vendor, equipment_items: [:application, :product, { events: :user }]).find(params.expect(:id))
+      @purchase_order = PurchaseOrder.includes(:bid_groups,
+                                               equipment_items: [:application, :product, :acquisition_bid_group_line, { events: :user }]).find(params.expect(:id))
       @return_context = Equipment::RequestParameters.return_context(params)
       @history = @purchase_order.equipment_history
       @equipment_audit_records = Equipment::AuditRecords.for(@history.to_a + @purchase_order.equipment_items.flat_map { |item| item.events.to_a })
@@ -18,55 +24,69 @@ module Admin
 
     def new
       @return_context = Equipment::RequestParameters.return_context(params)
-      selection = Equipment::Queue.new(**@return_context.reverse_merge(tab: 'needs_ordering').symbolize_keys)
-                                  .selection(**params.permit(need_ids: [], item_ids: [], group_product_ids: []).to_h.symbolize_keys)
-      raise Equipment::Conflict, 'Select equipment in Needs Ordering first.' if selection.values.all?(&:empty?)
-
-      @need_rows = selection[:needs].map { |need| { id: need.id, quantity: need.remaining_quantity, lock_version: need.lock_version } }
-      @item_rows = selection[:items].map { |item| { id: item.id, lock_version: item.lock_version } }
-      @purchase_order = PurchaseOrder.new(sent_at: Date.current)
+      @group = BidGroup.find(params.expect(:bid_group_id))
+      @purchase_order = PurchaseOrder.new(purpose: @group.purpose)
+      @line_unit_costs = {}
+      @expected_version = @group.lock_version
+      @line_versions = @group.active_lines.to_h { |line| [line.id.to_s, line.lock_version] }
       load_review
-    rescue Equipment::Conflict => e
-      redirect_to admin_equipment_index_path(@return_context), alert: e.message
+      @application_versions = Equipment::Mutation.profile_versions(@lines.filter_map(&:application).uniq(&:id))
     end
 
     def create
       @return_context = Equipment::RequestParameters.return_context(params)
-      permitted = params.expect(purchase_order: [:vendor_id, :number, :sent_at, :existing,
-                                                 { needs: [%i[id quantity lock_version]], items: [%i[id lock_version]] }])
-      @need_rows = Array(permitted[:needs]).map { |row| row.to_h.symbolize_keys }
-      @item_rows = Array(permitted[:items]).map { |row| row.to_h.symbolize_keys }
-      @existing = permitted[:existing]
-      @purchase_order = PurchaseOrder.new(permitted.slice(:vendor_id, :number, :sent_at))
-      id, version = @existing.to_s.split(':', 2)
+      @group = BidGroup.find_by(id: params.expect(:bid_group_id))
+      return head(:not_found) unless @group
+
+      data = params.expect(purchase_order: [:number, :vendor_name, :existing, *EquipmentShipping::FIELDS])
+      @purchase_order = PurchaseOrder.new(data.except(:existing).to_h.merge(purpose: @group.purpose))
+      @line_unit_costs = params.permit(line_unit_costs: {}).fetch(:line_unit_costs, {}).to_h
+      @existing = data[:existing]
+      @expected_version = params[:expected_version]
+      @line_versions = Equipment::RequestParameters.record_versions(params[:line_versions])
+      @application_versions = Equipment::RequestParameters.record_versions(params[:application_versions])
+      if params[:refresh_profiles] == '1'
+        load_review
+        @application_versions = Equipment::Mutation.profile_versions(@lines.filter_map(&:application).uniq(&:id))
+        render_equipment_profile_review
+        return
+      end
+
       order = Equipment::Ordering.new(actor: current_user).call(
-        needs: @need_rows, items: @item_rows,
-        purchase_order_attributes: permitted.slice(:vendor_id, :number, :sent_at).to_h,
-        purchase_order_id: id.presence, expected_po_version: version
+        bid_group: @group, expected_version: @expected_version, line_versions: @line_versions,
+        application_versions: @application_versions, purchase_order_attributes: data.except(:existing).to_h, existing: @existing,
+        line_unit_costs: @line_unit_costs
       )
-      redirect_to admin_purchase_order_path(order, return_context: @return_context), notice: 'Purchase order recorded.'
+      redirect_to admin_purchase_order_path(order, return_context: @return_context), notice: 'Award and unsent PO recorded.', status: :see_other
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotFound => e
       @form_errors = equipment_form_errors(e)
       load_review
       render :new, status: :unprocessable_content
     end
 
+    def send_order
+      order = PurchaseOrder.find(params.expect(:id))
+      Equipment::Ordering.new(actor: current_user).mark_sent!(order: order, sent_at: params[:sent_at], expected_version: params[:expected_version])
+      redirect_to admin_purchase_order_path(order), notice: 'PO marked sent.', status: :see_other
+    rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
+      redirect_to admin_purchase_order_path(order), alert: e.message, status: :see_other
+    end
+
     private
 
     def load_review
-      @purchase_order.valid? if @form_errors.present? && @existing.blank?
-      @needs = EquipmentNeed.includes(:product, :application).where(id: @need_rows.pluck(:id)).index_by(&:id)
-      @items = EquipmentItem.includes(:product, :application).where(id: @item_rows.pluck(:id)).index_by(&:id)
-      @vendors = Users::Vendor.equipment_procurement_eligible.order(:business_name)
-      @existing_orders = PurchaseOrder.includes(:vendor).recent_first
-      @existing_options = @existing_orders.map do |order|
-        ["#{order.vendor.business_name} · #{order.number} · #{helpers.accessible_date_value(order.sent_at)}", "#{order.id}:#{order.lock_version}"]
-      end
-      if @existing.present? && @existing_options.none? { |_label, value| value == @existing }
-        @existing_options << ['Previous PO selection changed; return to Equipment and refresh', @existing]
-      end
-      @application_count = (@needs.values + @items.values).map(&:application_id).uniq.size
-      @unit_count = @need_rows.sum { |row| row[:quantity].to_i } + @item_rows.size
+      @lines = @group.active_lines.includes(:product).order(:id).to_a
+      need_lines = @lines.select(&:equipment_need_id?)
+      item_lines = @lines.select(&:equipment_item_id?)
+      ActiveRecord::Associations::Preloader.new(records: need_lines, associations: { equipment_need: { application: :user } }).call if need_lines.any?
+      ActiveRecord::Associations::Preloader.new(records: item_lines, associations: { equipment_item: { application: :user } }).call if item_lines.any?
+      @vendor_names = PurchaseOrder.where.not(vendor_name: [nil, '']).distinct.order(:vendor_name).pluck(:vendor_name)
+      @existing_orders = PurchaseOrder.unsent.where(purpose: @group.purpose, funding_source: @group.funding_source)
+                                      .includes(equipment_items: [:product, { application: :user }]).recent_first.to_a
+      @existing_options = @existing_orders.map { |order| [order.selection_label, "#{order.id}:#{order.lock_version}"] }
+      return unless @existing.present? && @existing_options.none? { |_label, value| value == @existing }
+
+      @existing_options << ['Previous PO selection changed — review the current order before choosing again', @existing]
     end
   end
 end

@@ -7,6 +7,8 @@
 # Integration tests must call the real attach_proof method.
 # A stub can report success without storing an attachment.
 class ProofAttachmentService
+  class IncomeUpdateUnavailable < ArgumentError; end
+
   AttachmentEventContext = Struct.new(
     :application, :proof_type, :status, :submission_method,
     :admin, :metadata, :blob_size, :skip_audit_events,
@@ -144,8 +146,10 @@ class ProofAttachmentService
     def perform_attachment_flow(result, params)
       flow_data = prepare_flow_data(params)
 
+      prepare_income_update!(flow_data)
       attach_and_verify_initial_save(flow_data.application, flow_data.proof_type, flow_data.attachment_param)
       context, event_metadata = log_attachment_events_from_flow_data(flow_data, params)
+      result[:proof_review] = record_attachment_approval(context) if context.status.to_s == 'approved'
       result[:blob_size] = flow_data.blob_size
       result[:success] = true
 
@@ -161,6 +165,32 @@ class ProofAttachmentService
       end
 
       send_notification(context, event_metadata)
+    end
+
+    # Paper acceptance already owns its attachment audit and notifications. Record the same decision here
+    # without running the separate admin-review follow-up or reconciling each proof during paper intake.
+    def record_attachment_approval(context)
+      blob_id = context.application.document_attachment_for(context.proof_type).blob.id
+      decision = ProofReview.record_decision!(
+        application: context.application, admin: context.admin, proof_type: context.proof_type, status: :approved,
+        decision_key: "attachment-approval:#{context.proof_type}:#{blob_id}", reviewed_blob_id: blob_id
+      ) do |review|
+        review.record!(submission_method: context.submission_method)
+      end
+      decision.review
+    end
+
+    def prepare_income_update!(flow_data)
+      application = flow_data.application
+      return unless flow_data.proof_type.to_s == 'income' && application.income_proof_update_available?
+
+      application.lock!
+      raise IncomeUpdateUnavailable, 'Income proof no longer needs updating' unless application.income_proof_update_available?
+
+      previous = application.income_proof.blob
+      return unless previous && previous.id != flow_data.attachment_param.id && !application.previous_income_proofs.blobs.exists?(id: previous.id)
+
+      application.previous_income_proofs.attach(previous)
     end
 
     def attach_and_verify_initial_save(application, proof_type, blob)
@@ -297,6 +327,13 @@ class ProofAttachmentService
         notifiable: context.application,
         metadata: event_metadata
       )
+      return unless context.proof_type.to_s == 'income' && context.application.status_approved?
+
+      User.admins.find_each do |admin|
+        NotificationService.create_and_deliver!(type: 'income_proof_update_received', recipient: admin,
+                                                actor: context.admin || context.application.user, notifiable: context.application,
+                                                metadata: event_metadata, deliver: false)
+      end
     end
 
     def perform_rejection(application:, proof_type:, admin:, submission_method:, rejection_details:)

@@ -117,42 +117,33 @@ def clear_existing_data
   # Models with foreign keys (e.g., W9Review) must be cleared before the models
   # they point to (e.g., User).
 
-  # Clear models with dependencies first. User is cleared last.
-  [ContactChangeRequest, RegistrationVerification, PrintQueueItem, SecureRequestForm, GuardianRelationship,
-   ApplicationNote, TrainingSession, VoucherTransactionProduct, VoucherTransaction, Voucher,
-   W9Review, Invoice, ApplicationStatusChange, Evaluation, ProofReview,
-   Notification, RoleCapability, PolicyChange, EmailTemplate, Product, Event, Policy, Application].each do |model|
-    seed_puts "  Clearing #{model.name} records..."
-    # Delete records in small batches to avoid memory issues
-    model.in_batches(of: 100).delete_all
+  # This explicit demo reset removes the Application/report back-reference before deleting reports.
+  Application.where.not(equipment_source_evaluation_id: nil).in_batches
+             .update_all(equipment_source_evaluation_id: nil)
+  TrainingSessionEquipmentItem.in_batches(of: 100).delete_all
+  ApplicationServiceExpense.in_batches(of: 100).delete_all
+  # This destructive demo reset has a cycle between acquisition bid lines and physical stock.
+  # Keep constraint suspension within that fixed equipment set; safe bootstrap never clears records.
+  ActiveRecord::Base.connection.disable_referential_integrity do
+    [BidGroupLine, BidGroup, EquipmentItem, EquipmentNeed, PurchaseOrder].each do |model|
+      seed_puts "  Clearing #{model.name} records..."
+      model.in_batches(of: 100).delete_all
+    end
   end
 
-  seed_puts '  Clearing User records...'
-  User.in_batches(of: 100).delete_all
-end
-
-def create_products_from_fixtures
-  seed_puts 'Creating products from fixtures...'
-  product_fixture_path = Rails.root.join('test/fixtures/products.yml')
-  if File.exist?(product_fixture_path)
-    product_data = YAML.load_file(product_fixture_path)
-    product_data.each do |key, attributes|
-      seed_puts "  Processing product #{key}..."
-      # Assume that 'name' is unique for Product.
-      Product.find_or_create_by(name: attributes['name']) do |product|
-        clean_attributes = attributes.except('recommended_products', 'products_tried')
-        product.assign_attributes(clean_attributes.transform_keys(&:to_sym))
-      end
-    end
-    raise 'No products created' if Product.none?
-  else
-    seed_error "Products fixture not found at #{product_fixture_path}"
+  [ContactChangeRequest, RegistrationVerification, PrintQueueItem, SecureRequestForm, GuardianRelationship,
+   ApplicationNote, TrainingSession, MileageRate, VoucherTransactionProduct, VoucherTransaction, Voucher, W9Review, Invoice,
+   ApplicationStatusChange, Evaluation, ProofReview, Notification, RoleCapability, PolicyChange, EmailTemplate,
+   ProductResource, Product, Event, Policy, Application, User].each do |model|
+    seed_puts "  Clearing #{model.name} records..."
+    model.in_batches(of: 100).delete_all
   end
 end
 
 def load_fixtures_data(users_map)
   seed_puts 'Loading fixtures in order...'
-  load_applications_fixture(Rails.root.join('test/fixtures'), users_map)
+  # Development applications use the canonical intake gallery below; raw fixtures remain the test baseline.
+  load_applications_fixture(Rails.root.join('test/fixtures'), users_map) unless Rails.env.development?
   load_invoices_fixture(Rails.root.join('test/fixtures'), users_map)
 end
 
@@ -164,6 +155,9 @@ def create_users_with_factories
   users_map['admin'] = create_user_with_factory(:admin, email: 'admin@example.com', first_name: 'Admin', last_name: 'User')
   users_map['confirmed_user'] = create_user_with_factory(:constituent, email: 'user@example.com', first_name: 'Test', last_name: 'User', email_verified: true)
   users_map['confirmed_user2'] = create_user_with_factory(:constituent, email: 'user2@example.com', first_name: 'Jane', last_name: 'Doe', email_verified: true)
+  users_map['awaiting_dcf_constituent'] = create_user_with_factory(
+    :constituent, email: 'awaiting.certification@example.com', first_name: 'Robin', last_name: 'Taylor', email_verified: true
+  )
   users_map['unconfirmed_user'] = create_user_with_factory(:constituent, email: 'unconfirmed@example.com', first_name: 'New', last_name: 'User', email_verified: false)
   users_map['trainer'] = create_user_with_factory(:trainer, email: 'trainer@example.com', first_name: 'Trainer', last_name: 'Person')
   users_map['evaluator'] = create_user_with_factory(:evaluator, email: 'evaluator@example.com', first_name: 'Evaluator', last_name: 'Person')
@@ -361,8 +355,9 @@ begin
     seed_puts 'Clearing existing data...'
     clear_existing_data
 
-    seed_puts 'Creating products from fixtures...'
-    create_products_from_fixtures
+    seed_puts 'Initializing the product catalog...'
+    require_relative 'seeds/products'
+    Seeds::Products.call
 
     seed_puts 'Creating users with factories...'
     users_map = create_users_with_factories
@@ -391,12 +386,6 @@ begin
 
     seed_puts 'Verifying and fixing missing files...'
     verify_and_fix_missing_files
-
-    if Rails.env.development?
-      seed_puts 'Creating varied development applications...'
-      require_relative 'seeds/development_applications'
-      Seeds::DevelopmentApplications.new(admin: User.find_by_email('admin@example.com')).call
-    end
   end
 rescue StandardError => e
   Rails.logger.debug { "SEEDING FAILED: #{e.message}" }
@@ -405,6 +394,12 @@ rescue StandardError => e
   e.backtrace.first(10).each { |line| Rails.logger.debug line }
   raise e
 else
+  if Rails.env.development?
+    seed_puts 'Creating varied development applications...'
+    require_relative 'seeds/development_applications'
+    Seeds::DevelopmentApplications.new(admin: User.find_by_email('admin@example.com')).call
+  end
+
   seed_puts 'SEEDING SUMMARY:'
   seed_puts "   Users: #{User.count}"
   seed_puts "   Applications: #{Application.count}"

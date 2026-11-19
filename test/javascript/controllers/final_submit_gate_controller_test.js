@@ -41,7 +41,7 @@ describe("FinalSubmitGateController", () => {
 
   beforeEach(() => {
     document.body.innerHTML = `
-      <form>
+      <form data-final-submit-gate-incomplete-message="Complete all required fields before submitting.">
         <input type="checkbox" name="application[self_certify_disability]" required>
         <input type="checkbox" name="application[terms_accepted]" required>
         <input type="text" name="application[certifying_professional_attributes][name]" required>
@@ -100,7 +100,7 @@ describe("FinalSubmitGateController", () => {
     controller.update()
 
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe("Complete all required confirmations before submitting.")
+    expect(status.textContent).toBe("Complete all required fields before submitting.")
 
     document.querySelector('input[name="application[terms_accepted]"]').checked = true
     document.querySelector('input[name="application[hearing_disability]"]').checked = true
@@ -198,7 +198,7 @@ describe("FinalSubmitGateController", () => {
     controller.update()
     // Still disabled, but now for the ordinary reason -- nothing has been filled in yet.
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe("Complete all required confirmations before submitting.")
+    expect(status.textContent).toBe("Complete all required fields before submitting.")
 
     completeEveryRequirement()
     controller.update()
@@ -311,7 +311,7 @@ describe("FinalSubmitGateController", () => {
 
     controller.update()
 
-    expect(status.textContent).toBe("Complete all required confirmations before submitting.")
+    expect(status.textContent).toBe("Complete all required fields before submitting.")
   })
 })
 

@@ -1,17 +1,18 @@
-<div class="flex items-center space-x-4">
+<div class="flex flex-wrap items-center gap-4">
   <% if policy.present? %>
-    <%= hidden_field_tag "policies[][id]", policy.id %>
+    <%= hidden_field_tag 'policies[][id]', policy.id, id: nil %>
     <label for="policies_<%= policy.id %>_value" class="form-label">
       <%= label %>
     </label>
     <div class="relative rounded-md shadow-elevation-1 w-32">
-      <%= number_field_tag "policies[][value]",
-          policy.value,
-          class: "form-input",
-          required: true,
-          min: 1,
-          max: 100,
-          step: 1 %>
+      <%= number_field_tag 'policies[][value]',
+                           policy.value,
+                           id: "policies_#{policy.id}_value", autocomplete: 'off',
+                           class: 'form-input',
+                           required: true,
+                           min: 1,
+                           max: 100,
+                           step: 1 %>
     </div>
   <% else %>
     <p class="text-sm text-danger-600">Policy not found: <%= label %></p>

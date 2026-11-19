@@ -175,9 +175,6 @@ class User < ApplicationRecord
            inverse_of: :income_verified_by,
            dependent: :nullify
 
-  has_and_belongs_to_many :products,
-                          join_table: 'products_users'
-
   # Paper intake must not trust UI filters or +existing_constituent_id+ alone.
   # A merged duplicate still passes +constituent?+, but new applications belong to its survivor.
   def paper_applicant_candidate?

@@ -22,10 +22,11 @@
           <%= form.label :email, t('portal_self_service.registrations.email_label'), class: 'form-label required-label' %>
           <%= form.email_field :email, value: @verification.email, required: true, autocomplete: 'email', autofocus: true,
                                        maxlength: RegistrationVerification::EMAIL_MAX_LENGTH,
-                                       class: 'form-input', aria: { invalid: @verification.errors[:email].any?, describedby: 'email-help' } %>
-          <p id="email-help" class="form-hint"><%= t('registration_verification.email_help') %></p>
+                                       class: 'form-input',
+                                       aria: { invalid: @verification.errors[:email].any?,
+                                               describedby: ('email-error' if @verification.errors[:email].any?) } %>
           <% if @verification.errors[:email].any? %>
-            <p role="alert" class="mt-1 text-sm text-danger-600"><%= t('registration_verification.invalid_email') %></p>
+            <p id="email-error" role="alert" class="mt-1 text-sm text-danger-600"><%= t('registration_verification.invalid_email') %></p>
           <% end %>
         </div>
         <%= form.submit t('registration_verification.send_link'), class: 'btn btn-primary w-full',

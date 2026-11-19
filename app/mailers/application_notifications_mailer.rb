@@ -414,6 +414,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     user = application.user
     proof_type_formatted = format_proof_type(proof_type, locale: locale)
     recipient ||= user
+    explanation = application.status_approved? && proof_type.to_s == 'income' ? 'income_update' : 'pending'
 
     base_variables = build_base_email_variables(
       template: template,
@@ -436,7 +437,11 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                            organization_name: 'MAT Program',
                            proof_type_formatted: proof_type_formatted,
                            secure_upload_url: secure_upload_url,
-                           default_options_text: default_options_text
+                           default_options_text: default_options_text,
+                           request_explanation: I18n.t(
+                             "applications.proof_resubmission.request_explanation.#{explanation}",
+                             proof: proof_type_formatted, locale: locale
+                           )
                          }).compact
   end
 

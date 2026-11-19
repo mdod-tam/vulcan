@@ -11,11 +11,13 @@ class Application < ApplicationRecord
   include ApplicationStatusManagement
   include ApplicationSubmissionEligibility
   include ProofManageable
+  include Icanconnect::IncomeReview
   include ProofConsistencyValidation
   include ApplicationProviderInfoRequests
   include CertificationManagement
   include TrainingManagement
   include EvaluationManagement
+  include Applications::EquipmentProfile
   include Applications::EquipmentFulfillment
   include ContactChangeAudit
 
@@ -96,6 +98,7 @@ class Application < ApplicationRecord
   has_many :equipment_needs, dependent: :restrict_with_error
   has_many :equipment_items, dependent: :restrict_with_error
   has_many :application_notes, dependent: :restrict_with_error
+  has_many :application_service_expenses, dependent: :restrict_with_error
   has_many :certification_upload_forms, -> { certification_upload }, class_name: 'SecureRequestForm', inverse_of: :application, dependent: :restrict_with_error
   has_many :voucher_transactions, through: :vouchers, source: :transactions
   # Counts a purchase as Applications::ProductHistory does: a completed redemption, not a refund or adjustment.
@@ -195,6 +198,10 @@ class Application < ApplicationRecord
     )
   }
 
+  scope :staff_review_queue, -> { active.or(awaiting_proof_review) }
+
+  scope :awaiting_proofs, -> { where(status: %i[awaiting_proof reminder_sent]) }
+
   scope :with_pending_training_request, lambda {
     where(status: :approved)
       .where.not(training_requested_at: nil)
@@ -207,6 +214,13 @@ class Application < ApplicationRecord
             AND training_sessions.created_at >= applications.training_requested_at
         )
       SQL
+  }
+
+  scope :awaiting_trainer_assignment, -> { with_pending_training_request.where(assigned_trainer_id: nil) }
+
+  scope :approved_awaiting_training, lambda {
+    status_approved.where(id: TrainingSession.assigned_or_scheduled.select(:application_id))
+                   .or(with_pending_training_request)
   }
 
   # An explicit request timestamp drives this queue. Fulfillment type alone does not create a request.
@@ -263,6 +277,21 @@ class Application < ApplicationRecord
     where(document_signing_status: :signed)
       .where.not(status: %i[rejected archived])
       .where.not(disability_certification_status: %i[approved rejected])
+  }
+
+  scope :certifications_needing_review, lambda {
+    review = staff_review_queue
+    review.where(disability_certification_status: :received).or(review.digitally_signed_needs_review).distinct
+  }
+
+  scope :certifications_needing_request, lambda {
+    status_awaiting_dcf.where(disability_certification_status: :not_requested)
+                       .where.not(document_signing_status: :signed)
+  }
+
+  scope :certifications_awaiting_provider, lambda {
+    staff_review_queue.where(disability_certification_status: :requested)
+                      .where.not(document_signing_status: :signed)
   }
 
   def self.pain_point_analysis
@@ -381,7 +410,9 @@ class Application < ApplicationRecord
 
       unless old_status == target_status
         validate_status_transition!(target_status)
-        update!(status: target_status)
+        changes = { status: target_status }
+        changes[:needs_evaluator_since] = Time.current if target_status == 'approved' && needs_evaluator_since.nil?
+        update!(changes)
 
         status_change = status_changes.create!(
           from_status: old_status,
@@ -438,7 +469,7 @@ class Application < ApplicationRecord
   def proof_review_state(proof_type)
     proof_type = proof_type.to_s
     return :not_applicable unless ProofReview.reviewable_proof_type?(proof_type)
-    return :not_applicable if proof_type == 'income' && !income_proof_required?
+    return :not_applicable if proof_type == 'income' && !income_proof_review_applicable?
 
     return :missing_attachment unless document_attachment_for(proof_type).attached?
 
@@ -515,6 +546,15 @@ class Application < ApplicationRecord
   def required_proofs_approved?
     residency_proof_status_approved? && id_proof_status_approved? &&
       (!income_proof_required? || income_proof_status_approved?)
+  end
+
+  def icanconnect_eligible?(on: Date.current)
+    income_approved = if on.to_date < Date.current
+                        income_review_as_of(on)&.status_approved?
+                      else
+                        income_proof_status_approved? && income_proof.attached?
+                      end
+    approved_deafblind? && income_approved
   end
 
   # Eligible for a voucher: voucher fulfillment, every requirement approved, and none issued yet.

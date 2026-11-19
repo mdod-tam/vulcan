@@ -176,6 +176,24 @@ module ConstituentPortal
       assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
     end
 
+    test 'new application explains required income proof in the applicant locale' do
+      messages = {
+        'en' => 'This proof is required to submit your application.',
+        'es' => 'Este comprobante es obligatorio para enviar su solicitud.'
+      }
+      FeatureFlag.stub(:income_proof_required?, true) do
+        messages.each do |locale, message|
+          @user.update!(locale:)
+
+          get new_constituent_portal_application_path
+
+          assert_response :success
+          assert_select '#income-hint span.font-semibold', text: message
+          assert_select '#income-hint .translation_missing', count: 0
+        end
+      end
+    end
+
     test 'new form admits recent rejected history and continues its target draft' do
       create(:application, :rejected, user: @user, application_date: 1.day.ago)
 
@@ -853,6 +871,88 @@ module ConstituentPortal
           end
         end
       end
+    end
+
+    test 'final submission enforces the income limit without JavaScript and accepts a corrected zero' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      threshold = IncomeThresholdCalculationService.call(9).data.fetch(:threshold)
+      submitted = pending_review_submission_params
+      submitted[:application].merge!(household_size: 9, annual_income: (threshold + BigDecimal('0.01')).to_s('F'))
+      assert_no_difference 'Application.count' do
+        post constituent_portal_applications_path, params: submitted
+      end
+      assert_response :unprocessable_content
+      assert_includes response.body, I18n.t('activemodel.errors.models.application_form.attributes.annual_income.income_above_limit')
+      assert_select 'input[name="application[household_size]"][value="9"]'
+      assert_select "input[name='application[annual_income]'][value='#{submitted[:application][:annual_income]}']"
+
+      submitted[:application][:annual_income] = '0'
+      assert_difference 'Application.count', 1 do
+        post constituent_portal_applications_path, params: submitted
+      end
+      created = @user.applications.where.not(id: @application.id).sole
+      assert_redirected_to constituent_portal_application_path(created)
+      assert created.status_in_progress?
+      assert_equal 0, created.annual_income
+      assert_equal 9, created.household_size
+    end
+
+    test 'final submission refuses malformed income and fractional household size in the viewer locale' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      { '-1' => :invalid_amount, '12 dollars' => :invalid_amount, '10.005' => :invalid_amount }.each do |amount, error|
+        submitted = pending_review_submission_params.deep_merge(constituent: { locale: 'es' })
+        submitted[:application][:annual_income] = amount
+        assert_no_difference 'Application.count' do
+          post constituent_portal_applications_path, params: submitted
+        end
+        assert_response :unprocessable_content
+        assert_includes response.body, I18n.t("activemodel.errors.models.application_form.attributes.annual_income.#{error}", locale: :es)
+      end
+      submitted = pending_review_submission_params
+      submitted[:application].merge!(household_size: '2.5', annual_income: '0')
+      assert_no_difference 'Application.count' do
+        post constituent_portal_applications_path, params: submitted
+      end
+      assert_response :unprocessable_content
+      assert_includes response.body, I18n.t('activemodel.errors.models.application_form.attributes.household_size.positive_integer')
+      assert_select 'input[name="application[household_size]"][value="2.5"]'
+    end
+
+    test 'final draft submission keeps its income requirement and retry values when global collection is disabled' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      draft = create(:application, :draft, user: @user, income_proof_required: true, household_size: 2, annual_income: 10)
+      FeatureFlag.enable!(:vouchers_enabled)
+      assert_not FeatureFlag.income_proof_required?
+      threshold = IncomeThresholdCalculationService.call(2).data.fetch(:threshold)
+      submitted = pending_review_submission_params
+      submitted[:application].merge!(household_size: 2, annual_income: (threshold + BigDecimal('0.01')).to_s('F'))
+      assert_no_difference 'Application.count' do
+        patch constituent_portal_application_path(draft), params: submitted
+      end
+      assert_response :unprocessable_content
+      assert_includes response.body, I18n.t('activemodel.errors.models.application_form.attributes.annual_income.income_above_limit')
+      assert_select "input[name='application[annual_income]'][value='#{submitted[:application][:annual_income]}']"
+      assert draft.reload.status_draft?
+      assert_equal 10, draft.annual_income
+
+      submitted[:application].merge!(household_size: '2.5', annual_income: '0')
+      assert_no_difference 'Application.count' do
+        patch constituent_portal_application_path(draft), params: submitted
+      end
+      assert_response :unprocessable_content
+      assert_select 'input[name="application[household_size]"][value="2.5"]'
+      assert_select 'input[name="application[annual_income]"][value="0"]'
+      assert_equal 2, draft.reload.household_size
+      assert_equal 10, draft.annual_income
+
+      submitted[:application].merge!(household_size: 2, annual_income: threshold.to_s('F'))
+      assert_no_difference 'Application.count' do
+        patch constituent_portal_application_path(draft), params: submitted
+      end
+      assert_redirected_to constituent_portal_application_path(draft)
+      assert draft.reload.status_in_progress?
+      assert draft.income_proof_required?
+      assert_equal threshold, draft.annual_income
     end
 
     test 'guardian should create application for a dependent' do

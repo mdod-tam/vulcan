@@ -10,10 +10,10 @@ class DocumentValidator < ActiveModel::EachValidator
     purpose = options.fetch(:purpose)
 
     new_blobs(record, attribute).each do |blob|
-      next if purpose != :product_resource && ProofUploadFormats.generated?(blob)
+      next if %i[product_resource financial_evidence].exclude?(purpose) && ProofUploadFormats.generated?(blob)
 
       unless ProofUploadFormats.allowed_content_type?(blob.content_type, purpose: purpose)
-        record.errors.add(attribute, purpose == :product_resource ? 'must be a PDF document' : "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})")
+        record.errors.add(attribute, %i[product_resource financial_evidence].include?(purpose) ? 'must be a PDF document' : "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})")
       end
       record.errors.add(attribute, size_message(purpose)) unless ProofUploadFormats.size_allowed?(purpose, blob.byte_size)
     end

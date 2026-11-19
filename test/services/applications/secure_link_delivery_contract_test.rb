@@ -29,6 +29,24 @@ module Applications
       assert_empty ActionMailer::Base.deliveries
     end
 
+    test 'a denied iCanConnect income request still lets the initial MAT voucher job issue a voucher' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      application = create(:application, :completed, :with_id_proof, :with_residency_proof, :with_disability_certification,
+                           user: create(:constituent, hearing_disability: true, vision_disability: true),
+                           application_date: Date.current, income_proof_status: :not_reviewed)
+      load_seeded_email_templates('application_notifications_proof_requested')
+      EmailDelivery::ControlWriter.set_template_pair(name: 'application_notifications_proof_requested', format: :text,
+                                                     enabled: false, actor: @admin, operation_id: 'icc-income-proof-control')
+
+      result = assert_no_difference(-> { application.secure_request_forms.count }) do
+        RequestProofResubmission.new(application: application, actor: @admin, proof_type: :income).call
+      end
+      assert_not result.success?
+      assert_equal 'template_disabled', result.data[:suppression_reason]
+      assert_not application.reload.income_proof_required?
+      assert_difference(-> { application.vouchers.count }, 1) { IssueInitialVoucherJob.perform_now(application.id, @admin.id) }
+    end
+
     test 'a certification resend goes to the provider email on file now' do
       application = create(:application, :in_progress, certifying_professional_name: 'Dr. Original',
                                                        certifying_professional_email: 'original-provider@example.test')

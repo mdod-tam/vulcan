@@ -3,6 +3,36 @@
 require 'test_helper'
 
 class FilterParameterLoggingTest < ActiveSupport::TestCase
+  test 'service mileage is filtered with the other financial inputs' do
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'mileage' => '24.5', 'finance' => { 'mileage' => '24.5', 'mileage_rate' => '0.725', 'hourly_rate' => '95', 'billable_hours' => '1.5' }
+    )
+    assert_equal '[FILTERED]', filtered['mileage']
+    %w[mileage mileage_rate hourly_rate billable_hours].each { |field| assert_equal '[FILTERED]', filtered['finance'][field] }
+  end
+
+  test 'beneficiary program and setup classifications are filtered through nested hashes and arrays' do
+    values = { 'program_disability_groups' => ['deafblind'], 'disability_setup_group' => 'deaf', 'supplier_setup_group' => 'mobility' }
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      values.merge('application' => values, 'lines' => [values])
+    )
+    values.each_key do |key|
+      assert_equal '[FILTERED]', filtered[key]
+      assert_equal '[FILTERED]', filtered['application'][key]
+      assert_equal '[FILTERED]', filtered['lines'].first[key]
+    end
+  end
+
+  test 'shipping snapshot names are filtered at every nesting level including state and care-of' do
+    fields = EquipmentShipping::FIELDS
+    payload = fields.index_with { 'private shipping content' }
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(payload.merge('nested' => payload))
+    fields.each do |field|
+      assert_equal '[FILTERED]', filtered[field]
+      assert_equal '[FILTERED]', filtered['nested'][field]
+    end
+  end
+
   test 'normal DocuSeal completion parameters redact private document and audit URLs' do
     payload = {
       'event_type' => 'form.completed',

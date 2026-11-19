@@ -19,28 +19,28 @@
     </div>
 
     <% paper_form_data = {
-      turbo: false,
-      controller: "paper-application applicant-type income-validation",
-      action: "submit->paper-application#beforeSubmit " \
-             "applicant-type:applicantTypeChanged->paper-application#syncFormState " \
-             "adult-picker:selectionChange->paper-application#syncAdultVerificationGate " \
-             "adult-picker:verificationChange->paper-application#syncAdultVerificationGate " \
-             "adult-picker:createNew->paper-application#syncAdultVerificationGate",
-      "applicant-type-initial-create-new-adult-value": @paper_application[:show_create_new_adult],
-      "applicant-type-guardian-picker-outlet": "[data-controller='guardian-picker']",
-      "applicant-type-adult-picker-outlet": "[data-controller='adult-picker']"
-    }
-    paper_form_data[:"applicant-type-adult-picker-outlet"] = "[data-controller='adult-picker']"
-    if FeatureFlag.income_proof_required?
-      paper_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
-      paper_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
-    else
-      paper_form_data[:controller] = "paper-application applicant-type"
-    end %>
+         turbo: false,
+         controller: 'paper-application applicant-type income-validation',
+         paper_application_incomplete_message_value: t('applications.submit_gate.incomplete', locale: :en),
+         action: 'submit->paper-application#beforeSubmit ' \
+                 'applicant-type:applicantTypeChanged->paper-application#syncFormState ' \
+                 'adult-picker:selectionChange->paper-application#syncAdultVerificationGate ' \
+                 'adult-picker:verificationChange->paper-application#syncAdultVerificationGate ' \
+                 'adult-picker:createNew->paper-application#syncAdultVerificationGate',
+         'applicant-type-initial-create-new-adult-value': @paper_application[:show_create_new_adult],
+         'applicant-type-guardian-picker-outlet': "[data-controller='guardian-picker']",
+         'applicant-type-adult-picker-outlet': "[data-controller='adult-picker']"
+       }
+       paper_form_data[:'applicant-type-adult-picker-outlet'] = "[data-controller='adult-picker']"
+       if FeatureFlag.income_proof_required?
+         paper_form_data.merge!(income_validation_data(locale: :en))
+       else
+         paper_form_data[:controller] = 'paper-application applicant-type'
+       end %>
+
     <%= form_with(url: admin_paper_applications_path, method: :post, multipart: true,
       html: { "aria-label": "Paper application upload form", class: "space-y-6" },
       data: paper_form_data) do |form| %>
-
       <% if @restored_from_submission %>
         <div class="rounded-md bg-warning-50 border border-warning-300 p-4" role="status">
           <h2 class="text-sm font-semibold text-warning-900">Your entries were restored</h2>
@@ -806,14 +806,11 @@
                 </p>
 
                 <div class="flex items-center gap-3 mb-4 pb-4 mt-4">
-                  <%= check_box_tag :no_income_information,
-                      nil,
-                      ActiveModel::Type::Boolean.new.cast(submitted_params[:no_income_information]),
-                      class: "mt-1 rounded border-gray-300 text-primary-600 shadow-elevation-1",
-                      data: {
-                        "income-validation-target": "noIncomeProvided",
-                        "action": "change->income-validation#toggleIncome"
-                      } %>
+                  <%= check_box_tag :no_income_information, '1',
+                                    ActiveModel::Type::Boolean.new.cast(submitted_params[:no_income_information]),
+                                    class: 'mt-1 rounded border-gray-300 text-primary-600 shadow-elevation-1',
+                                    data: { 'income-validation-target': 'noIncomeProvided',
+                                            action: 'change->income-validation#toggleIncome' } %>
                   <%= label_tag :no_income_information, "Benefits information was provided that satisfies the income requirement", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
                 </div>
                 <%= fields_for :application, @paper_application[:application] do |a| %>
@@ -838,6 +835,7 @@
                           </div>
                           <%= a.number_field :annual_income,
                               step: "0.01",
+                              min: 0,
                               class: "form-input pl-7",
                               data: {
                                 "income-validation-target": "annualIncome",
@@ -1142,18 +1140,20 @@
 
       <div class="card border border-slate-200 p-6">
         <%= fields_for :application, @paper_application[:application] do |a| %>
+          <p class="mb-3 text-sm text-gray-700">The signed paper application must include this iCanConnect disclosure:</p>
+          <p class="mb-3 text-sm text-gray-700"><%= t('applications.form_labels.icc_disclosure', locale: :en) %></p>
           <div class="mb-6 flex items-start">
             <%= a.check_box :information_verified,
                 { required: true, class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" } %>
             <label for="application_information_verified" class="ml-3">
-              <span class="form-label required-label">I verify that the information entered from the paper application is accurate and complete</span>
+              <span class="form-label required-label">I verified the signed application includes the required program consent and entered its information accurately</span>
             </label>
           </div>
         <% end %>
         <%= render 'identity_review', review: @identity_review, submitted: submitted_params, guardian: false %>
         <%# The gate names outstanding controls as links, while upload and guardian blockers keep priority. %>
         <div id="paper-submit-gate-status" class="mt-2 text-sm text-gray-700" role="status" aria-live="polite" data-paper-application-target="status">
-          <p>Complete all required confirmations before submitting.</p>
+          <p><%= paper_form_data.fetch(:paper_application_incomplete_message_value) %></p>
         </div>
         <div class="flex flex-col sm:flex-row justify-end gap-3">
           <%= link_to "Cancel", admin_applications_path,

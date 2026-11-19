@@ -1,0 +1,10 @@
+es:
+  applications:
+    proof_resubmission:
+      request_explanation:
+        pending: "Estamos revisando su solicitud de MAT y todavía necesitamos su %{proof} antes de poder continuar con el trámite de su solicitud."
+        income_update: "Envíe un comprobante de ingresos actualizado antes de recibir equipos o servicios adicionales de iCanConnect. Su solicitud de MAT sigue aprobada."
+    form_labels:
+      icc_disclosure: "Si recibo equipos o servicios de iCanConnect, autorizo a MAT y a cualquier programa sucesor a verificar mi información y compartirla con la FCC y el administrador del Fondo TRS para administrar y supervisar el programa. Usaré los equipos y servicios solo para los fines previstos y no venderé, regalaré ni prestaré los equipos. Entiendo que proporcionar información falsa o usar indebidamente los equipos puede poner fin a los servicios y dar lugar a acciones legales."
+    proof_card:
+      income_update_needed: "Se necesita un comprobante de ingresos actualizado para recibir equipos o servicios adicionales de iCanConnect."

@@ -104,6 +104,8 @@ module EmailTemplates
         'annual_income_formatted' => '$45,000.00',
         'threshold_formatted' => '$55,000.00',
         'proof_type_formatted' => is_es ? 'Verificación de Ingresos' : 'Income Verification',
+        'request_explanation' => I18n.t('applications.proof_resubmission.request_explanation.pending',
+                                        proof: I18n.t('secure_proof_forms.proof_types.income', locale: locale), locale: locale),
         'additional_notes' => is_es ? 'Estas son algunas notas adicionales.' : 'These are some additional notes.'
       }.merge(training_completion_sample_data)
     end

@@ -3,31 +3,48 @@
 module Applications
   # The admin list reads fulfillment through its existing owner; application status stays approved.
   class ApprovedPipeline
-    Definition = Data.define(:key, :label, :action)
-    Row = Data.define(:application, :group, :stage, :entered_at, :days, :action_label, :progress, :evaluation, :voucher, :remaining_value)
+    Definition = Equipment::FulfillmentStage::Definition
+    Row = Data.define(:application, :group, :stage, :entered_at, :days, :action_label, :progress, :evaluation, :voucher, :remaining_value, :secondary, :action_context)
     Summary = Data.define(:stage, :label, :count, :oldest, :average_days, :unknown_dates, :remaining_value)
 
     STAGES = {
-      equipment: [Definition.new(:evaluator, 'Needs evaluator', 'Assign evaluator'),
-                  Definition.new(:report, 'Awaiting evaluation report', 'Open evaluation'),
-                  Definition.new(:po, 'Awaiting PO', 'Order equipment'),
-                  Definition.new(:tracking, 'Awaiting shipment', 'Record shipment'),
-                  Definition.new(:recorded, 'Shipment recorded', 'View shipment')].freeze,
+      equipment: Equipment::FulfillmentStage::DEFINITIONS,
       voucher: [Definition.new(:voucher_missing, 'Needs voucher', 'Open application'),
                 Definition.new(:voucher_issued, 'Voucher issued', 'View voucher'),
                 Definition.new(:voucher_expired, 'Expired with unused value', 'Review voucher'),
                 Definition.new(:voucher_used, 'Fully used', 'View voucher'),
                 Definition.new(:voucher_cancelled, 'Cancelled', 'View voucher')].freeze,
-      none: [Definition.new(:none, 'No equipment needed', 'View application')].freeze
+      none: [Definition.new(:no_equipment, 'No equipment needed', 'View application')].freeze
     }.freeze
-    EQUIPMENT_STAGES = { needs_action: :po, needs_catalog_product: :po, po_sent: :tracking, shipped: :recorded, no_equipment: :none }.freeze
-    HISTORY_ACTIONS = %w[evaluator_assigned evaluation_cancelled equipment_needs_initialized equipment_needs_updated
-                         equipment_order_recorded equipment_item_corrected expired status_changed_to_redeemed status_changed_to_expired
-                         status_changed_to_cancelled].freeze
+    STAGE_FILTERS = {
+      awaiting_evaluation: { label: 'Awaiting evaluation', stages: %i[needs_evaluator awaiting_report] },
+      getting_bids: { label: 'Getting bids', stages: %i[needs_fulfillment awaiting_bid_award] }
+    }.freeze
+    HISTORY_ACTIONS = %w[expired status_changed_to_redeemed status_changed_to_expired status_changed_to_cancelled].freeze
 
     def initialize(applications, now: Time.current)
       @applications = applications.select(&:status_approved?)
       @now = now
+    end
+
+    def self.terminal_stage?(stage)
+      %i[shipment_recorded voucher_used voucher_cancelled].include?(stage)
+    end
+
+    def self.stage_filters(group)
+      stages = STAGES.fetch(group).to_h { |definition| [definition.key.to_s, [definition.key]] }
+      return stages unless group == :equipment
+
+      stages.merge(STAGE_FILTERS.transform_keys(&:to_s).transform_values { |filter| filter.fetch(:stages) })
+    end
+
+    def self.sort_rows(rows)
+      rows.sort_by do |row|
+        terminal = terminal_stage?(row.stage)
+        timestamp = row.entered_at ? row.entered_at.to_f : Float::INFINITY
+        timestamp = -timestamp if terminal && row.entered_at
+        [terminal ? 1 : 0, timestamp, row.application.id]
+      end
     end
 
     def rows
@@ -45,8 +62,11 @@ module Applications
       STAGES.fetch(group).map do |definition|
         selected = groups.fetch(group).select { |row| row.stage == definition.key }
         dated = selected.select(&:entered_at)
+        oldest = self.class.terminal_stage?(definition.key) ? dated.max_by(&:entered_at) : dated.min_by { |row| [row.entered_at, row.application.id] }
+        evaluation = oldest&.evaluation
+        ActiveRecord::Associations::Preloader.new(records: [evaluation], associations: :evaluator).call if evaluation
         Summary.new(stage: definition.key, label: definition.label, count: selected.length,
-                    oldest: dated.min_by { |row| [row.entered_at, row.application.id] },
+                    oldest:,
                     average_days: dated.any? ? (dated.sum(&:days).to_f / dated.length).round : nil,
                     unknown_dates: selected.length - dated.length, remaining_value: selected.sum(&:remaining_value))
       end
@@ -60,52 +80,27 @@ module Applications
       ActiveRecord::Associations::Preloader.new(records: voucher_applications, associations: :vouchers).call
       ids = @applications.map(&:id)
       @training_application_ids = TrainingSession.where(application_id: ids).distinct.pluck(:application_id)
-      @open_evaluations = Evaluation.open_assigned.where(application_id: ids).order(:id).group_by(&:application_id).transform_values(&:last)
-      items = @applications.select(&:equipment_fulfillment?).flat_map(&:equipment_items)
-      load_history(ids, items, voucher_applications)
+      load_voucher_history(voucher_applications)
     end
 
-    def load_history(ids, items, voucher_applications)
+    def load_voucher_history(voucher_applications)
       voucher_ids = voucher_applications.flat_map { |application| application.vouchers.map(&:id) }
-      history = Event.where(auditable_type: 'Application', auditable_id: ids)
-                     .or(Event.where(auditable_type: 'Evaluation', auditable_id: Evaluation.where(application_id: ids).select(:id)))
-                     .or(Event.where(auditable_type: 'EquipmentItem', auditable_id: items.map(&:id)))
-                     .or(Event.where(auditable_type: 'PurchaseOrder', auditable_id: items.filter_map(&:purchase_order_id)))
-                     .or(Event.where(auditable_type: 'Voucher', auditable_id: voucher_ids))
-                     .where(action: HISTORY_ACTIONS).order(:created_at, :id)
-      voucher_owners = voucher_applications.flat_map { |application| application.vouchers.map { |voucher| [voucher.id, application.id] } }.to_h
-      @history = Hash.new { |hash, key| hash[key] = [] }
-      history.each do |event|
-        history_owners(event, voucher_owners).compact.map(&:to_i).uniq.each { |id| @history[id] << event }
-      end
-    end
-
-    def history_owners(event, voucher_owners)
-      case event.auditable_type
-      when 'Application' then [event.auditable_id]
-      when 'Voucher' then [voucher_owners[event.auditable_id]]
-      else Array(event.metadata['application_ids'].presence || event.metadata['application_id'])
-      end
+      @history = Event.where(auditable_type: 'Voucher', auditable_id: voucher_ids)
+                      .where(action: HISTORY_ACTIONS).order(:created_at, :id).group_by(&:auditable_id)
     end
 
     def build_row(application)
       return voucher_row(application) if application.voucher_fulfillment?
 
-      responsibility = application.admin_fulfillment_responsibility_state
-      evaluation = @open_evaluations[application.id]
-      stage = EQUIPMENT_STAGES.fetch(responsibility) { evaluation ? :report : :evaluator }
-      group = stage == :none ? :none : :equipment
-      action = if responsibility == :needs_catalog_product
-                 'Review equipment'
-               elsif stage == :none && training_on_file?(application)
-                 'Open training'
-               else
-                 definition(group, stage).action
-               end
-      entered_at = equipment_entry(application, stage)
-      Row.new(application:, group:, stage:, entered_at:, days: elapsed_days(entered_at), action_label: action,
-              progress: equipment_progress(application, stage, responsibility),
-              evaluation:, voucher: nil, remaining_value: 0.to_d)
+      fulfillment = application.equipment_fulfillment_stage
+      stage = fulfillment.stage
+      group = stage == :no_equipment ? :none : :equipment
+      entered_at = fulfillment.entered_at
+      training = stage == :no_equipment && training_on_file?(application)
+      Row.new(application:, group:, stage:, entered_at:, days: Equipment::WaitTime.days_since(entered_at, now: @now),
+              action_label: training ? 'Open training' : fulfillment.action,
+              progress: fulfillment.progress, evaluation: stage == :awaiting_report ? application.open_equipment_evaluations.last : nil, voucher: nil,
+              remaining_value: 0.to_d, secondary: fulfillment.secondary, action_context: fulfillment.action_context)
     end
 
     def voucher_row(application)
@@ -114,8 +109,9 @@ module Applications
       entered_at = voucher_entry(application, stage, voucher)
       remaining_value = selected.sum(&:remaining_value).to_d
       progress = voucher_progress(stage, voucher, remaining_value, entered_at)
-      Row.new(application:, group: :voucher, stage:, entered_at:, days: elapsed_days(entered_at),
-              action_label: definition(:voucher, stage).action, progress:, evaluation: @open_evaluations[application.id], voucher:, remaining_value:)
+      Row.new(application:, group: :voucher, stage:, entered_at:, days: Equipment::WaitTime.days_since(entered_at, now: @now),
+              action_label: definition(:voucher, stage).action, progress:, evaluation: nil, voucher:, remaining_value:,
+              secondary: [], action_context: {})
     end
 
     def voucher_selection(vouchers)
@@ -145,75 +141,11 @@ module Applications
       text
     end
 
-    def equipment_progress(application, stage, responsibility)
-      if stage == :none
-        return 'No equipment needed · training requested' if application.training_requested_at.present?
-
-        return training_on_file?(application) ? 'No equipment needed · training on file' : 'No equipment needed'
-      end
-      return 'Choose equipment to order' if responsibility == :needs_catalog_product
-      return 'Ready for evaluator assignment' if stage == :evaluator
-      return 'Evaluator assigned · report not submitted' if stage == :report
-
-      items = application.equipment_items.reject { |item| item.queue_status == 'withdrawn' }
-      shipped = items.count { |item| item.queue_status == 'shipped' }
-      ordered = items.count { |item| %w[ordered shipped].include?(item.queue_status) }
-      total = items.length + application.equipment_needs.sum(&:remaining_quantity)
-      "#{ordered} of #{total} #{'item'.pluralize(total)} ordered · #{shipped} shipped"
-    end
-
-    def equipment_entry(application, stage)
-      history = @history[application.id]
-      approval = application.current_status_entered_at
-      return evaluation_entry(history, approval, stage) if %i[evaluator report].include?(stage)
-
-      candidate = case stage
-                  when :po, :none
-                    history.find { |event| %w[equipment_needs_initialized equipment_needs_updated].include?(event.action) }&.created_at
-                  when :tracking
-                    history.rfind { |event| event.action == 'equipment_order_recorded' }&.created_at
-                  when :recorded
-                    history.rfind { |event| shipment_recording?(event) }&.created_at
-                  end
-      return unless candidate
-      return if history.any? { |event| event.created_at > candidate && ambiguous_equipment_change?(event) }
-
-      [candidate, approval].compact.max
-    end
-
-    def evaluation_entry(history, approval, stage)
-      cancellation = history.rfind { |event| event.action == 'evaluation_cancelled' }&.created_at
-      baseline = [approval, cancellation].compact.max
-      return baseline if stage == :evaluator
-
-      assignment = history.find { |event| event.action == 'evaluator_assigned' && (baseline.nil? || event.created_at >= baseline) }
-      assignment&.created_at
-    end
-
-    def shipment_recording?(event)
-      return false unless event.action == 'equipment_item_corrected'
-
-      before, after = event.field_change_pairs['shipped_at']
-      before.blank? && after.present?
-    end
-
-    # Ordinary device edits and partial shipments do not restart an application's stage clock.
-    # Reopened/corrected work needs a proven boundary; an unknown date is preferable to a guessed one.
-    def ambiguous_equipment_change?(event)
-      return true if event.action == 'equipment_needs_updated'
-      return false unless event.action == 'equipment_item_corrected'
-
-      changes = event.field_change_pairs
-      return true if changes.keys.intersect?(%w[purchase_order_id withdrawn_at])
-
-      changes['shipped_at']&.last.blank? && changes.key?('shipped_at')
-    end
-
     def voucher_entry(application, stage, voucher)
       return application.current_status_entered_at unless voucher
       return voucher.issued_at if stage == :voucher_issued
 
-      history = @history[application.id].select { |event| event.auditable_id == voucher.id && event.auditable_type == 'Voucher' }
+      history = @history.fetch(voucher.id, [])
       if stage == :voucher_expired
         return voucher.expiration_date unless voucher.voucher_expired?
 
@@ -231,10 +163,6 @@ module Applications
 
     def training_on_file?(application)
       application.training_requested_at.present? || @training_application_ids.include?(application.id)
-    end
-
-    def elapsed_days(entered_at)
-      [((@now - entered_at) / 1.day).floor, 0].max if entered_at
     end
   end
 end

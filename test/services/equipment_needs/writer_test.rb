@@ -26,27 +26,14 @@ module EquipmentNeeds
       assert_equal @evaluation.id, event.metadata['source_evaluation_id']
     end
 
-    test 'initialization and first staff edit only stamp bookkeeping for an invalid historical intake' do
-      # Model a persisted risk state; this does not assert that such production records exist.
-      @application.update_column(:maryland_resident, false)
-      original = @application.reload.attributes.except('equipment_needs_initialized_at', 'updated_at')
-      assert_not @application.valid?
-      assert_includes @application.errors[:maryland_resident].join, 'Maryland resident'
-
-      assert_raises(ActiveRecord::RecordInvalid) { @application.update!(equipment_needs_initialized_at: Time.current) }
-      assert_nil @application.reload.equipment_needs_initialized_at
-      assert_difference 'Event.where(action: "equipment_needs_initialized").count', 1 do
-        assert Writer.initialize_from!(@evaluation, actor: @evaluation.evaluator)
-      end
-      assert @application.reload.equipment_needs_initialized_at
-      assert_equal original, @application.attributes.except('equipment_needs_initialized_at', 'updated_at')
-
+    test 'a first staff empty decision records its marker and audit without inventing a source report' do
       staff_application = create(:application, :approved, :with_all_proofs)
-      staff_application.update_column(:maryland_resident, false)
       Writer.update!(staff_application, rows: [], expected_initialized_at: '', actor: @admin, reason: 'Reviewed an empty purchasing list')
       assert staff_application.reload.equipment_needs_initialized_at
-      assert_equal false, staff_application.maryland_resident
+      assert staff_application.equipment_needs_decided_at
+      assert_nil staff_application.equipment_source_evaluation_id
       assert_equal 'approved', staff_application.status
+      assert_empty staff_application.equipment_items
       assert_equal 'equipment_needs_updated', staff_application.events.order(:id).last.action
     end
 
@@ -62,7 +49,11 @@ module EquipmentNeeds
 
       assert_equal original, @evaluation.reload.attributes
       assert_equal original_products, @evaluation.recommended_product_ids.sort
-      assert_equal 2, @application.equipment_needs.find_by!(product: replacement).remaining_quantity
+      replacement_need = @application.equipment_needs.find_by!(product: replacement)
+      assert_equal 2, replacement_need.remaining_quantity
+      assert_nil replacement_need.source_evaluation_id
+      assert_equal @evaluation.id, @application.reload.equipment_source_evaluation_id
+      assert_equal @application.program_disability_groups.sole, replacement_need.disability_setup_group
       assert(@application.equipment_needs.where.not(product: replacement).all? { |need| need.remaining_quantity.zero? })
       event = @application.events.find_by!(action: 'equipment_needs_updated')
       assert_equal 'Family needs a different model', event.metadata['reason']
@@ -123,7 +114,7 @@ module EquipmentNeeds
       assert_equal original_report, report.reload.attributes
       assert_empty @application.equipment_needs
       assert_not @application.equipment_needs_decided?
-      assert_equal :needs_catalog_product, @application.admin_fulfillment_responsibility_state
+      assert_equal :needs_fulfillment, @application.admin_fulfillment_responsibility_state
 
       assert_difference -> { @application.events.where(action: 'equipment_needs_updated').count }, 1 do
         Writer.update!(@application, rows: [], expected_initialized_at: marker.iso8601(6), actor: @admin, reason: reason)
@@ -189,7 +180,7 @@ module EquipmentNeeds
       @admin.update!(status: :suspended)
       assert_raises(Equipment::Conflict) { edit_needs(submitted_rows) }
       @admin.update!(status: :active)
-      @application.update!(status: :archived)
+      @application.transition_status!(:archived, actor: @admin)
       assert_raises(Equipment::Conflict) { edit_needs(submitted_rows) }
     end
 
@@ -211,7 +202,7 @@ module EquipmentNeeds
       Writer.initialize_from!(report, actor: @admin)
       original = report.reload.attributes
       marker = @application.reload.equipment_needs_initialized_at
-      assert_equal :needs_catalog_product, @application.admin_fulfillment_responsibility_state
+      assert_equal :needs_fulfillment, @application.admin_fulfillment_responsibility_state
 
       assert_difference -> { @application.events.where(action: 'equipment_needs_updated').count }, 1 do
         edit_needs([], reason: 'Nothing further is required')
@@ -239,13 +230,13 @@ module EquipmentNeeds
       end
       assert_equal marker, @application.reload.equipment_needs_initialized_at
       assert_not @application.equipment_needs_decided?
-      assert_equal :needs_catalog_product, @application.admin_fulfillment_responsibility_state
+      assert_equal :needs_fulfillment, @application.admin_fulfillment_responsibility_state
     end
 
     private
 
     def submitted_rows
-      @application.equipment_needs.order(:id).map { |need| need.attributes.slice('id', 'product_id', 'remaining_quantity', 'lock_version') }
+      @application.equipment_needs.order(:id).map { |need| need.attributes.slice('id', 'product_id', 'remaining_quantity', 'lock_version', 'disability_setup_group') }
     end
 
     def edit_needs(rows, actor: @admin, reason: 'Family needs a different model')

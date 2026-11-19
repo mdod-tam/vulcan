@@ -1,0 +1,42 @@
+es:
+  service_dashboard:
+    followup_help: "Revise las cancelaciones y ausencias para reprogramar."
+    practitioner:
+      trainer: "Capacitador: %{name}"
+      evaluator: "Evaluador: %{name}"
+    actions:
+      schedule_evaluation: "Programar evaluación"
+      schedule_evaluation_aria: "Programar evaluación para una solicitud asignada"
+      evaluation_report: "Registrar informe de evaluación"
+      evaluation_report_aria: "Registrar informe de evaluación para una visita programada"
+      all_evaluation_reports_aria: "Registrar informe de evaluación para una visita programada con cualquier evaluador"
+      evaluation_report_help: "Registre el informe después de la visita; se incluyen las visitas futuras."
+      followup: "Revisar seguimiento"
+    days:
+      one: "%{value} día"
+      other: "%{value} días"
+    waiting_since:
+      assignment: "Espera desde la asignación"
+      request: "Espera desde la solicitud"
+      scheduled: "Espera desde la programación"
+    wait_not_recorded: "Inicio de la espera no registrado"
+    not_recorded: "No registrado"
+    average_to_schedule: "Promedio desde la asignación hasta la programación"
+    average_to_visit: "Promedio desde la programación hasta la visita completada"
+    recorded_schedules:
+      one: "Basado en 1 cita registrada."
+      other: "Basado en %{count} citas registradas."
+    recorded_visits:
+      one: "Basado en 1 visita registrada."
+      other: "Basado en %{count} visitas registradas."
+    unknown_dates:
+      one: "1 inicio de espera no registrado."
+      other: "%{count} inicios de espera no registrados."
+    disability_unknown: "Grupo de discapacidad no registrado"
+    groups:
+      deaf: "Sordera"
+      deafblind: "Sordoceguera"
+      hard_of_hearing: "Dificultad auditiva"
+      low_vision_blind: "Baja visión / Ceguera"
+      speech: "Habla"
+      mobility: "Movilidad"

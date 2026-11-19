@@ -41,8 +41,10 @@ module ConstituentPortal
         { household_size: 3, income: 106_601, expected_result: false }, # Above threshold
         { household_size: 8, income: 216_599, expected_result: true },  # Below threshold
         { household_size: 8, income: 216_601, expected_result: false }, # Above threshold
-        { household_size: 10, income: 216_599, expected_result: true },  # Above household size 8, use size 8 threshold
-        { household_size: 10, income: 216_601, expected_result: false }  # Above household size 8, use size 8 threshold
+        { household_size: 9, income: 238_600, expected_result: true },
+        { household_size: 9, income: 238_600.01, expected_result: false },
+        { household_size: 10, income: 260_600, expected_result: true },
+        { household_size: 10, income: 260_600.01, expected_result: false }
       ]
 
       test_cases.each do |test_case|
@@ -60,6 +62,32 @@ module ConstituentPortal
         assert_equal expected_result, actual_result,
                      "Expected income #{income} to be #{expected_result ? 'below' : 'above'} threshold #{threshold} for household size #{household_size}"
       end
+    end
+
+    test 'missing additional person policy keeps configured table sizes available in the form' do
+      Policy.find_by!(key: 'fpl_additional_person').destroy!
+
+      get new_constituent_portal_application_path
+
+      assert_response :success
+      form = css_select('[data-income-validation-fpl-thresholds-value]').sole
+      assert_equal 54_150, JSON.parse(form['data-income-validation-fpl-thresholds-value']).fetch('8')
+      assert_equal '400', form['data-income-validation-modifier-value']
+      assert_nil form['data-income-validation-additional-person-value']
+      assert_not IncomeThresholdCalculationService.call(9).success?
+    end
+
+    test 'the Spanish form supplies localized income warnings and the configured additional-person amount' do
+      @user.update!(locale: 'es')
+      get new_constituent_portal_application_path
+      assert_response :success
+
+      form = css_select('[data-income-validation-messages-value]').sole
+      messages = JSON.parse(form['data-income-validation-messages-value'])
+      assert_equal 'Los ingresos superan el límite', messages.fetch('title')
+      assert_equal 'es', form['data-income-validation-locale-value']
+      assert_equal '5500', form['data-income-validation-additional-person-value']
+      assert_select 'input[name="application[annual_income]"][min="0"][step="0.01"]'
     end
   end
 end

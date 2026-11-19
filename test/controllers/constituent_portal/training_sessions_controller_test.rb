@@ -40,7 +40,6 @@ module ConstituentPortal
     test 'completed summary keeps its authored language and demo guidance without claiming device ownership or revealing private fields' do
       create(:product_resource, product: @demo, title: 'Captions practice guide', locale: 'en')
       create(:product_resource, product: @demo, title: 'Guía de subtítulos', locale: 'es')
-      assert_empty @user.products
 
       get constituent_portal_training_session_path(@session)
 
