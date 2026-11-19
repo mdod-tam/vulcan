@@ -172,44 +172,52 @@ module Icanconnect
 
     def records
       result = []
+      items = EquipmentItem.arel_table
+      orders = PurchaseOrder.arel_table
       if @category.nil? || @category == 'equipment'
-        source = "COALESCE(equipment_items.delivered_on, purchase_orders.invoice_on, #{local_date_sql('equipment_items.created_at')})"
+        source = coalesce_date(items[:delivered_on], orders[:invoice_on], local_date(items[:created_at]))
         result.concat(period_scope(EquipmentItem.left_joins(:purchase_order), source)
                       .includes({ application: :user }, :product, :source_evaluation, purchase_order: [:equipment_items, FINANCIAL_PRELOADS]).to_a)
       end
       if @category.nil? || @category == 'purchase_order_charges'
-        received = '(SELECT MAX(delivered_on) FROM equipment_items WHERE equipment_items.purchase_order_id = purchase_orders.id)'
-        source = "COALESCE(#{received}, purchase_orders.invoice_on, #{local_date_sql('purchase_orders.created_at')})"
+        received = EquipmentItem.where(items[:purchase_order_id].eq(orders[:id])).select(items[:delivered_on].maximum).arel
+        source = coalesce_date(received, orders[:invoice_on], local_date(orders[:created_at]))
         result.concat(period_scope(PurchaseOrder.all, source).includes(:equipment_items, FINANCIAL_PRELOADS).to_a)
       end
       if @category.nil? || @category == 'assessment'
-        source = "COALESCE(evaluations.funding_service_on, #{local_date_sql('evaluations.appointment_completed_at')}, " \
-                 "#{local_date_sql('evaluations.created_at')})"
+        evaluations = Evaluation.arel_table
+        source = coalesce_date(evaluations[:funding_service_on], local_date(evaluations[:appointment_completed_at]), local_date(evaluations[:created_at]))
         result.concat(period_scope(Evaluation.all, source).includes({ application: :user }, :evaluator, FINANCIAL_PRELOADS).to_a)
       end
       if @category.nil? || @category == 'training'
-        source = "COALESCE(training_sessions.funding_service_on, #{local_date_sql('training_sessions.completed_at')}, " \
-                 "#{local_date_sql('training_sessions.created_at')})"
+        sessions = TrainingSession.arel_table
+        source = coalesce_date(sessions[:funding_service_on], local_date(sessions[:completed_at]), local_date(sessions[:created_at]))
         result.concat(period_scope(TrainingSession.all, source)
                       .includes({ application: :user }, :trainer, :product_trained_on, { equipment_items: :product }, FINANCIAL_PRELOADS).to_a)
       end
       if @category.nil? || %w[installation interpretation travel].include?(@category)
         scope = ApplicationServiceExpense.all
         scope = scope.where(category: @category) if @category
-        result.concat(period_scope(scope, 'application_service_expenses.service_date')
+        result.concat(period_scope(scope, ApplicationServiceExpense.arel_table[:service_date])
                       .includes({ application: :user }, { equipment_item: %i[product purchase_order] }, FINANCIAL_PRELOADS).to_a)
       end
       result
     end
 
-    def local_date_sql(column)
-      "(#{column} AT TIME ZONE 'UTC' AT TIME ZONE :zone)::date"
+    def coalesce_date(*dates)
+      Arel::Nodes::NamedFunction.new('COALESCE', dates)
+    end
+
+    def local_date(column)
+      utc = Arel::Nodes::NamedFunction.new('TIMEZONE', [Arel::Nodes.build_quoted('UTC'), column])
+      local = Arel::Nodes::NamedFunction.new('TIMEZONE', [Arel::Nodes.build_quoted(Time.zone.tzinfo.name), utc])
+      Arel::Nodes::NamedFunction.new('DATE', [local])
     end
 
     def period_scope(scope, source)
       scope = scope.where(funding_source: 'icanconnect')
       scope = scope.where(icc_claimed_at: nil) if @view == 'unclaimed'
-      scope.where("#{source} BETWEEN :from AND :through", from: @from, through: @through, zone: Time.zone.tzinfo.name)
+      scope.where(source.between(@from..@through))
     end
 
     def csv_values(row)
