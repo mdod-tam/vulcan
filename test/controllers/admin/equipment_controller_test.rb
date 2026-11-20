@@ -365,41 +365,48 @@ module Admin
       assert bid.reload.cancelled_at
     end
 
-    test 'bid and purchase order details retain the purchasing section and parent view' do
+    test 'bid details retain the purchasing section and parent view' do
       signing_hand = create(:product, name: 'Bid signing hand')
       stock = [{ product_id: @product.id, quantity: 4, supplier_setup_group: 'speech' },
                { product_id: signing_hand.id, quantity: 5, supplier_setup_group: 'deaf' }]
       bid = Equipment::Bidding.new(actor: @admin).create!(number: 'NAVIGATION-BID', purpose: 'program_stock', stock: stock)
+      get admin_bid_group_path(bid)
+
+      assert_response :success
+      assert_equipment_sections('Enter PO details')
+      assert_select 'nav[aria-label="Enter PO details views"]' do
+        assert_select 'a', count: 2
+        assert_select 'a[aria-current=location]', count: 1
+        assert_select 'a[aria-current=location][href=?]', admin_bid_groups_path, text: 'Bids'
+        assert_select 'a[aria-current=page]', count: 0
+      end
+      assert_select 'nav[aria-label="Return navigation"]' do
+        assert_select 'a[href=?]', admin_dashboard_path, text: 'Back to Dashboard'
+        assert_select 'a[href=?]', admin_applications_path, text: 'Back to Applications'
+      end
+      assert_select 'article h2', text: @product.catalog_label
+      assert_select 'article h2', text: signing_hand.catalog_label
+      assert_select 'article dt', text: 'Destination:', count: 2
+      assert_select 'article dd', text: 'Stock', count: 2
+      assert_select 'article dd', text: '4 Speech'
+      assert_select 'article dd', text: '5 Deaf'
+      assert_select 'article label', text: 'Release this reservation', count: 2
+      assert_select '#bid-history[open]' do
+        assert_select 'p', text: /Bid created — #{Regexp.escape(@admin.full_name)}/
+        assert_select 'time[datetime]'
+        assert_select 'p', text: /#{Regexp.escape(@product.catalog_label)}/
+      end
+    end
+
+    test 'purchase order details link back to purchase orders and the dashboard' do
       order = create(:purchase_order)
+      get admin_purchase_order_path(order)
 
-      [[admin_bid_group_path(bid), admin_bid_groups_path, 'Bids'],
-       [admin_purchase_order_path(order), admin_purchase_orders_path, 'Purchase Orders']].each do |path, parent_path, label|
-        get path
-
-        assert_response :success
-        assert_equipment_sections('Enter PO details')
-        assert_select 'nav[aria-label="Enter PO details views"] a', count: 2
-        assert_select 'nav[aria-label="Enter PO details views"] a[aria-current=location]', count: 1
-        assert_select 'nav[aria-label="Enter PO details views"] a[aria-current=location][href=?]', parent_path, text: label
-        assert_select 'nav[aria-label="Enter PO details views"] a[aria-current=page]', count: 0
-        next unless path == admin_bid_group_path(bid)
-
-        assert_select 'nav[aria-label="Return navigation"]' do
-          assert_select 'a[href=?]', admin_dashboard_path, text: 'Back to Dashboard'
-          assert_select 'a[href=?]', admin_applications_path, text: 'Back to Applications'
-        end
-        assert_select 'article h2', text: @product.catalog_label
-        assert_select 'article h2', text: signing_hand.catalog_label
-        assert_select 'article dt', text: 'Destination:', count: 2
-        assert_select 'article dd', text: 'Stock', count: 2
-        assert_select 'article dd', text: '4 Speech'
-        assert_select 'article dd', text: '5 Deaf'
-        assert_select 'article label', text: 'Release this reservation', count: 2
-        assert_select '#bid-history[open]' do
-          assert_select 'p', text: /Bid created — #{Regexp.escape(@admin.full_name)}/
-          assert_select 'time[datetime]'
-          assert_select 'p', text: /#{Regexp.escape(@product.catalog_label)}/
-        end
+      assert_response :success
+      assert_select 'nav[aria-label="Equipment sections"], nav[aria-label="Enter PO details views"]', count: 0
+      assert_select 'nav[aria-label="Return navigation"]' do
+        assert_select 'a[href=?]', admin_dashboard_path, text: 'Back to Dashboard'
+        assert_select 'a[href=?]', admin_purchase_orders_path, text: 'Back to Purchase Orders'
       end
     end
 
