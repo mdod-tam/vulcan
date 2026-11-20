@@ -52,12 +52,20 @@ module Icanconnect
     end
 
     def equipment_evidence_dates_consistent
-      %i[delivered_on installed_on].each do |field|
-        date = public_send(field)
-        errors.add(field, 'cannot be in the future') if date&.future?
+      validate_evidence_date(:delivered_on, shipped_at, 'shipment')
+      validate_evidence_date(:installed_on, delivered_on, 'delivery')
+    end
+
+    def validate_evidence_date(field, prerequisite, event)
+      date = public_send(field)
+      return unless date
+
+      errors.add(field, 'cannot be in the future') if date.future?
+      if prerequisite.nil?
+        errors.add(field, "requires a recorded #{event} date")
+      elsif date < prerequisite
+        errors.add(field, "cannot precede #{event}")
       end
-      errors.add(:delivered_on, 'cannot precede shipment') if delivered_on && shipped_at && delivered_on < shipped_at
-      errors.add(:installed_on, 'cannot precede constituent receipt') if installed_on && delivered_on && installed_on < delivered_on
     end
   end
 end

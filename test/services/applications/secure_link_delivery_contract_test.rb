@@ -6,6 +6,7 @@ module Applications
   # Delivery outcomes for issued secure links, with real mailers.
   class SecureLinkDeliveryContractTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::TimeHelpers
+    include IcanconnectTestSupport
 
     setup do
       ensure_system_audit_actor!
@@ -30,6 +31,7 @@ module Applications
     end
 
     test 'a denied iCanConnect income request still lets the initial MAT voucher job issue a voucher' do
+      start_icanconnect!
       FeatureFlag.enable!(:vouchers_enabled)
       application = create(:application, :completed, :with_id_proof, :with_residency_proof, :with_disability_certification,
                            user: create(:constituent, hearing_disability: true, vision_disability: true),

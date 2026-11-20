@@ -41,6 +41,12 @@
             </td>
             <td class="px-4 py-3 align-top">
               <%= link_to row.action_label, approved_pipeline_action_path(row), class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
+              <% if (work = row.icanconnect_work) %>
+                <p class="mt-1">
+                  <%= link_to "iCanConnect · #{work.action}", approved_pipeline_equipment_path(row.application, work),
+                              class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
+                </p>
+              <% end %>
             </td>
           </tr>
         <% end %>

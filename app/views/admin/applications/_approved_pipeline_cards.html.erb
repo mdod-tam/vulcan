@@ -90,6 +90,23 @@
         </div>
       <% end %>
     </article>
+    <% if @income_follow_up %>
+      <% follow_up_stage = Icanconnect::IncomeFollowUp::STAGE # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <% waiting = @income_follow_up.values.compact.size # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <article id="icanconnect-income-follow-up-card"
+               class="card summary-card summary-card-compact <%= 'border-primary-600 bg-primary-50' if @pipeline_stage == follow_up_stage %>">
+        <%= link_to application_list_path(group: :voucher, stage: follow_up_stage),
+                    class: 'summary-card-content rounded-t-lg text-primary-700 hover:underline',
+                    aria: { current: @pipeline_stage == follow_up_stage ? 'page' : nil },
+                    data: { turbo_frame: 'applications_list', turbo_action: 'advance' } do %>
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="summary-card-title text-primary-700">iCanConnect income follow-up</h3>
+            <p class="summary-card-count"><%= @income_follow_up.size %></p>
+          </div>
+          <p class="text-xs text-gray-600"><%= @income_follow_up.size - waiting %> to contact · <%= waiting %> waiting for proof</p>
+        <% end %>
+      </article>
+    <% end %>
   </div>
   <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
     <p class="text-gray-600">Wait times use recorded dates. Averages include only applications with a known date.</p>

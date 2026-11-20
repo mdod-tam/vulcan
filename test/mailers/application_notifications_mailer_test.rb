@@ -161,6 +161,22 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                                  proof: I18n.t('secure_proof_forms.proof_types.income', locale: locale), locale: locale))
       assert application.reload.status_approved?
     end
+
+    test "#{locale} rejected ICC proof requests a replacement without reopening MAT approval" do
+      use_real_email_templates('application_notifications_proof_rejected')
+      user = create(:constituent, locale: locale)
+      application = build(:application, :approved, user:, fulfillment_type: :voucher)
+      review = build(:proof_review, application:, proof_type: :income, status: :rejected, rejection_reason: 'Blurry photo')
+      url = 'https://example.test/secure-proof-replacement'
+      message = ApplicationNotificationsMailer.proof_rejected(application, review, secure_upload_url: url).message.body.decoded
+
+      assert_includes message, I18n.t('applications.proof_resubmission.rejection_explanation.income_update', locale:)
+      assert_includes message, I18n.t('applications.proof_resubmission.rejection_explanation.voucher', locale:)
+      assert_not_includes message, I18n.t('applications.proof_resubmission.rejection_explanation.pending', locale:)
+      assert_includes message, review.rejection_reason
+      assert_includes message, url
+      assert_predicate application, :status_approved?
+    end
   end
 
   test 'a Spanish proof-received email names the proof in Spanish when the ambient locale is English' do

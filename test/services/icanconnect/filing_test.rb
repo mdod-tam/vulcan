@@ -7,6 +7,7 @@ module Icanconnect
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       @admin = create(:admin)
     end
 
@@ -246,7 +247,7 @@ module Icanconnect
                                                       vendor_invoice_number: 'TRAIN-1')
       session.financial_document.attach(icc_blob)
       session.training_session_equipment_items.create!(equipment_item: unit)
-      mat = create(:equipment_item, application: application, purchase_order: create(:purchase_order), delivered_on: Date.current)
+      mat = create(:equipment_item, application: application, shipped_at: Date.current, delivered_on: Date.current, tracking_number: 'MAT-TRAINING-DEVICE')
       session.training_session_equipment_items.create!(equipment_item: mat)
       row = FilingPrep.row(session.reload)
       assert_equal BigDecimal('117.76'), row.amount

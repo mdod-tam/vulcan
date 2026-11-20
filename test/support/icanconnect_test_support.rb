@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 module IcanconnectTestSupport
+  def start_icanconnect!(on: Date.new(2000, 1, 1))
+    Icanconnect::Setting.find_or_initialize_by(id: Icanconnect::Setting::ID).tap { |setting| setting.update!(starts_on: on) }
+  end
+
   def icc_blob(slot: 'financial_document', purpose: :financial_evidence)
     blob = ActiveStorage::Blob.create_and_upload!(io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
                                                   filename: 'evidence.pdf', content_type: 'application/pdf')

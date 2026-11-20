@@ -20,6 +20,7 @@ module Admin
       @return_context = Equipment::RequestParameters.return_context(params)
       @history = @purchase_order.equipment_history
       @equipment_audit_records = Equipment::AuditRecords.for(@history.to_a + @purchase_order.equipment_items.flat_map { |item| item.events.to_a })
+      load_vendor_shipping if @purchase_order.direct_to_constituents?
     end
 
     def new
@@ -73,6 +74,15 @@ module Admin
     end
 
     private
+
+    def load_vendor_shipping
+      @vendor_shipping_request = @purchase_order.shipping_requests.recent_first.first
+      @vendor_shipping_remaining = @purchase_order.equipment_items.any? { |item| item.direct_vendor? && !item.withdrawn_at? && !item.shipped_at? }
+      return unless @vendor_shipping_remaining
+
+      attributes = @vendor_shipping_request&.slice(:recipient_email, :shipping_instructions) || {}
+      @vendor_shipping_form = PurchaseOrderShippingRequest.new(attributes.merge(flash[:vendor_shipping_input].to_h.symbolize_keys))
+    end
 
     def load_review
       @lines = @group.active_lines.includes(:product).order(:id).to_a

@@ -4,6 +4,8 @@ class ApplicationServiceExpense < ApplicationRecord
   include TypedDateInput
   include Icanconnect::Claimable
 
+  CATEGORIES = %w[installation interpretation travel].freeze
+
   typed_date_input :service_date
 
   belongs_to :application
@@ -12,10 +14,11 @@ class ApplicationServiceExpense < ApplicationRecord
   has_many_attached :superseded_financial_documents
   normalizes :vendor_name, with: ->(value) { value.to_s.strip.presence }
   validates :financial_document, :superseded_financial_documents, document: { purpose: :financial_evidence }
-  validates :category, inclusion: { in: %w[installation interpretation travel] }
+  validates :category, inclusion: { in: CATEGORIES }
   validates :service_date, presence: true
   validates :amount, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
   validate :expense_supports_beneficiary
+  validate :equipment_is_active, if: :will_save_change_to_equipment_item_id?
 
   private
 
@@ -26,6 +29,10 @@ class ApplicationServiceExpense < ApplicationRecord
     Icanconnect::Funding.validate!(application, source: funding_source, on: service_date) if application && service_date && funding_qualification_changed?
   rescue ArgumentError => e
     errors.add(:base, e.message)
+  end
+
+  def equipment_is_active
+    errors.add(:equipment_item, 'must be active') if equipment_item&.withdrawn_at?
   end
 
   def funding_qualification_changed?

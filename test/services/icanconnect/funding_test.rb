@@ -7,7 +7,25 @@ module Icanconnect
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       @admin = create(:admin)
+    end
+
+    test 'ICC funding opens on the start date and cannot cover earlier work' do
+      application = approved_deafblind_application
+      setting = Setting.find(Setting::ID)
+      setting.destroy!
+      assert_raises(Funding::Ineligible) { Funding.validate!(application, source: 'icanconnect') }
+      assert_nothing_raised { Funding.validate!(application, source: 'mat') }
+
+      launch = Date.tomorrow
+      start_icanconnect!(on: launch)
+      assert_raises(Funding::Ineligible) { Funding.validate!(application, source: 'icanconnect', on: launch) }
+
+      travel_to launch.in_time_zone.noon do
+        assert_raises(Funding::Ineligible) { Funding.validate!(application, source: 'icanconnect', on: launch.prev_day) }
+        assert_nothing_raised { Funding.validate!(application, source: 'icanconnect', on: launch) }
+      end
     end
 
     test 'one approved DeafBlind application can receive both MAT and iCanConnect devices' do

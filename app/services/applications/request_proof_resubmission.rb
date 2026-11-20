@@ -101,7 +101,7 @@ module Applications
     end
 
     def requestable_proof_state?
-      application.proof_requestable_via_secure_form?(proof_type)
+      application.proof_request_issuable?(proof_type)
     end
 
     def current_proof_status

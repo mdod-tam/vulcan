@@ -22,7 +22,7 @@ module TrainingManagement
   end
 
   def unlimited_training_sessions?
-    icanconnect_eligible?
+    icanconnect_eligible? && Icanconnect::Setting.active?
   end
 
   def training_capacity_available?

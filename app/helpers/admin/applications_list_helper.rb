@@ -80,34 +80,33 @@ module Admin
       return admin_voucher_path(row.voucher) if row.voucher
       return evaluators_evaluation_path(row.evaluation) if row.stage == :awaiting_report && row.evaluation
 
-      equipment_path = approved_pipeline_equipment_path(row)
+      equipment_path = approved_pipeline_equipment_path(row.application, row)
       return equipment_path if equipment_path
 
       anchor = row.stage == :needs_evaluator ? 'evaluation-status-title' : 'admin-training-heading'
       admin_application_path(row.application, anchor:)
     end
 
-    def approved_pipeline_equipment_path(row)
-      case row.stage
+    def approved_pipeline_equipment_path(application, work)
+      case work.stage
       when :needs_fulfillment
-        if Equipment::FulfillmentStage.new(row.application).equipment_selection_needed?
-          edit_admin_application_equipment_needs_path(row.application,
-                                                      return_context: { application_id: row.application.id, tab: 'needs_ordering' })
+        if Equipment::FulfillmentStage.new(application).equipment_selection_needed?
+          edit_admin_application_equipment_needs_path(application, return_context: { application_id: application.id, tab: 'needs_ordering' })
         else
-          admin_equipment_index_path(tab: 'needs_ordering', application_id: row.application.id)
+          admin_equipment_index_path(tab: 'needs_ordering', application_id: application.id)
         end
       when :awaiting_bid_award
-        ids = row.action_context[:bid_group_ids]
+        ids = work.action_context[:bid_group_ids]
         if ids.one?
-          new_admin_purchase_order_path(bid_group_id: ids.sole, return_context: { application_id: row.application.id, tab: 'needs_ordering' })
+          new_admin_purchase_order_path(bid_group_id: ids.sole, return_context: { application_id: application.id, tab: 'needs_ordering' })
         else
-          admin_bid_groups_path(application_id: row.application.id)
+          admin_bid_groups_path(application_id: application.id)
         end
       when :ready_to_send_po
-        ids = row.action_context[:purchase_order_ids]
-        ids.one? ? admin_purchase_order_path(ids.sole) : admin_purchase_orders_path(application_id: row.application.id, state: 'unsent')
-      when :awaiting_shipment then admin_equipment_index_path(tab: 'ordered', application_id: row.application.id, source: row.action_context[:source])
-      when :shipment_recorded then admin_equipment_index_path(tab: 'shipped', application_id: row.application.id)
+        ids = work.action_context[:purchase_order_ids]
+        ids.one? ? admin_purchase_order_path(ids.sole) : admin_purchase_orders_path(application_id: application.id, state: 'unsent')
+      when :awaiting_shipment then admin_equipment_index_path(tab: 'ordered', application_id: application.id, source: work.action_context[:source])
+      when :shipment_recorded then admin_equipment_index_path(tab: 'shipped', application_id: application.id)
       end
     end
 

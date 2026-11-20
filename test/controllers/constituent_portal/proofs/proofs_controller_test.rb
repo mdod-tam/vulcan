@@ -10,6 +10,7 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
   include IcanconnectTestSupport
 
   setup do
+    start_icanconnect!
     @user = create(:constituent)
 
     # The paper trait rejects proofs with no attachment.
@@ -119,7 +120,6 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     test "a concurrent income update keeps the accepted proof and returns a friendly #{locale} response" do
       ensure_system_audit_actor!
       FeatureFlag.disable!(:vouchers_enabled)
-      FeatureFlag.enable!(:icanconnect_enabled)
       @admin = create(:admin)
       applicant = create(:constituent, hearing_disability: true, vision_disability: true, locale: locale)
       application = nil

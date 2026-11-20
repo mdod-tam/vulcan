@@ -8,6 +8,7 @@ module Admin
       include IcanconnectTestSupport
 
       setup do
+        start_icanconnect!
         @admin = create(:admin)
         @order, @unit = icc_order_with_unit
         sign_in_as(@admin, bypass_mfa_enrollment: true)
@@ -73,6 +74,27 @@ module Admin
         bill = @unit.application.application_service_expenses.sole
         assert_equal Date.current, bill.service_date
         assert_equal BigDecimal('75.25'), bill.amount
+      end
+
+      test 'recording beneficiary receipt and installation requires the earlier shipping steps' do
+        unit = create(:equipment_item, application: @unit.application, purchase_order: @order, funding_source: 'icanconnect')
+        path = admin_icanconnect_financial_record_path("EquipmentItem:#{unit.id}")
+        date = Date.current.strftime('%m/%d/%Y')
+
+        patch path, params: { lock_version: unit.lock_version, finance: { delivered_on: date } }
+        assert_response :unprocessable_content
+        assert_select '[role="alert"]', text: /requires a recorded shipment/
+        assert_nil unit.reload.delivered_on
+
+        unit.update!(shipped_at: Date.current, tracking_number: 'SHIPMENT')
+        patch path, params: { lock_version: unit.lock_version, finance: { installed_on: date } }
+        assert_response :unprocessable_content
+        assert_select '[role="alert"]', text: /requires a recorded delivery date/
+        assert_nil unit.reload.installed_on
+
+        patch path, params: { lock_version: unit.lock_version, finance: { delivered_on: date, installed_on: date } }
+        assert_response :redirect
+        assert_equal [Date.current, Date.current], unit.reload.attributes.values_at('delivered_on', 'installed_on')
       end
 
       test 'invalid financial edits retain attempted amounts and the submitted review version' do
@@ -342,7 +364,7 @@ module Admin
         assert_response :success
         assert_select '#financial-correction-help', count: 1, text: /This invoice is already part of a filing/
         assert_select 'textarea[name="correction_reason"][required][aria-describedby=financial-correction-help]'
-        assert_select 'input[name="correction_reference"][required][aria-describedby=financial-correction-help]'
+        assert_select 'input[name="correction_reference"][required][aria-describedby~="financial-correction-reference-help"]'
         patch admin_icanconnect_financial_record_path(key), params: {
           lock_version: @order.reload.lock_version, finance: { vendor_invoice_number: 'CORRECTED' },
           correction_reason: 'Supplier corrected the invoice reference', correction_reference: 'EXTERNAL-CORRECTION'
@@ -364,7 +386,7 @@ module Admin
         assert_response :success
         assert_select '#financial-correction-help', count: 1, text: /This PO’s charges have been filed using its device receipt dates/
         assert_select 'textarea[name="correction_reason"][aria-describedby=financial-correction-help]:not([required])'
-        assert_select 'input[name="correction_reference"][aria-describedby=financial-correction-help]:not([required])'
+        assert_select 'input[name="correction_reference"][aria-describedby~="financial-correction-reference-help"]:not([required])'
         [Date.current.strftime('%m/%d/%Y'), ''].each do |attempted|
           patch admin_icanconnect_financial_record_path(key), params: {
             lock_version: @unit.reload.lock_version, finance: { delivered_on: attempted }
@@ -403,7 +425,7 @@ module Admin
         assert_response :success
         assert_select '#financial-correction-help', count: 1, text: /Receipt and installation dates can be recorded normally/
         assert_select 'textarea[name="correction_reason"][aria-describedby=financial-correction-help]:not([required])'
-        assert_select 'input[name="correction_reference"][aria-describedby=financial-correction-help]:not([required])'
+        assert_select 'input[name="correction_reference"][aria-describedby~="financial-correction-reference-help"]:not([required])'
         parameters = { lock_version: sibling.lock_version, finance: { unit_cost: '50.00', delivered_on: date, installed_on: date },
                        correction_reason: '', correction_reference: '' }
         patch admin_icanconnect_financial_record_path(key), params: parameters
@@ -432,9 +454,12 @@ module Admin
         assert_equal 51, sibling.reload.unit_cost
         assert sibling.events.exists?(action: 'icc_filed_cost_corrected')
         get edit_admin_icanconnect_financial_record_path("EquipmentItem:#{@unit.id}")
-        assert_select '#financial-correction-help', count: 1, text: /Filed for/
+        assert_select '#financial-correction-help', count: 1 do |notices|
+          assert_equal 'Filed for Test (reference FILED). To make a change, enter a reason and a claim or support ticket reference.',
+                       notices.sole.text.squish
+        end
         assert_select 'textarea[name="correction_reason"][required][aria-describedby=financial-correction-help]'
-        assert_select 'input[name="correction_reference"][required][aria-describedby=financial-correction-help]'
+        assert_select 'input[name="correction_reference"][required][aria-describedby~="financial-correction-reference-help"]'
         patch admin_icanconnect_financial_record_path("EquipmentItem:#{@unit.id}"), params: {
           lock_version: @unit.reload.lock_version, finance: { installed_on: date }
         }

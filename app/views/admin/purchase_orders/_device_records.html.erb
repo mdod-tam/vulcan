@@ -8,13 +8,17 @@
         <h3 class="font-semibold">Device #<%= item.id %> — <%= equipment_catalog_label(item.product) %></h3>
         <%= equipment_queue_badge(item) %>
       </div>
+      <% if item.direct_vendor? && item.queue_status == 'awaiting_shipment' %>
+        <%= link_to 'Enter shipping info', new_admin_equipment_shipment_path(item_ids: [item.id], return_context: return_context.merge(tab: 'ordered')),
+                    class: 'btn btn-outline', aria: { label: "Enter shipping info for device ##{item.id}" } %>
+      <% end %>
       <details class="space-y-3">
         <summary class="cursor-pointer text-primary-700 underline" aria-label="View tracking and actions for device #<%= item.id %>">View tracking and actions</summary>
         <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div><dt class="font-medium">Application</dt><dd><%= equipment_item_context_link(item, return_context: return_context) %></dd></div>
           <div><dt class="font-medium">Funding</dt><dd><%= equipment_funding_label(item) %></dd></div>
-          <div><dt class="font-medium">Serial number</dt><dd class="break-all"><%= item.serial_number.presence || 'Not recorded' %></dd></div>
-          <div><dt class="font-medium">IMEI</dt><dd class="break-all"><%= item.imei.presence || 'Not recorded' %></dd></div>
+          <% if item.serial_number? %><div><dt class="font-medium">Serial number</dt><dd class="break-all"><%= item.serial_number %></dd></div><% end %>
+          <% if item.imei? %><div><dt class="font-medium">IMEI</dt><dd class="break-all"><%= item.imei %></dd></div><% end %>
           <div><dt class="font-medium">Date shipped</dt><dd><%= accessible_date_value(item.shipped_at) || 'Not recorded' %></dd></div>
           <div><dt class="font-medium">Date received by recipient</dt><dd><%= accessible_date_value(item.delivered_on) || 'Not recorded' %></dd></div>
           <div><dt class="font-medium">Tracking number</dt><dd class="break-all"><%= item.tracking_number.presence || 'Not recorded' %> <%= equipment_tracking_link(item) %></dd></div>

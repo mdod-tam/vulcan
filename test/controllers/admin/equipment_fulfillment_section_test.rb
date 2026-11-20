@@ -7,6 +7,7 @@ module Admin
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       FeatureFlag.disable!(:vouchers_enabled)
       @admin = create(:admin)
       sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
@@ -59,7 +60,6 @@ module Admin
     end
 
     test 'each device names its funding while filing preparation stays on the dashboard' do
-      FeatureFlag.enable!(:icanconnect_enabled)
       application = approved_deafblind_application
       order = create(:purchase_order, funding_source: 'icanconnect')
       icc = create(:equipment_item, application: application, purchase_order: order, funding_source: 'icanconnect', disability_setup_group: 'deafblind')

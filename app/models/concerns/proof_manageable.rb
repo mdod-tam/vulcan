@@ -68,7 +68,7 @@ module ProofManageable
 
   # Secure proof links serve rejected proofs or missing proofs with not_reviewed status.
   # An archived application is closed: ProofReview refuses to review it, so an upload could never be reviewed.
-  # Issuance, the admin send button, and public submission all use this rule.
+  # Public submissions keep using this rule after a link has been issued.
   def proof_requestable_via_secure_form?(proof_type)
     return false if status_archived?
     return true if proof_type.to_s == 'income' && income_proof_update_available?
@@ -79,9 +79,15 @@ module ProofManageable
     public_send("#{proof_type}_proof_status_not_reviewed?") && !document_attachment_for(proof_type).attached?
   end
 
-  # The constituent portal accepts only a replacement for a rejected proof.
+  def proof_request_issuable?(proof_type)
+    return income_proof_update_offered? if status_approved? && proof_type.to_s == 'income'
+
+    proof_requestable_via_secure_form?(proof_type)
+  end
+
+  # The constituent portal accepts replacements for rejected proofs and offered income updates.
   def proof_resubmittable_via_portal?(proof_type)
-    return true if proof_type.to_s == 'income' && income_proof_update_available?
+    return income_proof_update_offered? if status_approved? && proof_type.to_s == 'income'
     return false if proof_type.to_s == 'income' && !income_proof_required?
 
     can_submit_proof? && public_send("#{proof_type}_proof_status_rejected?")

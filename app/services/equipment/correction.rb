@@ -82,6 +82,9 @@ module Equipment
         purchase_order.assign_attributes(values.slice(*PO_FIELDS))
         purchase_order.save!
         items.each(&:validate!)
+        if purchase_order.saved_change_to_sent_at? && !purchase_order.sent_at?
+          purchase_order.shipping_requests.open.order(:id).each { |request| request.revoke!(actor: @actor, reason: :purchase_order_unsent) }
+        end
         changes = changed_values(previous, purchase_order.attributes.slice(*PO_FIELDS))
         if changes.any?
           Mutation.audit!(purchase_order, actor: @actor, action: 'equipment_purchase_order_corrected', changes: changes,

@@ -43,6 +43,7 @@ module Admin
       assert_equal 'Awarded Supplier', order.vendor_name
       assert_equal [BigDecimal('1234.50')], order.equipment_items.distinct.pluck(:unit_cost)
       assert_equal 0, @need.reload.remaining_quantity
+      order.equipment_items.first.update!(serial_number: 'ORDERED-SERIAL', imei: '123456789012345')
       get admin_purchase_order_path(order)
       assert_response :success
       assert_includes response.body, 'PO sent date needed'
@@ -50,7 +51,7 @@ module Admin
       assert_select '#supplier-list-heading', text: 'Supplier order list'
       assert_select 'section[aria-labelledby="supplier-list-heading"]' do
         assert_select 'p', text: 'Share this list with the vendor, along with any setup instructions they agreed to follow.'
-        assert_select 'th', text: 'Disability setup', count: 0
+        assert_select 'th', text: /Disability setup|Shipment/, count: 0
         assert_select '[role="region"][tabindex="0"][aria-labelledby="supplier-list-heading"] table'
         assert_select 'td', text: /#{Regexp.escape(@need.application.shipping_address_1)}/
         assert_select '#supplier-list-text[readonly]', text: /PO PO-0042/
@@ -59,8 +60,8 @@ module Admin
         assert_select 'h2', text: 'Device tracking and records'
         assert_select 'article', count: 2
         assert_select 'dt', text: 'Funding', count: 2
-        assert_select 'dt', text: 'Serial number', count: 2
-        assert_select 'dt', text: 'IMEI', count: 2
+        assert_select 'dt + dd', text: 'ORDERED-SERIAL', count: 1
+        assert_select 'dt + dd', text: '123456789012345', count: 1
         assert_select 'dt', text: /Onward destination|Required setup|Purchase order|Where it came from/, count: 0
         assert_select 'input', count: 0
         assert_select 'a.btn.btn-outline', text: 'Edit price and receipt dates', count: 2
@@ -76,6 +77,10 @@ module Admin
       patch send_order_admin_purchase_order_path(order), params: { sent_at: Date.current.iso8601, expected_version: order.lock_version }
       assert_redirected_to admin_purchase_order_path(order)
       assert_equal Date.current, order.reload.sent_at
+      follow_redirect!
+      assert_select '#vendor-shipping h2', text: 'Vendor tracking link'
+      assert_select '#vendor-shipping summary', text: 'Email tracking link'
+      assert_select '#purchase-order-device-records a', text: 'Enter shipping info', count: 2
     end
 
     test 'invalid new PO retry preserves submitted number fixed line versions and return context' do

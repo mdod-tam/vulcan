@@ -14,6 +14,8 @@ Finance records actual hourly rates and billable hours on each assessment or tra
 
 To enter shared PO charges, open the purchase order and choose **Edit PO invoice and charges**. Enter shipping and any other invoice charges separately from the device prices. Each financial editor shows **Financial history** with the administrator, time, and recorded changes, including initial entries and later corrections. Related changes also appear in the application's activity history.
 
+For orders shipping directly to constituents, confirm the vendor's shipping email and choose **Send PO to vendor**. The vendor can use the same secure link to view that order and record each package as it ships. The link expires after 30 days and staff can replace or revoke it from the PO. Staff can also record tracking from **Awaiting shipment**.
+
 ## Filing workflow
 
 Open **iCanConnect filing preparation** from the Admin Dashboard and choose the date range and category. Filing preparation is a global workspace; each device on an application shows its own MAT or ICC funding label. **Unclaimed expenses** shows costs that have not been marked filed, including rows with missing information. **Period activity, including filed costs** includes previously filed costs. Equipment uses constituent receipt dates, services use performed dates, and shared PO charges use the last device receipt date. The worksheet keeps request, invoice, performed, receipt and installation dates separate. Unknown amounts stay blank.

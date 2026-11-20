@@ -258,7 +258,7 @@
                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>
              </p>
-             <%= render 'shared/document_upload', form: f, model: @application, field: :residency_proof,
+             <%= render 'shared/document_upload', form: f, model: @application, field: :residency_proof, blob: @retained_proofs&.dig('residency'),
                                                   input_id: 'application_residency_proof', described_by: 'residency-hint' %>
            </div>
 
@@ -269,7 +269,7 @@
              <p id="income-hint" class="form-hint mb-2">
                Upload SSI/SSDI documentation, recent pay stubs, or tax forms
              </p>
-             <%= render 'shared/document_upload', form: f, model: @application, field: :income_proof,
+             <%= render 'shared/document_upload', form: f, model: @application, field: :income_proof, blob: @retained_proofs&.dig('income'),
                                                   input_id: 'application_income_proof', described_by: 'income-hint' %>
            </div>
            <% end %>
@@ -280,7 +280,7 @@
              <p id="id-hint" class="form-hint mb-2">
                Upload a government-issued photo ID such as a driver's license, state ID card, or passport
              </p>
-             <%= render 'shared/document_upload', form: f, model: @application, field: :id_proof,
+             <%= render 'shared/document_upload', form: f, model: @application, field: :id_proof, blob: @retained_proofs&.dig('id'),
                                                   input_id: 'application_id_proof', described_by: 'id-hint' %>
            </div>
          </div>

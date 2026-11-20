@@ -8,6 +8,7 @@ module Admin
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
+      start_icanconnect!
       ensure_system_audit_actor!
       @admin = create(:admin)
       FeatureFlag.disable!(:vouchers_enabled)
@@ -112,12 +113,12 @@ module Admin
       version = unit.lock_version
       fill_in 'Price paid for this device', with: '12.345'
       fill_in 'Correction reason', with: 'Invoice corrected by supplier'
-      fill_in 'External correction reference', with: 'FEDERAL-CORRECTION-TEST'
+      fill_in 'Claim or support ticket reference', with: 'FEDERAL-CORRECTION-TEST'
       click_button 'Save correction'
       assert_selector '[role="alert"]', text: 'Enter a valid price per device in dollars and cents, or leave it blank.'
       assert_field 'Price paid for this device', with: '12.345'
       assert_field 'Correction reason', with: 'Invoice corrected by supplier'
-      assert_field 'External correction reference', with: 'FEDERAL-CORRECTION-TEST'
+      assert_field 'Claim or support ticket reference', with: 'FEDERAL-CORRECTION-TEST'
       assert_equal 150, unit.reload.unit_cost
       assert_equal version, unit.lock_version
       take_screenshot('icc-claimed-price-invalid-retry', html: true, full: true)
@@ -215,7 +216,7 @@ module Admin
     end
 
     test 'service bill preserves an invalid typed date and accepts the month first correction' do
-      _order, unit = icc_order_with_unit
+      _order, unit = travel_to(2.days.ago.noon) { icc_order_with_unit }
       visit new_admin_icanconnect_financial_record_path(application_id: unit.application_id)
       select 'Travel', from: 'Category'
       select "##{unit.id} — #{unit.product.name}", from: 'Device'
@@ -240,7 +241,46 @@ module Admin
       assert_equal Date.current, bill.service_date
       assert_equal BigDecimal('25.50'), bill.amount
       assert_equal 'Travel provider', bill.vendor_name
-      take_screenshot('icc-service-bill-date-corrected', html: true, full: true)
+      _, replacement = travel_to(2.days.ago.noon) { icc_order_with_unit(application: bill.application) }
+      other_application = create(:application)
+      unrelated = create(:equipment_item, application: other_application)
+      refresh
+      assert_no_selector "#finance_equipment_item_id option[value='#{unrelated.id}']", visible: :all
+      select 'Interpretation', from: 'Category'
+      select "##{replacement.id} — #{replacement.product.name}", from: 'Device'
+      fill_in 'Service date', with: Date.tomorrow.strftime('%m/%d/%Y')
+      click_button 'Save costs and documents'
+      assert_selector '[role="alert"]', text: 'cannot be in the future'
+      assert_selector '#finance_category option:checked', text: 'Interpretation'
+      assert_selector '#finance_equipment_item_id option:checked', text: "##{replacement.id} — #{replacement.product.name}"
+      take_screenshot('icc-service-bill-correction-retry', html: true, full: true)
+
+      fill_in 'Service date', with: Date.yesterday.strftime('%m/%d/%Y')
+      click_button 'Save costs and documents'
+      assert_text 'Financial evidence saved.'
+      assert_equal 'interpretation', bill.reload.category
+      assert_equal replacement.id, bill.equipment_item_id
+      assert_equal Date.yesterday, bill.service_date
+      event = Event.find_by!(auditable: bill, action: 'icc_financial_evidence_updated')
+      assert_equal [unit.id, replacement.id], event.metadata['equipment_item_ids']
+      assert_selector '#financial-history', text: /travel.*interpretation/im
+      take_screenshot('icc-service-bill-corrected', html: true, full: true)
+
+      bill.financial_document.attach(icc_blob)
+      ::Icanconnect::FilingWriter.new(actor: @admin).mark!(selections: [filing_selection(bill)], period: 'Test period', external_reference: 'ICC-BILL')
+      refresh
+      select 'Travel', from: 'Category'
+      assert_selector '#correction_reason[required]'
+      assert_selector '#correction_reference[required]'
+      fill_in 'Correction reason', with: 'Invoice identifies a travel expense.'
+      fill_in 'Claim or support ticket reference', with: 'ICC-BILL-CORRECTION'
+      click_button 'Save correction'
+      assert_text 'Financial evidence saved.'
+      assert_predicate bill.reload, :icc_claimed?
+      assert_equal 'travel', bill.category
+      correction = Event.find_by!(auditable: bill, action: 'icc_filed_cost_corrected')
+      assert_equal 'ICC-BILL-CORRECTION', correction.metadata['external_filing_reference']
+      take_screenshot('icc-filed-service-bill-corrected', html: true, full: true)
     end
 
     test 'unfiled sibling receipt can be recorded while shared invoice price changes need a correction' do
@@ -269,7 +309,7 @@ module Admin
       take_screenshot('icc-shared-invoice-cost-correction-needed', html: true, full: true)
 
       fill_in 'Correction reason', with: 'Supplier corrected the device price'
-      fill_in 'External correction reference', with: 'ICC-SIBLING-CORRECTION'
+      fill_in 'Claim or support ticket reference', with: 'ICC-SIBLING-CORRECTION'
       click_button 'Save costs and documents'
       assert_text 'Financial evidence saved.'
       assert_equal 51, sibling.reload.unit_cost
@@ -283,22 +323,43 @@ module Admin
     test 'a pending MAT voucher and iCanConnect purchase work on the same approved application' do
       FeatureFlag.enable!(:vouchers_enabled)
       application = create(:application, :completed, :with_id_proof, :with_residency_proof, :with_disability_certification,
-                           user: create(:constituent, hearing_disability: true, vision_disability: true), program_disability_groups: ['deafblind'],
+                           user: create(:constituent, last_name: 'IncomeFollowUpBrowser', hearing_disability: true, vision_disability: true),
+                           program_disability_groups: ['deafblind'],
                            application_date: Date.current, income_proof_status: :not_reviewed)
-      visit admin_applications_path(view: 'all', search: application.constituent_full_name)
-      assert_no_text 'Updated income proof ready for review'
-      visit admin_application_path(application, anchor: 'attachments-section')
+      vouchers = { view: 'pipeline', group: 'voucher', q: application.user.last_name }
+      follow_up = admin_applications_path(**vouchers, stage: ::Icanconnect::IncomeFollowUp::STAGE)
+      visit admin_applications_path(**vouchers)
+      within '#icanconnect-income-follow-up-card' do
+        assert_text '1 to contact · 0 waiting for proof'
+        click_link 'iCanConnect income follow-up'
+      end
+      assert_selector '#icanconnect-income-follow-up-title', text: 'iCanConnect income follow-up (1)'
+      within "tr#application_#{application.id}" do
+        assert_text 'Needs voucher'
+        assert_text 'To contact'
+      end
+      take_screenshot('voucher-icc-income-follow-up', html: true, full: true)
+      click_link 'Request income proof'
+      assert_current_path(admin_application_path(application)) { |url| url.fragment == 'income-proof' }
       within '#proof_income_request_chooser' do
         click_button 'Send Secure Income Upload Link'
       end
       assert_selector '[data-testid="income-proof-secure-request-forms-panel"]', text: 'Email'
       request = application.secure_request_forms.find_by!(kind: :income_proof_resubmission)
+      visit follow_up
+      assert_selector '#icanconnect-income-follow-up-card', text: '0 to contact · 1 waiting for proof'
+      assert_selector "tr#application_#{application.id}", text: /Waiting for proof.*Requested/m
+      assert_link 'View income proof request', href: admin_application_path(application, anchor: 'income-proof')
+      take_screenshot('voucher-icc-waiting-for-income-proof', html: true, full: true)
+
       document = scanned_upload(fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf'),
                                 secure_form: request, slot: 'income_proof')
       result = Applications::SubmitProofResubmission.new(application: application, secure_request_form: request, file: document.signed_id).call
       assert result.success?, result.message
       assert_not application.reload.income_proof_required?
       assert_difference(-> { application.vouchers.count }, 1) { IssueInitialVoucherJob.perform_now(application.id, @admin.id) }
+      visit follow_up
+      assert_text 'No applications need iCanConnect income follow-up.'
       visit admin_applications_path(view: 'review', filter: 'proofs_needing_review')
       assert_text application.constituent_full_name
       assert_text 'Updated income proof ready for review'
@@ -326,7 +387,13 @@ module Admin
       take_screenshot('voucher-icc-bid-review', html: true, full: true)
       click_button 'Reserve selected products under this bid'
       assert_text 'Bid reserved.'
-      click_link 'Enter PO details for this bid'
+      visit admin_applications_path(**vouchers)
+      within "tr#application_#{application.id}" do
+        assert_text 'Voucher issued'
+        assert_link 'iCanConnect · Enter PO details'
+      end
+      take_screenshot('voucher-icc-next-equipment-action', html: true, full: true)
+      click_link 'iCanConnect · Enter PO details'
       fill_in 'New PO number', with: 'ICC-AND-VOUCHER-PO'
       click_button 'Save PO details'
       assert_text 'Award and unsent PO recorded.'

@@ -51,7 +51,8 @@ module Icanconnect
         after = financial_audit_state(record)
         if before != after
           AuditEventService.log(action: 'icc_financial_evidence_updated', actor: @actor, auditable: record,
-                                metadata: audit_context(record).merge(changed_fields: changed_fields(record, before, after), before: before, after: after))
+                                metadata: audit_context(record, previous_equipment_item_id: before['equipment_item_id'])
+                                          .merge(changed_fields: changed_fields(record, before, after), before: before, after: after))
         end
       end
       record
@@ -74,8 +75,9 @@ module Icanconnect
         save_financial_attributes!(record, attributes)
         after = financial_audit_state(record)
         AuditEventService.log(action: 'icc_filed_cost_corrected', actor: @actor, auditable: record,
-                              metadata: audit_context(record).merge(correction_reason: reason, external_filing_reference: external_reference,
-                                                                    changed_fields: changed_fields(record, before, after), before: before, after: after))
+                              metadata: audit_context(record, previous_equipment_item_id: before['equipment_item_id'])
+                                        .merge(correction_reason: reason, external_filing_reference: external_reference,
+                                               changed_fields: changed_fields(record, before, after), before: before, after: after))
       end
       record
     ensure
@@ -84,7 +86,7 @@ module Icanconnect
 
     private
 
-    def audit_context(record)
+    def audit_context(record, previous_equipment_item_id: nil)
       context = { operation_id: SecureRandom.uuid, application_ids: [record.try(:application_id)].compact }
       case record
       when EquipmentItem
@@ -96,7 +98,8 @@ module Icanconnect
         units = record.equipment_items.pluck(:id, :purchase_order_id)
         context.merge!(equipment_item_ids: units.map(&:first), purchase_order_ids: units.map(&:last).compact.uniq)
       when ApplicationServiceExpense
-        context.merge!(equipment_item_ids: [record.equipment_item_id], purchase_order_ids: [record.equipment_item.purchase_order_id].compact)
+        ids = [previous_equipment_item_id, record.equipment_item_id].compact.uniq
+        context.merge!(equipment_item_ids: ids, purchase_order_ids: EquipmentItem.where(id: ids).distinct.pluck(:purchase_order_id).compact)
       end
       context
     end

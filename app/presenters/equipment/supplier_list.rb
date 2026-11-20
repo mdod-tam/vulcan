@@ -19,20 +19,14 @@ module Equipment
     end
 
     def headings
-      prefix = purchase_order ? SHIP_TO_HEADINGS : SHIP_TO_HEADINGS + ['Disability setup']
-      prefix + [stock_supplier? ? 'Program receipt' : 'Shipment']
+      purchase_order ? SHIP_TO_HEADINGS : SHIP_TO_HEADINGS + ['Disability setup', 'Shipment']
     end
 
     def table_values(row)
       values = ship_to_values(row)
-      values << row.setup unless purchase_order
-      values << completion_label(row)
-    end
+      return values if purchase_order
 
-    def completion_label(row)
-      return row.completed ? 'Received into program stock' : 'Awaiting receipt' if stock_supplier?
-
-      row.completed ? 'Already shipped' : 'Pending'
+      values + [row.setup, row.completed ? 'Already shipped' : 'Pending']
     end
 
     def references
@@ -42,11 +36,12 @@ module Equipment
     end
 
     def summary
-      prefix = purchase_order ? "PO #{purchase_order.number} · Bids #{references.presence || 'None'}" : 'Internal dispatch'
+      bids = references.presence
+      prefix = purchase_order ? ("Bids #{bids}" if bids) : 'Internal dispatch'
       applications = items.filter_map(&:application_id).uniq.size
       destinations = rows.map(&:address).uniq.size
-      "#{prefix} · #{items.size} #{'item'.pluralize(items.size)} · #{applications} #{'application'.pluralize(applications)} · " \
-        "#{destinations} #{'shipping address'.pluralize(destinations)}"
+      [prefix, "#{items.size} #{'item'.pluralize(items.size)}", "#{applications} #{'application'.pluralize(applications)}",
+       "#{destinations} #{'shipping address'.pluralize(destinations)}"].compact.join(' · ')
     end
 
     def plain_text
@@ -82,7 +77,7 @@ module Equipment
       recipient = stock ? 'Program stock' : item.application.user.full_name
       setup = item.disability_setup_group unless purchase_order
       address = address_for(stock ? purchase_order : item)
-      completed = stock ? item.stock_received_on.present? : item.shipped_at.present?
+      completed = item.shipped_at.present? unless purchase_order
       [item.product_id, stock ? nil : item.application.user_id, recipient, setup, address, completed]
     end
 

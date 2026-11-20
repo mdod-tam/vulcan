@@ -224,7 +224,8 @@ module Equipment
     def clear_allocation!(item)
       item.allocation_mutation = true
       item.update!(EquipmentShipping::FIELDS.index_with(nil).merge(application: nil, disability_setup_group: nil, stock_allocated_at: nil,
-                                                                   allocation_equipment_need: nil, source_evaluation: nil, setup_confirmed_at: nil))
+                                                                   allocation_equipment_need: nil, source_evaluation: nil, setup_confirmed_at: nil,
+                                                                   delivered_on: nil, installed_on: nil))
     end
   end
 end

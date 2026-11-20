@@ -7,6 +7,7 @@ module Admin
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       FeatureFlag.disable!(:vouchers_enabled)
       ensure_system_audit_actor!
       @admin = create(:admin)
@@ -396,8 +397,8 @@ module Admin
       within("#equipment-item-#{item.id}") { find('summary', text: 'View tracking and actions', exact_text: true).click }
       within('#purchase-order-device-records') do
         assert_link "Application ##{application.id}"
-        assert_text 'Serial number'
-        assert_text 'IMEI'
+        assert_no_selector 'dt', exact_text: 'Serial number'
+        assert_no_selector 'dt', exact_text: 'IMEI'
         assert_text 'Funding'
         assert_no_text '101 Confirmed Street'
         assert_no_text 'Apartment 7'
@@ -740,7 +741,9 @@ module Admin
       assert_text 'Setup ordered for stock: Not recorded'
       assert_text 'Setup for this recipient: Deaf'
       assert_text 'Internal dispatch list'
-      assert_text 'Identifier not recorded'
+      assert_field 'Serial number', with: ''
+      assert_field 'IMEI', with: ''
+      assert_no_text 'Identifier not recorded'
       take_screenshot('stock-packing-setup-and-identifier', html: true, full: true)
       fill_in "packing-#{item.id}-serial_number", with: 'PACKED-PHYSICAL-UNIT'
       fill_in "packing-#{item.id}-imei", with: '123'

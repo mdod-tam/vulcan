@@ -122,6 +122,7 @@ def clear_existing_data
              .update_all(equipment_source_evaluation_id: nil)
   TrainingSessionEquipmentItem.in_batches(of: 100).delete_all
   ApplicationServiceExpense.in_batches(of: 100).delete_all
+  PurchaseOrderShippingRequest.in_batches(of: 100).delete_all
   # This destructive demo reset has a cycle between acquisition bid lines and physical stock.
   # Keep constraint suspension within that fixed equipment set; safe bootstrap never clears records.
   ActiveRecord::Base.connection.disable_referential_integrity do
@@ -132,7 +133,7 @@ def clear_existing_data
   end
 
   [ContactChangeRequest, RegistrationVerification, PrintQueueItem, SecureRequestForm, GuardianRelationship,
-   ApplicationNote, TrainingSession, MileageRate, VoucherTransactionProduct, VoucherTransaction, Voucher, W9Review, Invoice,
+   ApplicationNote, TrainingSession, MileageRate, Icanconnect::Setting, VoucherTransactionProduct, VoucherTransaction, Voucher, W9Review, Invoice,
    ApplicationStatusChange, Evaluation, ProofReview, Notification, RoleCapability, PolicyChange, EmailTemplate,
    ProductResource, Product, Event, Policy, Application, User].each do |model|
     seed_puts "  Clearing #{model.name} records..."
@@ -397,6 +398,7 @@ else
   if Rails.env.development?
     seed_puts 'Creating varied development applications...'
     require_relative 'seeds/development_applications'
+    Icanconnect::Setting.create!(id: Icanconnect::Setting::ID, starts_on: 2.months.ago.to_date)
     Seeds::DevelopmentApplications.new(admin: User.find_by_email('admin@example.com')).call
   end
 

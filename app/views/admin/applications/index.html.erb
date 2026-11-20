@@ -117,7 +117,9 @@
       </div>
 
         <%= render 'admin/shared/filter_failure' if @filter_failed %>
-        <% if @applications_view == 'pipeline' %>
+        <% if @pipeline_stage == Icanconnect::IncomeFollowUp::STAGE %>
+          <%= render 'icanconnect_income_follow_up', summaries: pipeline_summaries %>
+        <% elsif @applications_view == 'pipeline' %>
           <%= render 'approved_pipeline', summaries: pipeline_summaries, group_labels: pipeline_group_labels %>
         <% else %>
         <div class="relative overflow-x-auto" role="region" aria-label="Applications" tabindex="0">

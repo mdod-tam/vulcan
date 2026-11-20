@@ -2,6 +2,12 @@
 
 module Admin
   module IcanconnectHelper
+    def icc_service_funding_options(record)
+      options = [%w[MAT mat]]
+      options << %w[iCanConnect icanconnect] if record.funding_source == 'icanconnect' || ::Icanconnect::Setting.active?(on: record.service_source_on)
+      options
+    end
+
     def icc_cost_label(record)
       case record
       when EquipmentItem then "Device ##{record.id}"
@@ -15,7 +21,7 @@ module Admin
       {
         unit_cost: 'Price paid for this device', delivered_on: 'Date received by the recipient', installed_on: 'Installation date',
         funding_source: 'Funding', vendor_name: 'Supplier or provider name', invoice_on: 'Invoice date',
-        vendor_invoice_number: 'Invoice or timesheet reference', other_cost: 'Other charges',
+        vendor_invoice_number: 'Invoice or timesheet reference', equipment_item_id: 'Device', other_cost: 'Other charges',
         other_cost_category: 'What the other charges cover', mileage: 'Mileage (miles)', mileage_rate: 'Cost per mile ($)'
       }.fetch(field, field.to_s.humanize)
     end

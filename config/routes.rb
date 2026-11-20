@@ -33,6 +33,7 @@ Rails.application.routes.draw do
     resource :"secure_#{kind}_form_resend", only: %i[new create], controller: "secure_#{kind}_form_resends"
     get "secure_#{kind}_form_resend/sent", to: "secure_#{kind}_form_resends#sent", as: :"secure_#{kind}_form_resend_sent"
   end
+  resource :secure_vendor_order, only: %i[show update], format: false, controller: 'vendor_portal/equipment_orders'
 
   # Welcome/Onboarding
   get 'welcome', to: 'welcome#index', as: :welcome
@@ -108,6 +109,7 @@ Rails.application.routes.draw do
 
   namespace :admin do
     namespace :icanconnect do
+      resource :settings, only: :update
       resource :filing_prep, only: %i[show update]
       resources :financial_records, only: %i[new edit update create], constraints: { id: %r{[^/]+} }
     end
@@ -225,6 +227,7 @@ Rails.application.routes.draw do
     resources :equipment_items, only: %i[edit update]
     resources :purchase_orders, only: %i[index show new create] do
       patch :send_order, on: :member
+      resource :shipping_request, only: %i[create destroy], controller: 'purchase_order_shipping_requests'
       resource :cost, only: :update, controller: 'purchase_order_costs'
       resource :stock_receipt, only: %i[new create]
       resource :correction, only: %i[edit update], controller: 'purchase_order_corrections'

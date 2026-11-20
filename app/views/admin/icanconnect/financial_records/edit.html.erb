@@ -27,18 +27,19 @@
   <% end %>
   <% if @record.icc_claimed? %>
     <p id="financial-correction-help" class="border border-warning-300 bg-warning-50 p-4">
-      Filed for <%= @record.icc_claim_period %>, reference <%= @record.icc_external_filing_reference %>.
-      To change a filed cost, explain the correction and enter its reference from the external filing system.
+      Filed for <%= @record.icc_claim_period %> (reference <%= @record.icc_external_filing_reference %>).
+      To make a change, enter a reason and a claim or support ticket reference.
     </p>
   <% end %>
   <% if !@record.icc_claimed? && @record.icc_financial_evidence_locked? %>
     <p id="financial-correction-help" class="border border-warning-300 bg-warning-50 p-4">
       <% if @correction_required %>
-        This invoice is already part of a filing. Explain any change and enter its correction reference.
+        This invoice is already part of a filing. Explain what changed and give the claim or support ticket reference.
       <% elsif @record.icc_receipt_evidence_locked? %>
-        This PO’s charges have been filed using its device receipt dates. You can record installation normally. To change the receipt date or price, enter the correction reason and external reference.
+        This PO’s charges have been filed using its device receipt dates. You can record installation normally.
+        To change the receipt date or price, explain what changed and give the claim or support ticket reference.
       <% else %>
-        Receipt and installation dates can be recorded normally. To change the price, enter the correction reason and external reference.
+        Receipt and installation dates can be recorded normally. To change the price, explain what changed and give the claim or support ticket reference.
       <% end %>
     </p>
   <% end %>
@@ -48,7 +49,7 @@
       <div>
         <%= label_tag "finance_#{field}", icc_financial_field_label(field), class: 'form-label' %>
         <% if field == :funding_source %>
-          <%= select_tag 'finance[funding_source]', options_for_select([%w[MAT mat], %w[iCanConnect icanconnect]], @record.funding_source),
+          <%= select_tag 'finance[funding_source]', options_for_select(icc_service_funding_options(@record), @record.funding_source),
                          class: 'form-input', aria: { describedby: 'service-funding-help' } %>
           <p id="service-funding-help" class="text-sm text-gray-600">Choose who pays for this service. iCanConnect services appear in filing preparation.</p>
         <% elsif field == :unit_cost %>
@@ -62,7 +63,15 @@
             Mileage cost is miles × this rate, added to the hourly service charge.
             <%= link_to 'Manage mileage rates', admin_policies_path(anchor: 'mileage-rates'), class: 'text-primary-700 underline' %>
           </p>
-        <% elsif field.to_s.end_with?('_on') %>
+        <% elsif field == :category %>
+          <%= select_tag 'finance[category]',
+                         options_for_select(ApplicationServiceExpense::CATEGORIES.map { |category| [category.humanize, category] }, @record.category),
+                         required: true, class: 'form-input' %>
+        <% elsif field == :equipment_item_id %>
+          <%= select_tag 'finance[equipment_item_id]',
+                         options_for_select(@equipment.map { |item| ["##{item.id} — #{item.product.name}", item.id] }, @record.equipment_item_id),
+                         required: true, class: 'form-input' %>
+        <% elsif field == :service_date || field.to_s.end_with?('_on') %>
           <%= text_field_tag "finance[#{field}]", typed_date_input_value(@record, field), typed_date_field_options(autocomplete: 'off', class: 'form-input') %>
         <% elsif %i[vendor_name other_cost_category vendor_invoice_number].include?(field) %>
           <%= text_field_tag "finance[#{field}]", @record.public_send(field), autocomplete: 'off', class: 'form-input' %>
@@ -112,10 +121,13 @@
                                              aria: { describedby: 'financial-correction-help' }, class: 'form-input' %>
     </div>
       <div>
-      <%= form.label :correction_reference, 'External correction reference', class: 'form-label' %>
+      <%= form.label :correction_reference, 'Claim or support ticket reference', class: 'form-label' %>
       <%= form.text_field :correction_reference,
                           value: params[:correction_reference], required: @correction_required,
-                          aria: { describedby: 'financial-correction-help' }, class: 'form-input' %>
+                          aria: { describedby: 'financial-correction-help financial-correction-reference-help' }, class: 'form-input' %>
+      <p id="financial-correction-reference-help" class="form-hint">
+        Enter the claim title and resubmission date, or the support ticket number for the correction.
+      </p>
     </div>
     <% end %>
     <%= form.submit @correction_required ? 'Save correction' : 'Save costs and documents', class: 'btn btn-primary' %>

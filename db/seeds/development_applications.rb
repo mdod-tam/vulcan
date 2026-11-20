@@ -107,8 +107,9 @@ module Seeds
           end
           advance_application(application, profile.fetch(:stage), started_at)
           if application.equipment_fulfillment?
+            icc = profile[:icc] && Icanconnect::Setting.active?(on: started_at)
             DevelopmentEquipmentWorkflows.new(admin: @admin, now: @now).call(
-              application, profile.fetch(:stage), started_at: started_at, icc: profile.fetch(:icc, false)
+              application, profile.fetch(:stage), started_at: started_at, icc: icc
             )
           end
           application.reload

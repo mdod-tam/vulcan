@@ -52,10 +52,7 @@ module ConstituentPortal
     def create
       @form = build_application_form
 
-      unless @form.valid?
-        show_missing_provider_info_flash(@form)
-        return render_form_errors(@form)
-      end
+      return render_application_retry(errors: @form.errors) unless valid_application_form?
 
       result = Applications::ApplicationCreator.call(@form)
 
@@ -82,10 +79,7 @@ module ConstituentPortal
         params: params
       )
 
-      unless @form.valid?
-        show_missing_provider_info_flash(@form)
-        return render_form_errors(@form, @application)
-      end
+      return render_application_retry(errors: @form.errors) unless valid_application_form?
 
       result = Applications::ApplicationCreator.call(@form)
 
@@ -177,6 +171,13 @@ module ConstituentPortal
         current_user: current_user,
         params: params
       )
+    end
+
+    def valid_application_form?
+      return true if @form.valid?
+
+      show_missing_provider_info_flash(@form)
+      false
     end
 
     def handle_creation_success(result)
@@ -288,29 +289,34 @@ module ConstituentPortal
     end
 
     def handle_creation_failure(result)
-      @application = result.application || Application.new(filtered_application_params)
-      # Early refusals return an unpopulated application or a resumed draft with stored values.
-      # Restore submitted values in memory for the form without saving them.
-      @application.assign_attributes(filtered_application_params)
-      restore_applicant_context_from_params
-      setup_address_for_form
-      restore_certifying_professional_from_params
-      apply_failure_messages(result)
-
-      render_form_errors(nil, @application)
+      render_application_retry(application: result.application, result:)
     end
 
     def handle_update_failure(result)
-      @application = result.application
-      # An early refusal can return stored draft values. Restore the latest edits in memory without saving them.
-      @application.assign_attributes(filtered_application_params)
-      apply_failure_messages(result)
+      render_application_retry(application: result.application, result:)
+    end
 
-      # The address before_action runs on GET only. Rebuild the form dependencies before the update refusal renders.
-      setup_address_for_form
-      restore_certifying_professional_from_params
-      prepare_certifying_professional_for_edit
-      render :edit, formats: [:html], status: :unprocessable_content
+    def render_application_retry(application: @application, errors: nil, result: nil)
+      @application = application || Application.new
+      @application.assign_attributes(filtered_application_params)
+      @application.errors.merge!(errors) if errors
+      restoring_new_form = action_name == 'create'
+      restore_applicant_context_from_params if restoring_new_form
+
+      initialize_address
+      build_certifying_professional_for_form
+      apply_failure_messages(result) if result
+      @retained_proofs = ProofManageable::REVIEW_PROOF_TYPES.index_with { |type| retained_proof_for_retry("#{type}_proof") }
+      render restoring_new_form ? :new : :edit, formats: [:html], status: :unprocessable_content
+    end
+
+    def retained_proof_for_retry(field)
+      upload = UploadedDocument.submitted(params[:application], field)
+      return unless upload.is_a?(String)
+
+      UploadedDocument.resolve!(upload, record: @application, name: field, scan_owner: current_user)
+    rescue UploadedDocument::Refused
+      nil
     end
 
     # A submitted guardian-address choice takes precedence so a refusal preserves the selected address.
@@ -419,10 +425,6 @@ module ConstituentPortal
 
     def determine_update_notice(original_status, application)
       determine_success_message(application, is_submission: application.status != original_status && application.status_in_progress?)
-    end
-
-    def prepare_certifying_professional_for_edit
-      @certifying_professional = certifying_professional_from_application(@application)
     end
 
     def render_autosave_response(result)

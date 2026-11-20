@@ -11,6 +11,13 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     %w[mileage mileage_rate hourly_rate billable_hours].each { |field| assert_equal '[FILTERED]', filtered['finance'][field] }
   end
 
+  test 'purchase order amounts are filtered inside finance parameters' do
+    amounts = %w[shipping_cost tax_cost other_cost invoice_total].index_with('12.34')
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter('finance' => amounts)
+
+    assert_equal amounts.transform_values { '[FILTERED]' }, filtered.fetch('finance')
+  end
+
   test 'beneficiary program and setup classifications are filtered through nested hashes and arrays' do
     values = { 'program_disability_groups' => ['deafblind'], 'disability_setup_group' => 'deaf', 'supplier_setup_group' => 'mobility' }
     filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(

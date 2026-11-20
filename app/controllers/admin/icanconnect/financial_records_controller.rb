@@ -11,7 +11,7 @@ module Admin
         'PurchaseOrder' => %i[vendor_name shipping_cost tax_cost other_cost other_cost_category invoice_total invoice_on vendor_invoice_number],
         'Evaluation' => %i[funding_source hourly_rate billable_hours mileage mileage_rate vendor_invoice_number],
         'TrainingSession' => %i[funding_source hourly_rate billable_hours mileage mileage_rate vendor_invoice_number],
-        'ApplicationServiceExpense' => %i[vendor_name amount vendor_invoice_number]
+        'ApplicationServiceExpense' => %i[category equipment_item_id service_date vendor_name amount vendor_invoice_number]
       }.freeze
 
       def new
@@ -84,6 +84,10 @@ module Admin
         load_financial_applications
         load_mileage_rate
         load_history
+        if @record.is_a?(ApplicationServiceExpense)
+          units = @record.application.equipment_items.where(funding_source: 'icanconnect')
+          @equipment = units.active.or(units.where(id: @record.equipment_item_id)).includes(:product).order(:id)
+        end
         return unless @record.is_a?(TrainingSession)
 
         current_ids = @record.equipment_item_ids

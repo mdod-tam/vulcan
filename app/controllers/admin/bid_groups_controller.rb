@@ -87,12 +87,14 @@ module Admin
       @items = EquipmentItem.includes(:product, application: :user).where(id: @item_rows.pluck(:id)).index_by(&:id)
       @voucher_requests = (@needs.values + @items.values).any? { |request| request.application&.voucher_fulfillment? }
       @funding_source ||= 'mat'
+      @icanconnect_active = @purpose != 'program_stock' && ::Icanconnect::Setting.active?
       @open_options = open_bid_options
       @stock_products = Product.where(id: @stock_rows.map { |row| row['product_id'] || row[:product_id] }).index_by { |product| product.id.to_s }
     end
 
     def open_bid_options
       groups = BidGroup.open.where(purpose: @purpose).order(:number)
+      groups = groups.where(funding_source: 'mat') unless @icanconnect_active
       groups = groups.where(funding_source: 'icanconnect') if @voucher_requests
       options = groups.map do |group|
         funding = group.funding_source == 'icanconnect' ? 'iCanConnect' : 'MAT'

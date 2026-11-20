@@ -7,6 +7,7 @@ module Equipment
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       FeatureFlag.disable!(:vouchers_enabled)
       @admin = create(:admin)
       @product = create(:product)

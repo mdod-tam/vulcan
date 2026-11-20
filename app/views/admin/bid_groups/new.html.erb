@@ -12,11 +12,19 @@
 <% elsif @voucher_requests %>
 <%= form.hidden_field :funding_source, value: 'icanconnect' %>
 <p>Funding source: iCanConnect. MAT equipment for these applications is handled through vouchers.</p>
-<% else %>
+<% unless @icanconnect_active %>
+  <p class="text-sm text-gray-700">
+    iCanConnect bids open on the start date in <%= link_to 'System Policies', admin_policies_path(anchor: 'icanconnect-participation'), class: 'underline' %>.
+  </p>
+<% end %>
+<% elsif @icanconnect_active %>
 <%= form.label :funding_source, 'Funding source', class: 'form-label' %>
 <%= form.select :funding_source, options_for_select([%w[MAT mat], %w[iCanConnect icanconnect]], @funding_source), {},
                 class: 'form-input', aria: { describedby: 'bid-funding-help' } %>
 <p id="bid-funding-help" class="text-sm text-gray-600">MAT and iCanConnect products go in separate bids. When adding to an open bid, choose its funding source.</p>
+<% else %>
+<%= form.hidden_field :funding_source, value: 'mat' %>
+<p>Funding source: MAT.</p>
 <% end %>
 <%= form.label :number, 'Bid number', class: 'form-label' %>
 <%= form.text_field :number, value: @number, autocomplete: 'off', class: 'form-input' %>
@@ -57,6 +65,6 @@ Request no longer available #<%= row[:id] %> — remove and refresh
 <%= hidden_field_tag "bid_group[stock][][#{key}]", value, id: nil %>
 <% end %>
 <% end %>
-<%= form.submit 'Reserve selected products under this bid', class: 'btn btn-primary' %>
+<%= form.submit 'Reserve selected products under this bid', class: 'btn btn-primary', disabled: @voucher_requests && !@icanconnect_active %>
 <% end %>
 </div>

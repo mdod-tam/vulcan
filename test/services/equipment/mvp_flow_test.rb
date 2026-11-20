@@ -7,6 +7,7 @@ module Equipment
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       FeatureFlag.disable!(:vouchers_enabled)
       @admin = create(:admin)
       @bidding = Bidding.new(actor: @admin)
@@ -14,6 +15,30 @@ module Equipment
       @receipt = StockReceipt.new(actor: @admin)
       @allocation = StockAllocation.new(actor: @admin)
       @product = create(:product)
+    end
+
+    test 'iCanConnect launch controls bid reservations and awards while preserving the reviewed requests' do
+      application = approved_deafblind_application
+      application.update!(shipping)
+      need = create(:equipment_need, application:, disability_setup_group: 'deafblind')
+      start_icanconnect!(on: Date.tomorrow)
+      assert_no_difference('BidGroup.count') do
+        error = assert_raises(Conflict) do
+          @bidding.create!(number: 'ICC-SCHEDULED', funding_source: 'icanconnect', needs: [need_row(need, 1)])
+        end
+        assert_includes error.message, 'start date in System Policies'
+      end
+      assert_equal 1, need.reload.available_quantity
+
+      start_icanconnect!(on: Date.current)
+      bid = @bidding.create!(number: 'ICC-ACTIVE', funding_source: 'icanconnect', needs: [need_row(need, 1)])
+      start_icanconnect!(on: nil)
+      assert_no_difference('PurchaseOrder.count') do
+        error = assert_raises(Conflict) { award(bid, number: 'ICC-PAUSED') }
+        assert_includes error.message, 'start date in System Policies'
+      end
+      assert bid.reload.open?
+      assert_equal 0, need.reload.available_quantity
     end
 
     test 'a mixed model bid reserves once then records an unsent PO before actual sending and shipment' do
@@ -220,10 +245,15 @@ module Equipment
       assert_equal 2, EquipmentItem.reserved_stock.count
       assert_equal 3, need.application.equipment_items.active.count + need.remaining_quantity
       assert_equal [evaluation.id], selected.map(&:source_evaluation_id).uniq
-      @allocation.release!(item: selected.first, expected_version: selected.first.lock_version, reason: 'Request remains wanted')
+      # Reproduce dates entered before the shipment requirement was enforced.
+      EquipmentItem.where(id: selected.first.id).update_all(delivered_on: Date.current, installed_on: Date.current)
+      @allocation.release!(item: selected.first.reload, expected_version: selected.first.lock_version, reason: 'Request remains wanted')
       assert_equal 2, need.reload.remaining_quantity
       assert_nil selected.first.reload.application_id
       assert_nil selected.first.source_evaluation_id
+      assert_nil selected.first.delivered_on
+      assert_nil selected.first.installed_on
+      assert_equal older.first.stock_received_on, selected.first.stock_received_on
       assert_raises(Conflict) { @allocation.release!(item: selected.first, expected_version: selected.first.lock_version, reason: 'Repeat') }
       assert_equal 2, need.reload.remaining_quantity
     end
@@ -253,7 +283,8 @@ module Equipment
       assert_equal evaluation.id, allocated.source_evaluation_id
       boundary = allocated.stock_allocated_at
       replacement = stock.find { |item| item.id != allocated.id }.reload
-      @allocation.swap!(item: allocated, replacement_id: replacement.id, expected_version: allocated.lock_version,
+      EquipmentItem.where(id: allocated.id).update_all(delivered_on: Date.current, installed_on: Date.current)
+      @allocation.swap!(item: allocated.reload, replacement_id: replacement.id, expected_version: allocated.lock_version,
                         replacement_version: replacement.lock_version, reason: 'Packing another verified box')
       assert_equal replacement.id, detached.reload.replaced_by_equipment_item_id
       assert_equal boundary, replacement.reload.stock_allocated_at
@@ -262,6 +293,10 @@ module Equipment
       assert_equal 'PHYSICAL-B', stock.last.reload.serial_number
       assert_nil allocated.reload.application_id
       assert_nil allocated.source_evaluation_id
+      assert_nil allocated.delivered_on
+      assert_nil allocated.installed_on
+      assert_nil replacement.delivered_on
+      assert_nil replacement.installed_on
       @allocation.release!(item: replacement, expected_version: replacement.lock_version, reason: 'Restore direct fulfillment')
       assert_nil detached.reload.withdrawn_at
       assert_nil detached.replaced_by_equipment_item_id
@@ -408,25 +443,21 @@ module Equipment
       end
     end
 
-    test 'detaching an unclaimed device cannot discard filed PO or shared invoice evidence' do
-      %i[purchase_order shared_unit].each do |filed_owner|
-        order, delivered = icc_order_with_unit
-        pending = create(:equipment_item, application: delivered.application, product: delivered.product, purchase_order: order,
-                                          funding_source: 'icanconnect', disability_setup_group: 'deafblind', unit_cost: 50, delivered_on: Date.current)
-        order.update!(invoice_total: 215)
-        record = filed_owner == :purchase_order ? order : delivered
-        ::Icanconnect::FilingWriter.new(actor: @admin).mark!(selections: [filing_selection(record)], period: 'Test', external_reference: "FILED-#{filed_owner}")
-        assert_not pending.reload.icc_claimed?
-        assert_no_difference('Event.count') do
-          error = assert_raises(Conflict) do
-            Correction.new(actor: @admin).update_item!(item: pending, attributes: {}, expected_version: pending.lock_version,
-                                                       reason: 'Try to remove a filed invoice member', operation: 'detach')
-          end
-          assert_includes error.message, 'shared invoice evidence'
+    test 'detaching an unshipped device cannot discard shared invoice evidence' do
+      order, delivered = icc_order_with_unit
+      pending = create(:equipment_item, application: delivered.application, product: delivered.product, purchase_order: order,
+                                        funding_source: 'icanconnect', disability_setup_group: 'deafblind', unit_cost: 50)
+      order.update!(invoice_total: 215)
+      ::Icanconnect::FilingWriter.new(actor: @admin).mark!(selections: [filing_selection(delivered)], period: 'Test', external_reference: 'FILED-UNIT')
+      assert_no_difference('Event.count') do
+        error = assert_raises(Conflict) do
+          Correction.new(actor: @admin).update_item!(item: pending, attributes: {}, expected_version: pending.lock_version,
+                                                     reason: 'Try to remove a filed invoice member', operation: 'detach')
         end
-        assert_equal order.id, pending.reload.purchase_order_id
-        assert_equal 2, order.reload.equipment_items.count
+        assert_includes error.message, 'shared invoice evidence'
       end
+      assert_equal order.id, pending.reload.purchase_order_id
+      assert_equal 2, order.reload.equipment_items.count
     end
 
     private

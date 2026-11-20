@@ -7,6 +7,7 @@ module Admin
     private
 
     def load_policies
+      @icanconnect_setting = ::Icanconnect::Setting.find_or_initialize_by(id: ::Icanconnect::Setting::ID)
       @policies = Policy.order(:key).load
       @policies_by_key = @policies.index_by(&:key)
       @additional_person_policy = @policies_by_key['fpl_additional_person']

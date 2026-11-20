@@ -8,7 +8,7 @@
   <%= form_with model: @record, url: admin_icanconnect_financial_records_path(application_id: @application.id), scope: :expense, class: 'space-y-4' do |form| %>
     <div>
       <%= form.label :category, class: 'form-label' %>
-      <%= form.select :category, %w[installation interpretation travel].map { |category| [category.humanize, category] }, {}, class: 'form-input' %>
+      <%= form.select :category, ApplicationServiceExpense::CATEGORIES.map { |category| [category.humanize, category] }, {}, class: 'form-input' %>
     </div>
     <div>
       <%= form.label :equipment_item_id, 'Device', class: 'form-label' %>

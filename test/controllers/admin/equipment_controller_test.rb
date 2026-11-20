@@ -7,6 +7,7 @@ module Admin
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       @admin = create(:admin)
       sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
       @product = create(:product, name: 'Exact phone')

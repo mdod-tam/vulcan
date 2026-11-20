@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module Admin
   class PoliciesTest < ApplicationSystemTestCase
+    include IcanconnectTestSupport
+
     def setup
       @admin = create(:admin)
 
@@ -16,6 +18,34 @@ module Admin
       system_test_sign_in(@admin, bypass_mfa_enrollment: true)
     end
 
+    test 'an admin can schedule or clear the iCanConnect start date from System Policies' do
+      start_icanconnect!(on: nil)
+      visit admin_policies_path
+      within '#icanconnect-participation' do
+        assert_field 'Start date', with: ''
+        assert_text 'Leave it blank to keep those actions off.'
+        fill_in 'Start date', with: '02/30/2026'
+        click_button 'Save start date'
+        assert_selector '[role="alert"]', text: 'Enter a valid date in MM/DD/YYYY format.'
+        assert_field 'Start date', with: '02/30/2026'
+        take_screenshot('icanconnect-start-date-invalid', html: true)
+        fill_in 'Start date', with: Date.tomorrow.strftime('%m/%d/%Y')
+        click_button 'Save start date'
+      end
+      assert_text 'iCanConnect start date saved.'
+      assert_equal Date.tomorrow, ::Icanconnect::Setting.sole.starts_on
+      assert_not ::Icanconnect::Setting.active?
+      find_by_id('icanconnect-participation').scroll_to(:center)
+      take_screenshot('icanconnect-start-date-scheduled', html: true)
+
+      within '#icanconnect-participation' do
+        fill_in 'Start date', with: ''
+        click_button 'Save start date'
+        assert_field 'Start date', with: ''
+      end
+      assert_nil ::Icanconnect::Setting.sole.starts_on
+    end
+
     test 'policy editing saves labeled values and links to related settings at desktop and narrow widths' do
       recovery_period = Policy.find_or_create_by!(key: 'account_recovery_rate_period') { |policy| policy.value = 1 }
       visit admin_policies_path
@@ -24,7 +54,7 @@ module Admin
       assert_selector 'h1', text: 'System Policies', count: 1
       assert_text 'Federal Poverty Level (FPL) Settings'
       fill_in 'Base FPL for 1 person', with: '16000'
-      fill_in 'Base FPL added for each person above eight', with: '6000'
+      fill_in 'Base FPL added for each person above 8', with: '6000'
       assert_selector "#policy_#{recovery_period.id}_unit", text: 'hours'
       assert_selector "#policy_#{recovery_period.id}_description", text: /staff help recovering security-key access/
       assert_equal "policy_#{recovery_period.id}_description policy_#{recovery_period.id}_unit",
@@ -36,7 +66,7 @@ module Admin
       assert_equal 6_000, Policy.find_by!(key: 'fpl_additional_person').value
       assert_equal @admin.id, Policy.find_by!(key: 'fpl_additional_person').policy_changes.order(:id).last.user_id
       assert_field 'Base FPL for 1 person', with: '16000'
-      assert_field 'Base FPL added for each person above eight', with: '6000'
+      assert_field 'Base FPL added for each person above 8', with: '6000'
       assert_equal 2, recovery_period.reload.value
       assert_field 'Account recovery time window', with: '2'
       take_screenshot('policies-desktop-saved-values', full: true, html: true)
@@ -88,7 +118,7 @@ module Admin
       end
       assert_text "Policy 'fpl_additional_person' created successfully."
       assert_no_selector '#missing-policy-fpl_additional_person-value'
-      fill_in 'Base FPL added for each person above eight', with: '6000'
+      fill_in 'Base FPL added for each person above 8', with: '6000'
       click_button 'Update Policies'
       assert_text 'Policies updated successfully.'
       click_link 'View Full Change History'
@@ -101,7 +131,7 @@ module Admin
       take_screenshot('policies-created-policy-change-history', full: true, html: true)
       click_link 'Back to Policies'
       assert_selector 'h1', text: 'System Policies', count: 1
-      assert_field 'Base FPL added for each person above eight', with: '6000'
+      assert_field 'Base FPL added for each person above 8', with: '6000'
     end
 
     test 'dated mileage rates retain invalid input and allow future changes and audited edits' do

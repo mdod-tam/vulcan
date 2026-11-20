@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class IcanconnectEligibilityTest < ActiveSupport::TestCase
+  include IcanconnectTestSupport
+
   setup do
     @admin = create(:admin)
     FeatureFlag.disable!(:vouchers_enabled)
@@ -69,11 +71,14 @@ class IcanconnectEligibilityTest < ActiveSupport::TestCase
   end
 
   test 'ICC eligibility removes the training count limit without a second approval state' do
+    start_icanconnect!(on: nil)
     Policy.stubs(:max_training_sessions).returns(1)
     trainer = create(:trainer)
     application = qualified_application(assigned_trainer: trainer)
     create(:training_session, :completed, application: application, trainer: trainer)
 
+    assert_not application.unlimited_training_sessions?
+    start_icanconnect!(on: Date.current)
     assert application.unlimited_training_sessions?
     assert_nil application.remaining_training_sessions
     assert_not application.training_session_quota_exhausted?

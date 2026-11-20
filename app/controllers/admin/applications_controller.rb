@@ -190,14 +190,34 @@ module Admin
       @pipeline = Applications::ApprovedPipeline.new(scoped.to_a)
       @pipeline_group = params[:group].to_s.to_sym
       @pipeline_group = @pipeline.groups.find { |_group, rows| rows.any? }&.first || :equipment unless @pipeline.groups.key?(@pipeline_group)
-      stages = Applications::ApprovedPipeline.stage_filters(@pipeline_group)
-      @pipeline_stage = stages.key?(params[:stage]) ? params[:stage] : 'all'
-      rows = @pipeline.groups.fetch(@pipeline_group)
-      rows = rows.select { |row| stages.fetch(@pipeline_stage).include?(row.stage) } unless @pipeline_stage == 'all'
-      rows = Applications::ApprovedPipeline.sort_rows(rows)
+      rows = filter_pipeline_rows(@pipeline.groups.fetch(@pipeline_group))
       @pipeline_matching_count = rows.length
       @pagy, @pipeline_rows = paginate_or_first_page(rows)
       preload_pipeline_display
+    end
+
+    def filter_pipeline_rows(rows)
+      requested_stage = params.permit(:stage)[:stage]
+      if @pipeline_group == :voucher && ::Icanconnect::Setting.active?
+        @income_follow_up = ::Icanconnect::IncomeFollowUp.requests_by_application(rows.map { |row| row.application.id })
+        if requested_stage == ::Icanconnect::IncomeFollowUp::STAGE
+          @pipeline_stage = requested_stage
+          return income_follow_up_rows(rows)
+        end
+      end
+
+      stages = Applications::ApprovedPipeline.stage_filters(@pipeline_group)
+      @pipeline_stage = requested_stage.presence_in(stages.keys) || 'all'
+      rows = rows.select { |row| stages.fetch(@pipeline_stage).include?(row.stage) } unless @pipeline_stage == 'all'
+      Applications::ApprovedPipeline.sort_rows(rows)
+    end
+
+    def income_follow_up_rows(rows)
+      rows.select { |row| @income_follow_up.key?(row.application.id) }.sort_by do |row|
+        requested_at = @income_follow_up[row.application.id]
+        since = requested_at || row.application.current_status_entered_at
+        [requested_at ? 1 : 0, since&.to_f || Float::INFINITY, row.application.id]
+      end
     end
 
     def preload_pipeline_display

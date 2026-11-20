@@ -81,6 +81,7 @@ module EmailDelivery
       'VendorNotificationsMailer#w9_expiring_soon' => [:vendor, :email_only, 'vendor_notifications_w9_expiring_soon'],
       'VendorNotificationsMailer#w9_rejected' => [:vendor, :email_only, 'vendor_notifications_w9_rejected', W9_REQUEST_OWNER],
       'VendorNotificationsMailer#w9_upload_requested' => [:vendor, :email_only, nil, W9_REQUEST_OWNER],
+      'VendorNotificationsMailer#equipment_order' => [:vendor, :email_only, nil, 'Equipment::VendorOrder'],
       'VoucherNotificationsMailer#voucher_assigned' => [:voucher, :preference, 'voucher_notifications_voucher_assigned'],
       'VoucherNotificationsMailer#voucher_expired' => [:voucher, :preference, 'voucher_notifications_voucher_expired'],
       'VoucherNotificationsMailer#voucher_expiring_soon' => [:voucher, :preference, 'voucher_notifications_voucher_expiring_soon'],

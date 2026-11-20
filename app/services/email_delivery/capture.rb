@@ -71,7 +71,7 @@ module EmailDelivery
     def lock_envelope(correlation)
       lock_key = Digest::SHA256.digest(correlation).unpack1('q>')
       bind = ActiveRecord::Relation::QueryAttribute.new('lock_key', lock_key, ActiveRecord::Type::Integer.new(limit: 8))
-      EmailDeliveryAttempt.connection.exec_query('SELECT pg_advisory_xact_lock($1)', 'Email envelope lock', [bind])
+      EmailDeliveryAttempt.connection.exec_query('SELECT pg_advisory_xact_lock($1)::text', 'Email envelope lock', [bind])
     end
 
     def attempt_attributes(address, correlation, notification, origin, identity)

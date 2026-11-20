@@ -34,7 +34,7 @@
   <%= render 'equipment_items', items: @equipment_items, audit_records: @equipment_audit_records,
                                 return_context: @return_context, title: 'Devices for this application' %>
   <div class="flex flex-wrap gap-4 text-sm">
-    <% if @equipment_items.any? { |item| item.funding_source == 'icanconnect' } %>
+    <% if @equipment_items.any? { |item| item.funding_source == 'icanconnect' } && Icanconnect::Setting.active? %>
       <%= link_to 'Add installation, interpretation or travel cost',
                   new_admin_icanconnect_financial_record_path(application_id: application.id), class: 'text-primary-700 underline' %>
     <% end %>

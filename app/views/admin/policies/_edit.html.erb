@@ -7,6 +7,8 @@
         <%= link_to 'Feature Flags', admin_feature_flags_path, class: 'btn btn-outline', data: { turbo_frame: '_top' } %>
       </nav>
 
+      <%= render 'admin/policies/icanconnect_setting', setting: @icanconnect_setting %>
+
       <%= render 'admin/policies/mileage_rates', rates: @mileage_rates, new_rate: @new_mileage_rate,
                                                  events: @mileage_rate_events, error: @mileage_rate_error %>
 

@@ -8,6 +8,7 @@ module Admin
       include IcanconnectTestSupport
 
       setup do
+        start_icanconnect!
         FeatureFlag.disable!(:vouchers_enabled)
         @admin = create(:admin)
         @application = create(:application, :approved, :with_all_proofs, equipment_needs_initialized_at: Time.current)

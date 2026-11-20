@@ -1,0 +1,33 @@
+<%# locals: (order:, shipping_request:, draft:) -%>
+<section id="vendor-shipping" class="card space-y-4 p-5" aria-labelledby="vendor-shipping-title">
+  <h2 id="vendor-shipping-title" class="text-xl font-semibold"><%= order.sent_at? ? 'Vendor tracking link' : 'Send purchase order to vendor' %></h2>
+  <% if shipping_request %>
+    <div>
+      <% if shipping_request.delivery_failed? %>
+        <p class="text-danger-700">The vendor email failed. Send a new link or contact the vendor directly.</p>
+      <% elsif shipping_request.delivery_sent? %>
+        <p class="break-words">Link emailed to <%= shipping_request.recipient_email %> on <%= l(shipping_request.sent_at.to_date, format: :long) %>.</p>
+      <% else %>
+        <p>Waiting for the email result.</p>
+      <% end %>
+      <% if shipping_request.status_sent? && !shipping_request.expired? %>
+        <p>Link expires <%= l(shipping_request.expires_at.to_date, format: :long) %>.</p>
+        <%= button_to 'Revoke link', admin_purchase_order_shipping_request_path(order),
+                      method: :delete, params: { shipping_request_id: shipping_request.id }, class: 'btn btn-outline mt-2' %>
+      <% elsif shipping_request.delivery_sent? %>
+        <p>Link <%= shipping_request.display_status %>.</p>
+      <% end %>
+    </div>
+  <% elsif order.sent_at? %>
+    <p>No tracking link has been emailed.</p>
+  <% end %>
+  <% if draft && order.sent_at? %>
+    <% label = shipping_request ? 'Email a new tracking link' : 'Email tracking link' # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <%= tag.details open: shipping_request&.delivery_failed? || flash[:vendor_shipping_input].present? do %>
+      <summary class="cursor-pointer text-primary-700 underline"><%= label %></summary>
+      <%= render 'admin/purchase_orders/vendor_shipping_form', order: order, draft: draft, label: label %>
+    <% end %>
+  <% elsif draft %>
+    <%= render 'admin/purchase_orders/vendor_shipping_form', order: order, draft: draft, label: 'Send PO to vendor' %>
+  <% end %>
+</section>

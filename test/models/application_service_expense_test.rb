@@ -6,6 +6,7 @@ class ApplicationServiceExpenseTest < ActiveSupport::TestCase
   include IcanconnectTestSupport
 
   setup do
+    start_icanconnect!
     ensure_system_audit_actor!
     @admin = create(:admin)
     FeatureFlag.disable!(:vouchers_enabled)

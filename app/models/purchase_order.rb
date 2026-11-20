@@ -10,6 +10,7 @@ class PurchaseOrder < ApplicationRecord
   enum :purpose, BidGroup::PURPOSES, validate: true
   has_many :equipment_items, dependent: :restrict_with_error
   has_many :bid_groups, dependent: :restrict_with_error
+  has_many :shipping_requests, class_name: 'PurchaseOrderShippingRequest', dependent: :restrict_with_error
   has_many :events, as: :auditable, dependent: :restrict_with_error
   normalizes :number, with: ->(value) { value.to_s.strip }
   before_validation { self.normalized_number = number.to_s.gsub(/\s+/, '').upcase }

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_19_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_19_230000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -645,6 +645,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_170000) do
     t.check_constraint "(portal_creation_key IS NULL) = (portal_creation_fingerprint IS NULL)", name: "guardian_relationships_portal_creation_pair_check"
   end
 
+  create_table "icanconnect_settings", force: :cascade do |t|
+    t.date "starts_on"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.check_constraint "id = 1", name: "icanconnect_settings_singleton"
+  end
+
   create_table "invoice_generation_failures", force: :cascade do |t|
     t.bigint "vendor_id", null: false
     t.datetime "attempted_at", null: false
@@ -833,6 +840,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_170000) do
     t.index ["reviewed_at"], name: "index_proof_reviews_on_reviewed_at"
     t.index ["status"], name: "index_proof_reviews_on_status"
     t.check_constraint "submission_method IS NULL OR (submission_method = ANY (ARRAY[0, 1, 2, 3, 4]))", name: "proof_reviews_submission_method_check"
+  end
+
+  create_table "purchase_order_shipping_requests", force: :cascade do |t|
+    t.bigint "purchase_order_id", null: false
+    t.bigint "requested_by_id", null: false
+    t.string "recipient_email", null: false
+    t.text "shipping_instructions"
+    t.string "public_token_digest", null: false
+    t.uuid "request_batch_id", null: false
+    t.integer "status", default: 0, null: false
+    t.string "delivery_status", default: "pending", null: false
+    t.datetime "sent_at", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "submitted_at"
+    t.datetime "revoked_at"
+    t.datetime "expiration_recorded_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["public_token_digest"], name: "index_purchase_order_shipping_requests_on_public_token_digest", unique: true
+    t.index ["purchase_order_id"], name: "index_purchase_order_shipping_requests_on_purchase_order_id"
+    t.index ["requested_by_id"], name: "index_purchase_order_shipping_requests_on_requested_by_id"
   end
 
   create_table "purchase_orders", force: :cascade do |t|
@@ -1414,6 +1442,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_170000) do
   add_foreign_key "product_resources", "products"
   add_foreign_key "proof_reviews", "applications"
   add_foreign_key "proof_reviews", "users", column: "admin_id"
+  add_foreign_key "purchase_order_shipping_requests", "purchase_orders"
+  add_foreign_key "purchase_order_shipping_requests", "users", column: "requested_by_id"
   add_foreign_key "purchase_orders", "users", column: "icc_claimed_by_id"
   add_foreign_key "recovery_requests", "users"
   add_foreign_key "registration_verifications", "users", column: "created_user_id"

@@ -103,6 +103,8 @@ module EquipmentHelper
   }.freeze
 
   def equipment_audit_action_label(event)
+    return 'Shipment reported by vendor' if event.action == 'equipment_shipment_recorded' && event.metadata['purchase_order_shipping_request_id'].present?
+
     EQUIPMENT_AUDIT_ACTION_LABELS.fetch(event.action) { event.action.delete_prefix('equipment_').humanize }
   end
 

@@ -8,6 +8,7 @@ module Admin
       include IcanconnectTestSupport
 
       setup do
+        start_icanconnect!
         @admin = create(:admin)
         @order, @unit = icc_order_with_unit
         sign_in_as(@admin, bypass_mfa_enrollment: true)

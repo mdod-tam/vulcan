@@ -10,6 +10,7 @@ module Icanconnect
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       @admin = create(:admin)
       @order, @unit = icc_order_with_unit
       @application = @unit.application

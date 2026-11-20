@@ -6,6 +6,7 @@ require 'action_dispatch/testing/test_process'
 module Applications
   class PaperApplicationServiceTest < ActiveSupport::TestCase
     include PaperIdentityConfirmationHelper
+    include IcanconnectTestSupport
 
     include ActionDispatch::TestProcess::FixtureFile
 
@@ -680,6 +681,7 @@ module Applications
 
     test 'paper acceptance starts ICC income verification from its actual proof decision and keeps later invoice edits historical' do
       verified_on = Date.current
+      start_icanconnect!(on: verified_on)
       application = nil
       expense = nil
       travel_to verified_on.in_time_zone.noon do
@@ -702,9 +704,7 @@ module Applications
         assert_equal Time.current, application.income_last_verified_at
         assert_equal 3, application.proof_reviews.where(proof_type: %i[income residency id], status: :approved).count
         assert_equal 0, Notification.where(action: 'proof_approved', notifiable: application).count
-        order = create(:purchase_order, funding_source: 'icanconnect')
-        unit = create(:equipment_item, application: application, purchase_order: order, funding_source: 'icanconnect',
-                                       delivered_on: verified_on)
+        _order, unit = icc_order_with_unit(application:)
         assert_not application.icanconnect_income_review_due?
         expense = ApplicationServiceExpense.create!(application: application, equipment_item: unit, category: 'travel',
                                                     service_date: verified_on, amount: '25.50')

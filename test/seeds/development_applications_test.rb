@@ -4,7 +4,10 @@ require 'test_helper'
 require_relative '../../db/seeds/development_applications'
 
 class DevelopmentApplicationsTest < ActiveSupport::TestCase
+  include IcanconnectTestSupport
+
   setup do
+    start_icanconnect!
     Rails.env.stubs(:development?).returns(true)
     @admin = User.find_by_email('admin@example.com')
   end

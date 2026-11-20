@@ -4,7 +4,8 @@ module Applications
   # The admin list reads fulfillment through its existing owner; application status stays approved.
   class ApprovedPipeline
     Definition = Equipment::FulfillmentStage::Definition
-    Row = Data.define(:application, :group, :stage, :entered_at, :days, :action_label, :progress, :evaluation, :voucher, :remaining_value, :secondary, :action_context)
+    Row = Data.define(:application, :group, :stage, :entered_at, :days, :action_label, :progress, :evaluation, :voucher,
+                      :remaining_value, :secondary, :action_context, :icanconnect_work)
     Summary = Data.define(:stage, :label, :count, :oldest, :average_days, :unknown_dates, :remaining_value)
 
     STAGES = {
@@ -100,7 +101,7 @@ module Applications
       Row.new(application:, group:, stage:, entered_at:, days: Equipment::WaitTime.days_since(entered_at, now: @now),
               action_label: training ? 'Open training' : fulfillment.action,
               progress: fulfillment.progress, evaluation: stage == :awaiting_report ? application.open_equipment_evaluations.last : nil, voucher: nil,
-              remaining_value: 0.to_d, secondary: fulfillment.secondary, action_context: fulfillment.action_context)
+              remaining_value: 0.to_d, secondary: fulfillment.secondary, action_context: fulfillment.action_context, icanconnect_work: nil)
     end
 
     def voucher_row(application)
@@ -111,7 +112,14 @@ module Applications
       progress = voucher_progress(stage, voucher, remaining_value, entered_at)
       Row.new(application:, group: :voucher, stage:, entered_at:, days: Equipment::WaitTime.days_since(entered_at, now: @now),
               action_label: definition(:voucher, stage).action, progress:, evaluation: nil, voucher:, remaining_value:,
-              secondary: [], action_context: {})
+              secondary: [], action_context: {}, icanconnect_work: pending_icanconnect_work(application))
+    end
+
+    def pending_icanconnect_work(application)
+      return unless application.equipment_needs_initialized_at?
+
+      work = application.equipment_fulfillment_stage
+      work if work.stage.in?(%i[needs_fulfillment awaiting_bid_award ready_to_send_po awaiting_shipment])
     end
 
     def voucher_selection(vouchers)

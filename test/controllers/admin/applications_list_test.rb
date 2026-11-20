@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Admin
   class ApplicationsListTest < ActionDispatch::IntegrationTest
+    include IcanconnectTestSupport
+
     setup do
       @admin = create(:admin)
       sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
@@ -269,10 +271,40 @@ module Admin
       assert_response :success
       assert_select "tr#application_#{equipment.id}"
       assert_select '[data-pipeline-stage="voucher_expired"]', count: 0
+      assert_select '#icanconnect-income-follow-up-card', count: 0
 
       get admin_applications_path(view: 'pipeline', q: 'PipelineListCohort', group: 'voucher', stage: 'voucher_expired')
       assert_response :success
       assert_select "tr#application_#{voucher_application.id}", text: /125/
+    end
+
+    test 'iCanConnect follow-up counts only approved DeafBlind voucher applicants who need income proof' do
+      start_icanconnect!(on: nil)
+      FeatureFlag.enable!(:vouchers_enabled)
+      deafblind = { last_name: 'IncomeFollowUpCohort', hearing_disability: true, vision_disability: true }
+      missing = create(:application, :completed, :with_disability_certification,
+                       user: create(:constituent, **deafblind),
+                       income_proof_status: :not_reviewed)
+      approved = create(:application, :completed, :with_all_proofs, user: create(:constituent, **deafblind))
+      other_group = create(:application, :completed, :with_disability_certification,
+                           user: create(:constituent, **deafblind, vision_disability: false), income_proof_status: :not_reviewed)
+      expired = create(:secure_request_form, :expired, application: missing, kind: :income_proof_resubmission)
+      notification = create(:notification, action: 'proof_resubmission_requested', notifiable: missing, recipient: missing.user,
+                                           metadata: { proof_type: 'income', secure_request_form_id: expired.id })
+      notification.record_delivery_handoff!(channel: :email, state: :submitted)
+
+      get admin_applications_path(view: 'pipeline', group: 'voucher', stage: ::Icanconnect::IncomeFollowUp::STAGE, q: deafblind[:last_name])
+      assert_response :success
+      assert_select '#icanconnect-income-follow-up-card', count: 0
+      assert_select "#application_#{missing.id} a", text: 'Request income proof', count: 0
+
+      start_icanconnect!(on: Date.current)
+      get admin_applications_path(view: 'pipeline', group: 'voucher', stage: ::Icanconnect::IncomeFollowUp::STAGE, q: deafblind[:last_name])
+
+      assert_response :success
+      assert_select '#icanconnect-income-follow-up-card', text: /1 to contact · 0 waiting for proof/
+      assert_select "#application_#{missing.id} a[href=?]", admin_application_path(missing, anchor: 'income-proof'), text: 'Request income proof'
+      assert_select "#application_#{approved.id}, #application_#{other_group.id}", count: 0
     end
 
     test 'changing filters in the training queue keeps its representation and bulk session loading' do

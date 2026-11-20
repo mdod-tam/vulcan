@@ -7,27 +7,12 @@ module ApplicationFormHandling
     helper_method :redirect_with_notice, :redirect_with_alert
   end
 
-  def render_form_errors(form, application = nil)
-    @application = application || Application.new
-    @application.assign_attributes(filtered_application_params)
-
-    @application.errors.merge!(form.errors) if form.respond_to?(:errors)
-
-    initialize_address_and_provider_for_form
-    render action_name == 'update' ? :edit : :new, formats: [:html], status: :unprocessable_content
-  end
-
   def redirect_with_notice(path, notice)
     redirect_to path, notice: notice
   end
 
   def redirect_with_alert(path, alert)
     redirect_to path, alert: alert
-  end
-
-  def initialize_address_and_provider_for_form
-    initialize_address if respond_to?(:initialize_address, true)
-    build_certifying_professional_for_form if respond_to?(:build_certifying_professional_for_form, true)
   end
 
   def determine_success_message(application, is_submission: false)

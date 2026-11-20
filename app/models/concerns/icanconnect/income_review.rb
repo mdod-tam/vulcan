@@ -37,6 +37,10 @@ module Icanconnect
       verified_at.nil? || verified_at.in_time_zone.to_date.next_year <= date
     end
 
+    def income_proof_update_offered?
+      income_proof_update_available? && Setting.active?
+    end
+
     def income_proof_update_available?
       return false unless approved_deafblind?
       return !income_proof.attached? if income_proof_status_not_reviewed?

@@ -65,17 +65,24 @@ module Equipment
           row = submitted.find { |entry| entry[:id].to_s == line.id.to_s }
           Mutation.version!(line, row[:lock_version])
           quantity = positive!(row[:quantity])
-          raise Conflict, 'A detached device remains one physical unit.' if line.equipment_item_id && quantity != 1
-          if line.equipment_need && quantity > line.equipment_need.available_quantity + line.quantity
-            raise Conflict, 'The requested quantity is reserved elsewhere or no longer wanted.'
-          end
-
+          validate_quantity_change!(line, quantity, group.funding_source)
           line.update!(quantity: quantity)
         end
       end
+    rescue Icanconnect::Funding::Ineligible => e
+      raise Conflict, e.message
     end
 
     private
+
+    def validate_quantity_change!(line, quantity, funding_source)
+      raise Conflict, 'A detached device remains one physical unit.' if line.equipment_item_id && quantity != 1
+      if line.equipment_need && quantity > line.equipment_need.available_quantity + line.quantity
+        raise Conflict, 'The requested quantity is reserved elsewhere or no longer wanted.'
+      end
+
+      Icanconnect::Funding.require_active! if funding_source == 'icanconnect' && quantity > line.quantity
+    end
 
     def audit_lines(group)
       group.bid_group_lines.order(:id).map { |line| line.attributes.slice(*AUDIT_LINE_FIELDS) }

@@ -149,6 +149,11 @@ class ApplicationForm
     scalars = scalar_params(app_params, *SCALAR_APPLICATION_PARAMS)
 
     assign_attributes(scalars)
+    ProofManageable::REVIEW_PROOF_TYPES.each do |type|
+      field = "#{type}_proof"
+      key = :"#{field}_signed_id"
+      public_send("#{field}=", scalar_params(app_params, key)[key]) if public_send(field).blank?
+    end
     self.annual_income = annual_income.strip.delete_prefix('$').delete(',') if scalars.key?(:annual_income) && MoneyInput.parse(annual_income)
 
     # A top-level checkbox takes precedence over the nested one.

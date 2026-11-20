@@ -8,6 +8,7 @@ module Icanconnect
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
+      start_icanconnect!
       ensure_system_audit_actor!
       FeatureFlag.disable!(:vouchers_enabled)
       @admin = create(:admin)
@@ -22,6 +23,30 @@ module Icanconnect
 
     teardown do
       Current.reset
+    end
+
+    test 'a scheduled start date prevents new ICC requests while an existing link can still accept proof' do
+      application = approved_deafblind_application
+      application.update!(income_proof_status: :rejected, income_proof_required: false)
+      request = Applications::RequestProofResubmission.new(application: application, actor: @admin, proof_type: :income)
+      first_delivery = request.call
+      assert first_delivery.success?, first_delivery.message
+      form = first_delivery.data.fetch(:secure_request_forms).sole
+
+      start_icanconnect!(on: Date.tomorrow)
+      assert_no_difference('SecureRequestForm.count') do
+        result = Applications::RequestProofResubmission.new(application: application, actor: @admin, proof_type: :income).call
+        assert result.failure?
+      end
+      assert_not application.proof_request_issuable?(:income)
+      assert form.reload.active_for_public_use?
+      assert application.proof_requestable_via_secure_form?(:income)
+      assert_not application.proof_resubmittable_via_portal?(:income)
+
+      travel_to Date.tomorrow.in_time_zone.noon do
+        assert application.proof_request_issuable?(:income)
+        assert application.proof_resubmittable_via_portal?(:income)
+      end
     end
 
     test 'ordinary approval permits initial ICC funding and later ICC work needs updated income proof at one year' do

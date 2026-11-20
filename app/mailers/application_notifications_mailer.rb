@@ -375,7 +375,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   def build_proof_rejected_variables(application, proof_review, secure_upload_url, recipient, template:, locale: nil)
     user                 = application.user
-    remaining_attempts   = application.proof_submission_attempts_remaining
+    icc_income_proof     = approved_income_proof?(application, proof_review.proof_type)
+    remaining_attempts   = icc_income_proof ? 0 : application.proof_submission_attempts_remaining
     archived             = application.status_archived?
     proof_type_formatted = format_proof_type(proof_review.proof_type, locale: locale)
     recipient ||= user
@@ -402,6 +403,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                            constituent_full_name: user.full_name,
                            organization_name: 'MAT Program',
                            proof_type_formatted: proof_type_formatted,
+                           request_explanation: proof_rejection_explanation(application, icc_income_proof, locale:),
                            rejection_reason: rejection_reason,
                            secure_upload_url: secure_upload_url,
                            remaining_attempts_message_text: remaining_attempts.positive? ? remaining_attempts_message : '',
@@ -414,7 +416,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     user = application.user
     proof_type_formatted = format_proof_type(proof_type, locale: locale)
     recipient ||= user
-    explanation = application.status_approved? && proof_type.to_s == 'income' ? 'income_update' : 'pending'
+    explanation = approved_income_proof?(application, proof_type) ? 'income_update' : 'pending'
 
     base_variables = build_base_email_variables(
       template: template,
@@ -443,6 +445,20 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                              proof: proof_type_formatted, locale: locale
                            )
                          }).compact
+  end
+
+  def approved_income_proof?(application, proof_type)
+    application.status_approved? && proof_type.to_s == 'income'
+  end
+
+  def proof_rejection_explanation(application, icc_income_proof, locale:)
+    scope = 'applications.proof_resubmission.rejection_explanation'
+    return I18n.t("#{scope}.pending", locale:) unless icc_income_proof
+
+    explanation = I18n.t("#{scope}.income_update", locale:)
+    return explanation unless application.voucher_fulfillment?
+
+    "#{explanation} #{I18n.t("#{scope}.voucher", locale:)}"
   end
 
   def resolve_rejection_reason(proof_review, locale)

@@ -1,0 +1,51 @@
+<%# locals: (first:, shipped:, remaining:, draft:, token:) -%>
+<section class="card space-y-4 p-5" aria-labelledby="destination-<%= first.id %>">
+  <div>
+    <h2 id="destination-<%= first.id %>" class="text-lg font-semibold">Ship to <%= first.application.user.full_name %></h2>
+    <p class="whitespace-pre-line"><%= first.shipping_label %></p>
+  </div>
+  <% if shipped.any? %>
+    <h3 class="font-semibold">Recorded shipments</h3>
+    <ul class="space-y-2 text-sm">
+      <% shipped.group_by { |item| [item.shipped_at, item.carrier, item.tracking_number] }.each do |(date, carrier, tracking), units| %>
+        <li>
+          <p><%= accessible_date_value(date) %> · <%= [EquipmentItem::CARRIERS[carrier], tracking].compact_blank.join(' ') %></p>
+          <p><%= units.group_by(&:product).map { |product, group| "#{group.size} × #{product.catalog_label}" }.join(', ') %></p>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+  <% if remaining.any? %>
+    <%= form_with scope: :shipment, url: secure_vendor_order_path, method: :patch,
+                  namespace: "destination_#{first.id}", class: 'space-y-3', data: { turbo: false } do |form| %>
+      <%= hidden_field_tag :token, token, id: nil %>
+      <%= form.hidden_field :destination, value: first.id %>
+      <fieldset class="space-y-1">
+        <legend class="font-semibold">Devices in this package</legend>
+        <% remaining.each do |item| %>
+          <%= hidden_field_tag "shipment[versions][#{item.id}]", item.lock_version, id: nil %>
+          <label class="flex items-center gap-2">
+            <%= check_box_tag 'shipment[item_ids][]', item.id, Array(draft&.[](:item_ids)).include?(item.id.to_s), id: nil %>
+            <span><%= item.product.catalog_label %><% if remaining.count { |unit| unit.product_id == item.product_id } > 1 %> · Device #<%= item.id %><% end %></span>
+          </label>
+        <% end %>
+      </fieldset>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <%= form.label :carrier, 'Carrier', class: 'form-label' %>
+          <%= form.select :carrier, options_for_select(EquipmentItem::CARRIERS.invert.to_a, draft&.[](:carrier)),
+                          { include_blank: 'Choose a carrier' }, required: true, class: 'form-input' %>
+        </div>
+        <div>
+          <%= form.label :tracking_number, 'Tracking number', class: 'form-label' %>
+          <%= form.text_field :tracking_number, value: draft&.[](:tracking_number), required: true, class: 'form-input' %>
+        </div>
+        <div>
+          <%= form.label :shipped_at, 'Date shipped', class: 'form-label' %>
+          <%= form.text_field :shipped_at, typed_date_field_options(value: accessible_date_value(draft&.[](:shipped_at)), required: true, class: 'form-input') %>
+        </div>
+      </div>
+      <%= form.submit 'Save tracking', class: 'btn btn-primary' %>
+    <% end %>
+  <% end %>
+</section>

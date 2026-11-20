@@ -7,6 +7,7 @@ module Equipment
     include IcanconnectTestSupport
 
     setup do
+      start_icanconnect!
       @admin = create(:admin)
       @order = create(:purchase_order)
       @first = create(:equipment_item, purchase_order: @order, product: create(:product, msrp: 999))

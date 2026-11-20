@@ -31,7 +31,7 @@ module Equipment
       assert_nil order.reload.sent_at
       assert_equal [1, 2], list.rows.map(&:quantity).sort
       assert_equal 3, list.rows.sum(&:quantity)
-      assert_equal ['Pending'], list.rows.map { |row| list.completion_label(row) }.uniq
+      assert_equal ['Product model', 'Quantity', 'Recipient', 'Shipping address'], list.headings
       assert_includes list.plain_text, 'PO SUPPLIER-PO'
       assert_not_includes list.plain_text, 'Disability setup'
       assert_not_includes list.plain_text, 'Deaf'
@@ -55,8 +55,8 @@ module Equipment
       order = award(group, number: 'STOCK-SUPPLIER', shipping_address_1: '900 Receiving Road', shipping_address_2: 'Dock 3',
                            shipping_city: 'Baltimore', shipping_state: 'MD', shipping_zip_code: '21201')
       unreceived = SupplierList.new(purchase_order: order)
-      assert_equal 'Program receipt', unreceived.headings.last
-      assert_equal ['Awaiting receipt'], unreceived.rows.map { |row| unreceived.completion_label(row) }.uniq
+      assert_equal 'Shipping address', unreceived.headings.last
+      assert_equal 2, unreceived.rows.sole.quantity
       @ordering.mark_sent!(order:, sent_at: Date.current, expected_version: order.lock_version)
       rows = order.equipment_items.map { |item| { batch: item.stock_receipt_batch, quantity: 1 } }
       StockReceipt.new(actor: @admin).receive!(order:, received_on: Date.current, rows: rows,
@@ -67,7 +67,7 @@ module Equipment
       unit = StockAllocation.new(actor: @admin).allocate!(needs: [{ id: need.id, lock_version: need.lock_version, quantity: 1 }], application_versions: equipment_profile_versions(need.application)).sole
 
       list = SupplierList.new(purchase_order: order)
-      assert_equal ['Received into program stock'], list.rows.map { |row| list.completion_label(row) }.uniq
+      assert_equal 2, list.rows.sole.quantity
       assert_nil list.rows.sole.setup
       assert(list.rows.all? { |row| row.recipient == 'Program stock' })
       assert_includes list.plain_text, '900 Receiving Road'
@@ -95,7 +95,7 @@ module Equipment
                                        attributes: { shipped_at: Date.current, tracking_number: 'ACTUAL-OUTBOUND' }, confirm_setup: true)
       assert_equal supplier_copy, SupplierList.new(purchase_order: order).plain_text
       dispatched = SupplierList.new(dispatch_items: [allocated.reload])
-      assert_equal 'Already shipped', dispatched.completion_label(dispatched.rows.sole)
+      assert_equal 'Already shipped', dispatched.table_values(dispatched.rows.sole).last
     end
 
     private

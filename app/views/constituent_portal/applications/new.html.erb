@@ -301,7 +301,7 @@
                 <strong>current, unexpired Medicaid and/or SNAP award letter</strong>, or <strong>current, unexpired VA Benefits letter</strong>.
                 <span class="font-semibold text-danger-600"><%= t('applications.income_proof_required', locale: form_message_locale) %></span>
               </p>
-              <%= render 'shared/document_upload', form: form, model: @application, field: :income_proof,
+              <%= render 'shared/document_upload', form: form, model: @application, field: :income_proof, blob: @retained_proofs&.dig('income'),
                                                    input_id: 'application_income_proof', described_by: 'income-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
@@ -333,7 +333,7 @@
                 <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>.
                 <span class="font-semibold text-danger-600">This proof is required to submit your application.</span>
               </p>
-              <%= render 'shared/document_upload', form: form, model: @application, field: :residency_proof,
+              <%= render 'shared/document_upload', form: form, model: @application, field: :residency_proof, blob: @retained_proofs&.dig('residency'),
                                                    input_id: 'application_residency_proof', described_by: 'residency-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
@@ -351,7 +351,7 @@
                 <strong>identification card</strong>, or <strong>passport</strong>.
                 <span class="font-semibold text-danger-600">This proof is required to submit your application.</span>
               </p>
-              <%= render 'shared/document_upload', form: form, model: @application, field: :id_proof,
+              <%= render 'shared/document_upload', form: form, model: @application, field: :id_proof, blob: @retained_proofs&.dig('id'),
                                                    input_id: 'application_id_proof', described_by: 'id-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser

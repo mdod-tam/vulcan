@@ -1,6 +1,5 @@
 <%# locals: (purchase_order:, rows: nil) -%>
 <section class="space-y-3">
-  <h2 class="text-xl font-semibold">Device costs</h2>
 <p>MSRP = catalog price. Actual unit cost = price we paid for it in this PO. Don’t enter guesses.</p>
 <%= form_with url: admin_purchase_order_cost_path(purchase_order), method: :patch, scope: :costs, class: 'space-y-3' do |form| %>
 <%= form.hidden_field :expected_version, value: purchase_order.lock_version %>

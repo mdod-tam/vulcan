@@ -22,6 +22,9 @@ module EmailTemplates
     def for_template(template, subject: nil, include_optional_variables: nil)
       include_optional_variables = !template.liquid? if include_optional_variables.nil?
       base_data = base(subject: subject || template.subject)
+      if template.name == 'application_notifications_proof_rejected'
+        base_data['request_explanation'] = I18n.t('applications.proof_resubmission.rejection_explanation.pending', locale: @locale)
+      end
       base_data = remove_sample_paths(base_data, optional_only_variables(template)) unless include_optional_variables
       generated = generated_sample_data_for(template, base_data, include_optional_variables: include_optional_variables)
       base_data.deep_merge(generated)

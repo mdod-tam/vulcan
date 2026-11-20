@@ -57,7 +57,17 @@ An empty environment gets the catalog through bootstrap. For an initialized envi
 
 Compare reported drafts with the confirmed catalog in **Manage Products**. Confirm a retained model only after checking its manufacturer and exact model. Where an existing confirmed model collides with an incoming catalog entry, the refresh rolls back. Review the two records and resolve the duplicate with the catalog owner before retrying. Keep product IDs and records that support past purchases.
 
-Before enabling ICC income outreach, review the English and Spanish `application_notifications_proof_requested` templates against their [checked-in definitions](../../db/seeds/email_templates). For an initialized environment, update these two templates in one maintenance transaction. Their bodies should use the `request_explanation` variable for the eligibility message, and both variable definitions must include it. Preserve staff-authored wording where it still applies. Preview both an initial request and an approved applicant’s ICC income update in each language. Check `fpl_additional_person` in Policies if the environment uses household sizes above eight. Verify that a vendor and an evaluator can both select a confirmed product.
+### iCanConnect launch
+
+In **System Policies → iCanConnect participation**, enter the program’s start date. Leave the date blank to keep new iCanConnect funding and income outreach off. Once the date arrives, staff can start new iCanConnect work dated on or after the start date. Existing orders, filings, and proof links remain available. The destructive development demo seed sets a past date so staff can try the example workflows.
+
+Before using ICC income outreach in an initialized environment, run `bin/rails email_templates:update_icc_proof_outreach`. On Heroku, use `heroku run bin/rails email_templates:update_icc_proof_outreach --app "$MAT_APP"`. The task updates the eligibility paragraph and adds the `request_explanation` variable to the English and Spanish proof request and rejection templates in one audited transaction. It preserves template IDs, subjects, the rest of the bodies, and settings. It is safe to rerun.
+
+If the task reports a customized eligibility paragraph, it rolls back. Review that paragraph with the staff template owner. In a maintenance transaction, edit the affected template body and variable definition together using the [checked-in template](../../db/seeds/email_templates) as a reference, then rerun the task. Use `%<request_explanation>s` for Standard or `{{ request_explanation }}` for Liquid and add `request_explanation` to the required variables. Preserve the staff wording around the new variable.
+
+In staging, run `bin/rails email_templates:preview_icc_proof_outreach` with the four proof templates enabled. The command renders the actual mailer with sample records and a sample upload URL. It sends no email. Verify requests and rejections in English and Spanish for a pending MAT application and an approved MAT applicant who needs iCanConnect proof. The general template editor preview shows pending-application sample copy.
+
+Check `fpl_additional_person` in Policies if the environment uses household sizes above eight. Verify that a vendor and an evaluator can both select a confirmed product.
 
 The mileage migration expects the unreleased annual rate table to be empty. If reverting from a database with saved effective dates, back up the database first. Restore a compatible snapshot for the prior release, or use a forward repair to keep effective dates and recorded rates. Multiple rates in one year cannot be represented by the previous schema.
 

@@ -3,6 +3,18 @@
 class VendorNotificationsMailer < ApplicationMailer
   include ActionView::Helpers::NumberHelper
 
+  def equipment_order(shipping_request, secure_url)
+    number = shipping_request.purchase_order.number
+    mail_with_text_body({ to: shipping_request.recipient_email, subject: "MAT purchase order #{number}", message_stream: 'notifications' }, <<~TEXT)
+      Your bid was accepted. Open purchase order #{number} for the items and shipping instructions.
+      After each package ships, use the same link to enter its tracking number.
+
+      #{secure_url}
+
+      For help or a new link, contact #{ProgramContact.support_email}.
+    TEXT
+  end
+
   def invoice_generated
     invoice      = params[:invoice]
     vendor       = invoice.vendor
