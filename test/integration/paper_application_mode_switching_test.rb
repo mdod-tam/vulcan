@@ -65,8 +65,8 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     }
   end
 
-  test 'paper application service properly handles mode switching between accept and reject' do
-    # Initial proof decisions
+  test 'accepted paper income stays current while rejected residency can be replaced and approved' do
+    review_started_at = Time.current
     post admin_paper_applications_path, params: {
       constituent: paper_self_applicant_params,
       application: paper_application_params,
@@ -86,21 +86,40 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     assert_not application.residency_proof.attached?
     assert_equal 'rejected', application.residency_proof_status
 
-    # Review updates use the regular application endpoint after paper creation.
+    income_blob_id = application.income_proof.blob.id
+    income_review = application.proof_reviews.proof_type_income.status_approved.sole
+    assert_equal @admin, income_review.admin
+    assert_equal income_blob_id, income_review.reviewed_blob_id
+    assert income_review.submission_method_paper?
+    assert_operator income_review.reviewed_at, :>=, review_started_at
+    assert_operator income_review.reviewed_at, :<=, Time.current
+    original_review = income_review.attributes
+    original_state = application.reload.attributes.slice('status', 'income_proof_status', 'residency_proof_status', 'total_rejections')
 
-    patch update_proof_status_admin_application_path(application), params: {
-      **proof_decision_params(application, :income),
-      proof_type: 'income',
-      status: 'rejected',
-      rejection_reason: 'expired',
-      rejection_notes: 'Documentation is expired'
-    }
-    assert_response :redirect
+    # A current approval cannot be decided again without another submission.
+    assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
+      patch update_proof_status_admin_application_path(application), params: {
+        **proof_decision_params(application, :income),
+        proof_type: 'income',
+        status: 'rejected',
+        rejection_reason: 'expired',
+        rejection_notes: 'Documentation is expired'
+      }
+    end
+    assert_response :unprocessable_content
+    assert_includes response.body, 'Proof is not reviewable for this application'
+    assert_equal original_state, application.reload.attributes.slice(*original_state.keys)
+    assert_equal original_review, income_review.reload.attributes
+    assert_equal income_blob_id, application.income_proof.blob.id
 
-    # Approval requires an attachment. Attach residency proof before the review.
-    application.residency_proof.attach(@residency_proof_file)
-    application.update_column(:residency_proof_status, Application.residency_proof_statuses[:not_reviewed])
+    # A newly received replacement is pending until staff review it.
+    attached = ProofAttachmentService.attach_proof(
+      application: application, proof_type: :residency, blob_or_file: @residency_proof_file,
+      status: :not_reviewed, admin: @admin, submission_method: :paper
+    )
+    assert attached[:success], attached[:error]&.message
     application.reload
+    assert_equal 'not_reviewed', application.residency_proof_status
 
     patch update_proof_status_admin_application_path(application), params: {
       **proof_decision_params(application, :residency),
@@ -111,19 +130,17 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     assert_response :redirect
     application.reload
 
-    assert_not application.income_proof.attached?
-    assert_equal 'rejected', application.income_proof_status
+    assert_equal income_blob_id, application.income_proof.blob.id
+    assert_equal 'approved', application.income_proof_status
+    assert_equal original_review, application.proof_reviews.proof_type_income.sole.attributes
 
     assert application.residency_proof.attached?, 'Residency proof should be attached after approval'
     assert_equal 'approved', application.residency_proof_status
 
-    income_review = application.proof_reviews.find_by(proof_type: :income, status: :rejected, rejection_reason: 'expired')
-    assert_not_nil income_review, "Should have an income proof review with rejection_reason 'expired'"
-
-    # ProofReviewer creates the approval record.
-    residency_approved_reviews = application.proof_reviews.where(proof_type: :residency, status: :approved)
-
-    assert residency_approved_reviews.exists?, 'Should have at least one approved residency proof review'
+    assert_equal %w[rejected approved], application.proof_reviews.proof_type_residency.chronological.pluck(:status)
+    residency_review = application.proof_reviews.proof_type_residency.status_approved.sole
+    assert_equal @admin, residency_review.admin
+    assert_equal @residency_proof_file.id, residency_review.reviewed_blob_id
   end
 
   test 'paper application service properly handles invalid signed_ids' do

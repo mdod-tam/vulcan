@@ -21,11 +21,23 @@ module TrainingManagement
     completed_training_sessions_count + open_training_sessions_count
   end
 
+  def unlimited_training_sessions?
+    icanconnect_eligible? && Icanconnect::Setting.active?
+  end
+
+  def training_capacity_available?
+    status_approved? && (unlimited_training_sessions? || remaining_training_sessions.positive?)
+  end
+
   def remaining_training_sessions
+    return nil if unlimited_training_sessions?
+
     [max_training_sessions - reserved_training_sessions_count, 0].max
   end
 
   def training_session_quota_exhausted?
+    return false if unlimited_training_sessions?
+
     reserved_training_sessions_count >= max_training_sessions
   end
 

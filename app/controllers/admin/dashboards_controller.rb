@@ -5,16 +5,9 @@ module Admin
   class DashboardsController < BaseController
     def show
       @metrics = Reports::AdminDashboardMetrics.call
+      @approved_stage_counts = @metrics.fetch(:approved_stage_counts)
 
-      # Preload notifiable for Notification#message and actor for the view.
-      @recent_notifications = Notification
-                              .includes(:actor, :notifiable)
-                              .includes(notifiable: :application)
-                              .where('created_at > ?', 7.days.ago)
-                              .order(created_at: :desc)
-                              .limit(3)
-
-      preload_notification_message_dependencies(@recent_notifications)
+      @recent_notifications = recent_admin_notifications
 
       # Incomplete notes assigned to the current admin, three per page.
       @pagy_assigned_notes, @assigned_notes = paginate_or_first_page(

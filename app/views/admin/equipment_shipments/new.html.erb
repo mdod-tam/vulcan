@@ -1,0 +1,56 @@
+<div class="max-w-5xl mx-auto p-6 space-y-4">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-2xl font-bold">Enter shipping info</h1>
+    <%= link_to 'Back to equipment queue', equipment_return_path(@return_context), class: 'btn btn-outline' %>
+  </div>
+  <p>Record the date these devices shipped, the carrier and the tracking number.</p>
+<%= render 'admin/equipment/form_errors', errors: @form_errors %>
+<% if @items.any? %>
+<%= render 'admin/equipment/copy_list', supplier_list: Equipment::SupplierList.new(dispatch_items: @items),
+                                        heading: 'Internal dispatch list', summary_label: 'Copy plain text dispatch list', id_prefix: 'dispatch-list' %>
+<% end %>
+<%= form_with url: admin_equipment_shipments_path, scope: :shipment, class: 'space-y-4' do |form| %>
+<% @return_context.each do |key, value| %>
+<%= hidden_field_tag "return_context[#{key}]", value %>
+<% end %>
+<% @items.each do |item| %>
+<article class="border rounded p-4">
+<% row = @rows[item.id.to_s] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<h2 class="font-semibold">
+<%= item.application&.user&.full_name %>
+ · <%= equipment_catalog_label(item.product) %> · Device #<%= item.id %>
+</h2>
+      <p class="whitespace-pre-line">
+<%= item.shipping_label %>
+</p>
+      <p>Setup for this recipient: <%= Product::PROGRAM_GROUPS[item.disability_setup_group] || 'Setup needed' %>
+</p>
+<% if item.stock? %>
+<p>Setup ordered for stock:
+          <% if item.acquisition_bid_group_line %>
+<%= Product::PROGRAM_GROUPS[item.acquisition_bid_group_line.supplier_setup_group] || 'Unassigned' %>
+<% else %>Not recorded<% end %>
+</p>
+<% end %>
+<%= hidden_field_tag 'shipment[rows][][id]', item.id, id: nil %>
+<%= hidden_field_tag 'shipment[rows][][lock_version]', row['lock_version'], id: nil %>
+  <% { 'serial_number' => 'Serial number', 'imei' => 'IMEI' }.each do |field, label| %>
+    <%= label_tag "packing-#{item.id}-#{field}", item.public_send(field).present? ? "#{label} — verify on the device" : label %>
+    <%= text_field_tag "shipment[rows][][#{field}]", row[field],
+                       id: "packing-#{item.id}-#{field}", readonly: item.public_send(field).present?, autocomplete: 'off', class: 'form-input' %>
+  <% end %>
+</article>
+<% end %>
+<p>These devices must be for the same recipient and shipping address, and all from program stock or all from a vendor.</p>
+<%= form.label :shipped_at, 'Date shipped', class: 'form-label' %>
+<%= form.text_field :shipped_at, typed_date_field_options(value: accessible_date_value(params.dig(:shipment, :shipped_at)),
+                                                          required: true, autocomplete: 'off', class: 'form-input') %>
+<%= form.label :tracking_number, class: 'form-label' %>
+<%= form.text_field :tracking_number, value: params.dig(:shipment, :tracking_number), required: true, autocomplete: 'off', class: 'form-input' %>
+<%= form.label :carrier, class: 'form-label' %>
+<%= form.select :carrier, options_for_select(EquipmentItem::CARRIERS.invert, params.dig(:shipment, :carrier)), { include_blank: 'Not recorded' }, class: 'form-input' %>
+<label>
+<%= form.check_box :confirm_setup, checked: params.dig(:shipment, :confirm_setup) == '1' %> I checked the devices and confirmed they are set up for this recipient.</label>
+<%= form.submit 'Save shipping info', class: 'btn btn-primary' %>
+<% end %>
+</div>

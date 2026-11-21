@@ -543,7 +543,7 @@ class ApplicationTest < ActiveSupport::TestCase
       application = create(:application, :completed, fulfillment_type: :equipment)
       create(:evaluation, application: application, constituent: application.user, status: evaluation_status)
 
-      assert_equal :pending_evaluation, application.admin_fulfillment_responsibility_state
+      assert_equal(evaluation_status == :cancelled ? :needs_evaluator : :awaiting_report, application.admin_fulfillment_responsibility_state)
       assert_includes application.evaluations.needing_followup, application.latest_evaluation
     end
   end

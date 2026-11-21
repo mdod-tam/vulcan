@@ -37,6 +37,7 @@ module Applications
       %w[not_reviewed rejected].each do |proof_status|
         @application.update!(income_proof_status: proof_status)
         assert_not @application.proof_requestable_via_secure_form?(:income)
+        assert_not @application.proof_resubmittable_via_portal?(:income)
 
         result = nil
         assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count'] do

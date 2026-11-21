@@ -1,0 +1,36 @@
+<div class="max-w-4xl mx-auto card p-6 space-y-5">
+  <h1 class="text-2xl font-semibold">Add a service bill</h1>
+  <p>Record installation, interpretation or travel costs for <%= @application.constituent_full_name %>. Choose the iCanConnect device this bill supports.</p>
+  <%= link_to 'Back to application', admin_application_path(@application), class: 'underline' %>
+  <% if @error %>
+    <p class="text-danger-700" role="alert"><%= @error %></p>
+  <% end %>
+  <%= form_with model: @record, url: admin_icanconnect_financial_records_path(application_id: @application.id), scope: :expense, class: 'space-y-4' do |form| %>
+    <div>
+      <%= form.label :category, class: 'form-label' %>
+      <%= form.select :category, ApplicationServiceExpense::CATEGORIES.map { |category| [category.humanize, category] }, {}, class: 'form-input' %>
+    </div>
+    <div>
+      <%= form.label :equipment_item_id, 'Device', class: 'form-label' %>
+      <%= form.select :equipment_item_id, @equipment.map { |item| ["##{item.id} — #{item.product.name}", item.id] },
+                      { include_blank: 'Choose a device' }, required: true, class: 'form-input' %>
+    </div>
+    <div>
+      <%= form.label :service_date, class: 'form-label' %>
+      <%= form.text_field :service_date, typed_date_field_options(value: typed_date_input_value(@record, :service_date), required: true, class: 'form-input') %>
+    </div>
+    <div>
+      <%= form.label :vendor_name, 'Provider name', class: 'form-label' %>
+      <%= form.text_field :vendor_name, class: 'form-input' %>
+    </div>
+    <div>
+      <%= form.label :amount, 'Amount billed', class: 'form-label' %>
+      <%= form.number_field :amount, min: 0, step: '0.01', autocomplete: 'off', class: 'form-input' %>
+    </div>
+    <div>
+      <%= form.label :vendor_invoice_number, 'Invoice number', class: 'form-label' %>
+      <%= form.text_field :vendor_invoice_number, class: 'form-input' %>
+    </div>
+    <%= form.submit 'Save bill and add documents', class: 'btn btn-primary' %>
+  <% end %>
+</div>

@@ -10,6 +10,7 @@ class DeliveryStatusPresenter
   end
 
   def label(diagnostics: true)
+    return text("suppression_statuses.#{reason}", default: text('statuses.suppressed')) if diagnostics && status == 'suppressed'
     return text("statuses.#{status}") if diagnostics
 
     text("recipient_statuses.#{status}", default: text("statuses.#{status}"))

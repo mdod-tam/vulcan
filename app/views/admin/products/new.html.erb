@@ -1,6 +1,9 @@
 <div class="container mx-auto px-4 py-8">
-  <div class="max-w-3xl mx-auto">
-    <h1 class="text-2xl font-bold mb-6">New Product</h1>
-    <%= render 'form' %>
+  <div class="max-w-3xl mx-auto space-y-6">
+    <%= render 'admin/shared/index_header', title: 'New Product', title_id: 'form-title', applications_link: false %>
+    <%= link_to 'Back to Products', admin_products_path, class: 'btn btn-outline' %>
+    <div class="card p-6">
+      <%= render 'form' %>
+    </div>
   </div>
 </div>

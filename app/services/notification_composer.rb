@@ -123,6 +123,14 @@ class NotificationComposer
     proof_attached_message('id')
   end
 
+  def message_for_income_proof_update_requested
+    safe_join(['Updated income proof requested for ', application_reference, '. Check delivery and follow up with the constituent.'])
+  end
+
+  def message_for_income_proof_update_received
+    safe_join(['Updated income proof received for ', application_reference, '. Review it in the proof-review queue.'])
+  end
+
   def message_for_income_proof_attached
     proof_attached_message('income')
   end

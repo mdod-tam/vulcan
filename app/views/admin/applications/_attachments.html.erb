@@ -1,8 +1,8 @@
 <% preload_document_scans([@application.income_proof, @application.residency_proof, @application.id_proof]) %>
 <div class="space-y-6" data-controller="stream-ready">
 
-  <% if @application.income_proof_required? %>
-  <div class="border rounded-lg overflow-hidden bg-white">
+  <% if @application.income_proof_review_applicable? %>
+  <div id="income-proof" class="border rounded-lg overflow-hidden bg-white">
     <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
       <div class="flex items-center space-x-2">
         <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -16,6 +16,23 @@
     </div>
 
     <div class="p-4">
+      <% if @application.status_approved? && @application.income_proof_update_offered? %>
+        <p class="mb-3 rounded border border-warning-300 bg-warning-50 p-3">
+          Updated income proof is needed before adding iCanConnect equipment or services. Request updated income proof below.
+          The application stays approved and MAT-funded work can continue.
+        </p>
+      <% end %>
+      <% if @application.previous_income_proofs.attached? %>
+        <details class="mb-3">
+          <summary>Previous income documents</summary>
+          <ul class="mt-2 space-y-2">
+            <% @application.previous_income_proofs.each do |document| %>
+              <li><%= link_to "Income document saved #{l(document.created_at.to_date, format: :long)}",
+                              document_attachment_path(document), class: 'underline' %></li>
+            <% end %>
+          </ul>
+        </details>
+      <% end %>
       <% if @application.income_proof.attached? %>
         <div class="mb-3">
           <p class="text-sm text-gray-600">

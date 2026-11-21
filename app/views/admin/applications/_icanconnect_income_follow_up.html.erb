@@ -1,0 +1,52 @@
+<%# locals: (summaries:) -%>
+<div class="border-b border-gray-200 px-4 py-3">
+  <h2 id="icanconnect-income-follow-up-title" class="text-lg font-semibold text-gray-900">
+    iCanConnect income follow-up (<%= @pipeline_matching_count %>)
+  </h2>
+</div>
+
+<% if @pipeline_rows.any? %>
+  <% voucher_statuses = summaries.to_h { |summary| [summary.stage, summary.label] } # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <div class="relative overflow-x-auto" role="region" aria-labelledby="icanconnect-income-follow-up-title" tabindex="0">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+        <tr>
+          <th scope="col" class="px-4 py-3">Constituent</th>
+          <th scope="col" class="px-4 py-3">Voucher status</th>
+          <th scope="col" class="px-4 py-3">Income proof</th>
+          <th scope="col" class="px-4 py-3">Next action</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-200 text-sm">
+        <% @pipeline_rows.each do |row| %>
+          <% requested_at = @income_follow_up[row.application.id] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+          <tr id="application_<%= row.application.id %>">
+            <th scope="row" class="px-4 py-3 text-left align-top">
+              <%= row.application.user.full_name %>
+              <p class="mt-1 text-xs font-normal text-gray-600">Application #<%= row.application.id %></p>
+              <% if row.application.managing_guardian %>
+                <p class="mt-1 text-xs font-normal text-gray-600">Guardian: <%= row.application.managing_guardian.full_name %></p>
+              <% end %>
+            </th>
+            <td class="px-4 py-3 align-top"><%= voucher_statuses.fetch(row.stage) %></td>
+            <td class="px-4 py-3 align-top">
+              <% if requested_at %>
+                Waiting for proof
+                <p class="mt-1 text-xs text-gray-600">Requested <%= l(requested_at.to_date, format: :long) %></p>
+              <% else %>
+                To contact
+              <% end %>
+            </td>
+            <td class="px-4 py-3 align-top">
+              <%= link_to requested_at ? 'View income proof request' : 'Request income proof',
+                          admin_application_path(row.application, anchor: 'income-proof'),
+                          class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+<% else %>
+  <p class="p-6 text-center text-gray-600">No applications need iCanConnect income follow-up.</p>
+<% end %>

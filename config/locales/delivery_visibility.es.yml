@@ -62,6 +62,9 @@ es:
       sms_submitted: Mensaje de texto enviado al proveedor
       docuseal: Invitación de DocuSeal solicitada
       letter_blocked: Carta bloqueada — esperando cancelación
+    suppression_statuses:
+      missing_recipient: No enviado — falta el correo electrónico
+      delivery_identity_changed: No enviado — cambiaron los datos
     descriptions:
       queued: El mensaje está esperando su canal de entrega.
       accepted: Postmark aceptó el correo. No se ha confirmado la entrega al servidor
@@ -87,6 +90,7 @@ es:
       letter_blocked: Los controles de entrega bloquean la carta y aún no se ha cancelado
         en la cola de impresión.
     reasons:
+      missing_recipient: No hay una dirección de correo electrónico válida. Use la información de contacto de la solicitud para hacer el seguimiento.
       trainer_coverage_changed: Este mensaje no se envió porque la persona destinataria ya no es el capacitador asignado.
       assignment_superseded: Este mensaje no se envió porque la asignación que anunciaba cambió después.
       all_disabled: Todas las comunicaciones están desactivadas.

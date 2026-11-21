@@ -71,13 +71,13 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     form_ids = response.parsed_body.css('section[aria-label="Evaluation Actions"] form[id]').pluck('id')
     assert_equal ['supplemental-notes-form'], form_ids
     assert_select '#working-notes-form', count: 0
-    assert_select 'dt', text: 'Working Notes'
+    assert_select 'dt', text: 'Report internal notes'
     assert_select 'dd strong', text: 'Internal notes only.'
     assert_select '#working-notes-help strong', text: 'Internal notes only.'
     assert_select '#supplemental-notes-help strong', text: 'Internal notes only.'
-    assert_select '#supplemental-notes-form label', text: 'Working Notes'
+    assert_select '#supplemental-notes-form label', text: 'Supplemental internal notes'
     assert_select '#supplemental-notes-form textarea[aria-describedby="supplemental-notes-help"]', text: 'Follow-up observation'
-    assert_select 'dt', text: 'Recommended products from catalog'
+    assert_select 'dt', text: 'Recommended catalog products'
     assert_select 'li', text: /Satisfied/
     assert_select 'li', text: /Neutral/
 

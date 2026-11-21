@@ -14,7 +14,6 @@ export default class extends Controller {
     this.ensureAnnouncerExists()
     
     // Listener removal needs the same bound functions.
-    this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this)
     this._boundHandleCurrencyFormat = this.handleCurrencyFormat.bind(this)
     
     this.setupEventListeners()
@@ -26,12 +25,10 @@ export default class extends Controller {
   }
 
   setupEventListeners() {
-    this.element.addEventListener("income-validation:validated", this._boundHandleIncomeValidation)
     this.element.addEventListener("currency-formatter:formatted", this._boundHandleCurrencyFormat)
   }
 
   teardownEventListeners() {
-    this.element.removeEventListener("income-validation:validated", this._boundHandleIncomeValidation)
     this.element.removeEventListener("currency-formatter:formatted", this._boundHandleCurrencyFormat)
   }
 
@@ -81,24 +78,6 @@ export default class extends Controller {
         }
       }, 5000)
     }, delay)
-  }
-
-  handleIncomeValidation(event) {
-    const { exceedsThreshold, threshold, householdSize } = event.detail
-    
-    if (exceedsThreshold) {
-      const formattedThreshold = threshold.toLocaleString('en-US', {
-        style: 'currency',
-        currency: 'USD'
-      })
-      
-      this.announce(
-        `Warning: Your annual income exceeds the maximum threshold of ${formattedThreshold} for a household size of ${householdSize}. Applications with income above the threshold are not eligible for this program.`,
-        { urgency: 'assertive' }
-      )
-    } else {
-      this.announce('Income is within the eligible threshold.')
-    }
   }
 
   handleCurrencyFormat(event) {

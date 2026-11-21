@@ -19,6 +19,8 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     get sign_in_path
     assert_response :success
     assert_select 'a[href=?]', new_password_path, text: 'Forgot password?'
+    assert_select 'label[for="contact-input"]', text: I18n.t('sessions.form.contact_label')
+    assert_select '#contact-input:not([aria-describedby])'
   end
 
   def test_should_get_new_with_public_request_locale
@@ -63,6 +65,8 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal Mime[:turbo_stream].to_s, response.media_type
     assert_select 'turbo-stream[action=replace][target=sign_in_form]' do
       assert_select 'template #sign_in_form form'
+      assert_select '#contact-input[aria-describedby="contact-error"]'
+      assert_select '#contact-error'
     end
     assert_no_match(/<!DOCTYPE html>/i, response.body)
   end

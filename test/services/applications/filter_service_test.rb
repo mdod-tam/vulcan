@@ -94,6 +94,18 @@ module Applications
       end
     end
 
+    test 'awaiting proofs includes reminders and preserves the supplied scope' do
+      awaiting = create(:application, status: :awaiting_proof)
+      reminder = create(:application, status: :reminder_sent)
+      create(:application, status: :awaiting_proof)
+      supplied = Application.where(id: [awaiting, reminder, @active_app, @approved_app].map(&:id))
+
+      result = FilterService.new(supplied, filter: 'awaiting_proofs').apply_filters
+
+      assert result.success?, result.message
+      assert_equal [awaiting.id, reminder.id].sort, result.data.ids.sort
+    end
+
     test 'filters by pending training requests using application state' do
       with_mocked_attachments do
         pending_request = create(:application, :approved, user: create(:constituent, email: 'pending_training_filter@example.com'))
@@ -119,67 +131,50 @@ module Applications
       end
     end
 
-    test 'filters by proofs needing review' do
-      with_mocked_attachments do
-        service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
-        service_result = service.apply_filters
+    test 'awaiting training includes pending requests and open sessions once within the supplied scope' do
+      trainer = create(:trainer)
+      pending = create(:application, :approved, training_requested_at: 3.days.ago, application_date: Date.current)
+      requested = create(:application, :approved, training_requested_at: 3.days.ago, application_date: Date.current)
+      create(:training_session, application: requested, trainer:)
+      scheduled = create(:application, :approved, training_requested_at: 3.days.ago, application_date: Date.current)
+      create(:training_session, :completed, application: scheduled, trainer:, completed_at: 4.days.ago, created_at: 5.days.ago)
+      create(:training_session, :scheduled, application: scheduled, trainer:)
+      completed = create(:application, :approved, training_requested_at: 3.days.ago, application_date: Date.current)
+      create(:training_session, :completed, application: completed, trainer:)
+      create(:training_session, :scheduled, trainer:)
+      supplied = Application.where(id: [pending, requested, scheduled, completed, @approved_app, @active_app].map(&:id))
 
-        assert service_result.success?, 'Expected service call to be successful'
-        result_data = service_result.data
-        assert_includes result_data, @active_app
-        assert_not_includes result_data, @approved_app
-      end
+      result = FilterService.new(supplied, filter: 'awaiting_training').apply_filters
+
+      assert result.success?, result.message
+      assert_equal [pending.id, requested.id, scheduled.id].sort, result.data.ids.sort
+    end
+
+    test 'filters by proofs needing review only when a file has been submitted' do
+      submitted = create(:application, :with_income_proof, status: :in_progress)
+      service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
+      result = service.apply_filters
+      assert_predicate result, :success?
+      assert_includes result.data, submitted
+      assert_not_includes result.data, @active_app, 'A missing file cannot be reviewed'
+      assert_not_includes result.data, @approved_app
     end
 
     test 'proofs_needing_review excludes income-not-required apps from income portion' do
-      with_mocked_attachments do
-        income_not_required_user = create(:user,
-                                          first_name: 'NoIncome',
-                                          last_name: 'User',
-                                          email: 'no_income_filter@example.com',
-                                          hearing_disability: true)
-        income_off_app = create(:application, status: :in_progress, user: income_not_required_user)
-        income_off_app.update_columns(
-          income_proof_required: false,
-          income_proof_status: Application.income_proof_statuses[:not_reviewed],
-          residency_proof_status: Application.residency_proof_statuses[:approved],
-          id_proof_status: Application.id_proof_statuses[:approved]
-        )
-
-        service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
-        result_data = service.apply_filters.data
-
-        assert_not_includes(
-          result_data,
-          income_off_app,
-          'App with income_proof_required=false and residency approved should not appear in proofs_needing_review'
-        )
-      end
+      application = create(:application, :with_income_proof, status: :in_progress,
+                                                             residency_proof_status: :approved, id_proof_status: :approved)
+      application.update_columns(income_proof_required: false)
+      result = FilterService.new(@scope, { filter: 'proofs_needing_review' }).apply_filters
+      assert_predicate result, :success?
+      assert_not_includes result.data, application, 'An optional income proof does not require review'
     end
 
-    test 'proofs_needing_review includes income-not-required apps when residency is not reviewed' do
-      with_mocked_attachments do
-        residency_pending_user = create(:user,
-                                        first_name: 'ResPending',
-                                        last_name: 'User',
-                                        email: 'res_pending_filter@example.com',
-                                        hearing_disability: true)
-        residency_pending_app = create(:application, status: :in_progress, user: residency_pending_user)
-        residency_pending_app.update_columns(
-          income_proof_required: false,
-          income_proof_status: Application.income_proof_statuses[:not_reviewed],
-          residency_proof_status: Application.residency_proof_statuses[:not_reviewed]
-        )
-
-        service = FilterService.new(@scope, { filter: 'proofs_needing_review' })
-        result_data = service.apply_filters.data
-
-        assert_includes(
-          result_data,
-          residency_pending_app,
-          'App with income_proof_required=false but residency not_reviewed should appear in proofs_needing_review'
-        )
-      end
+    test 'proofs_needing_review includes submitted residency when income is not required' do
+      application = create(:application, :with_residency_proof, status: :in_progress)
+      application.update_columns(income_proof_required: false)
+      result = FilterService.new(@scope, { filter: 'proofs_needing_review' }).apply_filters
+      assert_predicate result, :success?
+      assert_includes result.data, application
     end
 
     test 'filters by disability certifications to review' do
@@ -238,6 +233,45 @@ module Applications
         assert_not_includes result_data, @approved_app
         assert_not_includes result_data, @rejected_app, 'Rejected applications should be excluded even with received disability certification'
       end
+    end
+
+    test 'combined certification review preserves the supplied scope and the received and signed subfilters' do
+      received = create(:application, :in_progress, disability_certification_status: :received)
+      signed = create(:application, :in_progress,
+                      disability_certification_status: :requested, document_signing_status: :signed, program_disability_groups: ['speech'])
+      overlap = create(:application, :in_progress, disability_certification_status: :received, document_signing_status: :signed)
+      archived = create(:application, :archived, disability_certification_status: :received, document_signing_status: :signed)
+      decided = create(:application, :in_progress, disability_certification_status: :approved, document_signing_status: :signed)
+      outsider = create(:application, :in_progress, disability_certification_status: :received)
+      supplied = Application.where(id: [received, signed, overlap, archived, decided].map(&:id))
+      expected = {
+        'certifications_needing_review' => [received.id, signed.id, overlap.id],
+        'disability_certs_to_review' => [received.id, overlap.id],
+        'digitally_signed_needs_review' => [signed.id, overlap.id]
+      }
+      expected.each do |filter, ids|
+        result = FilterService.new(supplied, filter: filter).apply_filters
+        assert result.success?, result.message
+        assert_equal ids.sort, result.data.ids.sort, filter
+        assert_not_includes result.data.ids, outsider.id
+      end
+      grouped = FilterService.new(supplied, filter: 'certifications_needing_review', program_group: 'speech').apply_filters
+      assert grouped.success?, grouped.message
+      assert_equal [signed.id], grouped.data.ids
+    end
+
+    test 'certification requests exclude signed and already requested forms within the supplied scope' do
+      pending = create(:application, status: :awaiting_dcf, disability_certification_status: :not_requested)
+      signed = create(:application, status: :awaiting_dcf, disability_certification_status: :not_requested, document_signing_status: :signed)
+      requested = create(:application, status: :awaiting_dcf, disability_certification_status: :requested)
+      received = create(:application, status: :awaiting_dcf, disability_certification_status: :received)
+      create(:application, status: :awaiting_dcf, disability_certification_status: :not_requested)
+      supplied = Application.where(id: [pending, signed, requested, received, @active_app, @approved_app].map(&:id))
+
+      result = FilterService.new(supplied, filter: 'cert_requests_needed').apply_filters
+
+      assert result.success?, result.message
+      assert_equal [pending.id], result.data.ids
     end
 
     test 'filters by explicit status parameter' do

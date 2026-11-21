@@ -16,7 +16,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_select '#recommendation-notes-help', text: /shared verbatim.*applicant or managing guardian/
+    assert_select '#recommendation-notes-help', text: /applicant or managing guardian receives this text exactly as written/
     assert_select '#working-notes-help', text: /internal notes.*not included.*confirmation emails or letters/
     assert_select '#complete_evaluation_recommendation_notes[aria-describedby~="recommendation-notes-help"]'
     assert_select '#working_evaluation_working_notes[aria-describedby~="working-notes-help"]'
@@ -30,7 +30,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '#complete-evaluation-form input[type="radio"]', count: 0
     assert_select '#catalog-recommendations-group:not([hidden]):not([disabled])'
     assert_select '#complete_evaluation_no_suitable_product[type="checkbox"]:not([checked])'
-    assert_select '#recommendation-notes-help strong', text: /shared verbatim.*Use Working Notes for internal notes/
+    assert_select '#recommendation-notes-help strong', text: /receives this text exactly as written.*Put private assessment notes in Report internal notes/
     assert_select '#complete-internal-notes-help strong', text: 'Internal notes only.'
     assert_select '#complete-evaluation-form input[type="submit"][data-turbo-submits-with="Submitting report..."]'
     assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s
@@ -100,6 +100,23 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'scheduled', @evaluation.reload.status
   end
 
+  test 'empty and scalar trial controls preserve a failed report without crashing its retry form' do
+    ['', 'untrusted', nil, {}].each do |trials|
+      assert_no_difference ['Event.count', 'EquipmentNeed.count'] do
+        post submit_report_evaluators_evaluation_path(@evaluation), params: {
+          evaluation: { appointment_completed_at: '', location: 'Retry library', notes: 'Retained retry observations',
+                        recommended_product_ids: [@product.id], products_tried_inputs: trials }
+        }
+      end
+      assert_response :unprocessable_content
+      assert_select '#complete-evaluation-form'
+      assert_select '#complete_evaluation_location[value="Retry library"]'
+      assert_select '#complete_evaluation_notes', text: 'Retained retry observations'
+      assert_select "#trial-#{@product.id}[checked]", count: 0
+      assert_equal 'scheduled', @evaluation.reload.status
+    end
+  end
+
   test 'archived recommendations are rejected but archived trials survive replacement with an active recommendation' do
     @product.archive!
     replacement = create(:product, name: 'Available replacement device')
@@ -116,8 +133,9 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select '#submit-report-errors a[href="#catalog-recommendations-group"]'
-    assert_select '#submit-report-recommended-product-ids-error', text: /cannot include archived catalog products/
-    assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s, count: 0
+    assert_select '#submit-report-recommended-product-ids-error', text: /must contain confirmed available models/
+    assert_select '#catalog-recommendations-group input[type="checkbox"][value=?][checked]', @product.id.to_s
+    assert_select '#catalog-recommendations-group', text: /This product is unavailable\. Uncheck it before submitting the report\./
     assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', replacement.id.to_s
     assert_select "#trial-#{@product.id}[checked]"
     assert_select "#trial-#{@product.id}-reaction option[value=Neutral][selected]"
@@ -143,7 +161,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     evaluation = create(:evaluation, :completed, evaluator: @evaluator)
     products = evaluation.recommended_products.to_a
     products.each(&:archive!)
-    original = evaluation.attributes.except('post_completion_notes', 'updated_at')
+    original = evaluation.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
 
     get evaluators_evaluation_path(evaluation)
     assert_response :success
@@ -153,7 +171,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to evaluators_evaluation_path(evaluation)
     assert_equal 'Additional follow-up context.', evaluation.reload.post_completion_notes
-    assert_equal original, evaluation.attributes.except('post_completion_notes', 'updated_at')
+    assert_equal original, evaluation.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
     assert_equal products.map(&:id).sort, evaluation.recommended_product_ids.sort
   end
 
@@ -372,13 +390,13 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       'Communication Preferences'
     )
     assert_includes @response.body, 'Constituent'
-    assert_includes @response.body, 'Mark Evaluation as Completed'
+    assert_includes @response.body, 'Complete evaluation report'
     assert_includes @response.body, 'Cancel Evaluation'
     assert_includes @response.body, 'Reschedule Evaluation'
     assert_not_includes @response.body, 'Mark as No-Show'
     completion_form = form_html_for('complete-evaluation-form')
 
-    assert_includes completion_form, 'Working Notes'
+    assert_includes completion_form, 'Report internal notes'
     assert_includes completion_form, %(action="#{submit_report_evaluators_evaluation_path(@evaluation)}")
     assert_includes completion_form, 'method="post"'
     assert_not_includes completion_form, 'Call constituent before arrival'
@@ -443,7 +461,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, 'Record the evaluation outcome'
     assert_body_order(
       'This evaluation needs an outcome.',
-      'Mark Evaluation as Completed',
+      'Complete evaluation report',
       'Mark as No-Show',
       'Reschedule Evaluation',
       'Cancel Evaluation'
@@ -486,18 +504,66 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, 'Appointment Completed At'
-    assert_includes @response.body, 'Report Submitted At'
-    assert_includes @response.body, 'Working Notes'
+    assert_includes @response.body, 'Appointment completed'
+    assert_includes @response.body, 'Report submitted'
+    assert_select '#report-internal-notes dt', text: 'Report internal notes'
+    assert_select 'section[aria-labelledby="working-notes-heading"]', count: 0
     assert_select '#working-notes-form', count: 0
     assert_includes @response.body, 'Attendees'
     assert_includes @response.body, 'Products Tried'
-    assert_includes @response.body, 'Recommended products from catalog'
-    assert_includes @response.body, 'Working Notes'
-    assert_not_includes @response.body, 'Mark Evaluation as Completed'
+    assert_includes @response.body, 'Recommended catalog products'
+    assert_select '#supplemental-notes-form label', text: 'Supplemental internal notes'
+    assert_not_includes @response.body, 'Complete evaluation report'
     assert_not_includes @response.body, 'Cancel Evaluation'
     assert_not_includes @response.body, 'Reschedule Evaluation'
     assert_no_training_session_context
+  end
+
+  test 'show resolves tried product names with a bounded catalog query count' do
+    products = 4.times.map { |index| create(:product, name: "Historical trial #{index}") }
+    @evaluation.update!(status: :completed, evaluation_date: Time.current, appointment_completed_at: 1.hour.ago,
+                        report_submitted_at: Time.current, products_tried: products.map { |product| { 'product_id' => product.id.to_s, 'reaction' => 'Neutral' } })
+    queries = []
+    observer = lambda do |_name, _start, _finish, _id, payload|
+      queries << payload[:sql] if payload[:sql].match?(/FROM "products"/)
+    end
+
+    ActiveSupport::Notifications.subscribed(observer, 'sql.active_record') do
+      get evaluators_evaluation_path(@evaluation)
+    end
+
+    assert_response :success
+    products.each { |product| assert_select 'li', text: "#{product.name} — Neutral" }
+    assert_operator queries.size, :<=, 3, queries.join("\n")
+  end
+
+  test 'submitted report notes remain distinct and unchanged when later supplemental notes are added' do
+    post submit_report_evaluators_evaluation_path(@evaluation), params: {
+      evaluation: {
+        appointment_completed_at: 1.hour.ago, location: 'Library', notes: 'wanted iphone specifically',
+        recommended_product_ids: [], recommendation_notes: 'Review a model outside the catalog.'
+      }
+    }
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    report = @evaluation.reload.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
+
+    follow_redirect!
+    assert_select '#report-internal-notes', text: /Report internal notes.*wanted iphone specifically/m
+    assert_select 'section[aria-labelledby="working-notes-heading"]', count: 0
+    assert_select '#supplemental-notes-form label', text: 'Supplemental internal notes'
+    assert_select '#supplemental_evaluation_post_completion_notes', text: ''
+
+    ['Follow-up observation.', "Follow-up observation.\nA later update."].each do |supplement|
+      patch evaluators_evaluation_path(@evaluation), params: { evaluation: { post_completion_notes: supplement } }
+
+      assert_redirected_to evaluators_evaluation_path(@evaluation)
+      follow_redirect!
+      assert_select '#report-internal-notes', text: /wanted iphone specifically/
+      assert_select '#supplemental_evaluation_post_completion_notes', text: supplement
+      assert_equal supplement, @evaluation.reload.post_completion_notes
+      assert_nil @evaluation.working_notes
+      assert_equal report, @evaluation.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
+    end
   end
 
   test 'assigned evaluator can schedule an evaluation' do
@@ -597,12 +663,12 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(evaluation)
     assert_response :success
     assert_includes response.body, 'Outside-specialist consultation'
-    original = evaluation.attributes.except('post_completion_notes', 'updated_at')
+    original = evaluation.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
     patch evaluators_evaluation_path(evaluation), params: { evaluation: { post_completion_notes: 'Additional consultation context' } }
 
     assert_redirected_to evaluators_evaluation_path(evaluation)
     assert_equal 'Additional consultation context', evaluation.reload.post_completion_notes
-    assert_equal original, evaluation.attributes.except('post_completion_notes', 'updated_at')
+    assert_equal original, evaluation.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
   end
 
   test 'assigned evaluator can complete evaluation before scheduled time' do
@@ -647,7 +713,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, 'Failed to submit evaluation:'
     assert_select '#submit-report-errors a[href="#complete_evaluation_notes"]', text: "Notes can't be blank", count: 1
     assert_select '#submit-report-notes-error', text: "Notes can't be blank"
-    assert_includes @response.body, 'Mark Evaluation as Completed'
+    assert_includes @response.body, 'Complete evaluation report'
     assert_select '#supplemental-notes-form', count: 0
     assert_equal 'scheduled', @evaluation.reload.status
   end
@@ -799,8 +865,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select 'dt', text: 'Scheduled For'
-    assert_select 'dt', text: 'Appointment Completed At'
-    assert_select 'dt', text: 'Report Submitted At'
+    assert_select 'dt', text: 'Appointment completed'
+    assert_select 'dt', text: 'Report submitted'
     assert_select 'dd', text: 'Not recorded', count: 2
     assert_select "textarea[name='evaluation[post_completion_notes]']", count: 1
   end

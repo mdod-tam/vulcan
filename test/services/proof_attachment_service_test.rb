@@ -86,6 +86,44 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'secure_form', event.metadata['submission_method']
   end
 
+  test 'accepted paper proof records one blob-bound decision without adding review notifications on retry' do
+    attributes = { application: @application, proof_type: :income, blob_or_file: @test_file_upload,
+                   status: :approved, admin: @admin, submission_method: :paper }
+    verified_at = Time.current.change(usec: 0)
+    travel_to verified_at do
+      assert_no_difference 'Notification.count' do
+        assert_difference 'ProofReview.count', 1 do
+          result = ProofAttachmentService.attach_proof(attributes)
+          assert result[:success], result[:error]&.message
+        end
+        assert_no_difference 'ProofReview.count' do
+          result = ProofAttachmentService.attach_proof(attributes)
+          assert result[:success], result[:error]&.message
+        end
+      end
+      review = @application.proof_reviews.proof_type_income.sole
+      assert review.status_approved?
+      assert review.submission_method_paper?
+      assert_equal @admin, review.admin
+      assert_equal @test_file_upload.id, review.reviewed_blob_id
+      assert_equal verified_at, review.reviewed_at
+      assert_equal verified_at, @application.income_last_verified_at
+    end
+  end
+
+  test 'an accepted paper proof decision rolls back with its attachment when the caller fails' do
+    assert_no_difference 'ProofReview.count' do
+      ApplicationRecord.transaction do
+        result = ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: @test_file_upload,
+                                                     status: :approved, admin: @admin, submission_method: :paper)
+        assert result[:success], result[:error]&.message
+        raise ActiveRecord::Rollback
+      end
+    end
+    assert_not @application.reload.income_proof.attached?
+    assert_not @application.income_proof_status_approved?
+  end
+
   test 'attach_proof logs an attached event for web, paper, secure form and email submissions, not a submitted one' do
     %i[web paper secure_form email].each do |method|
       Event.delete_all

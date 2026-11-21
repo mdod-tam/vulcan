@@ -1,0 +1,5 @@
+<%# locals: (purchase_order:) -%>
+<%= render 'admin/equipment/copy_list',
+           supplier_list: Equipment::SupplierList.new(purchase_order:),
+           heading: 'Supplier order list', summary_label: 'Copy plain text list of all products in this PO', id_prefix: 'supplier-list',
+           description: 'Share this list with the vendor, along with any setup instructions they agreed to follow.' %>

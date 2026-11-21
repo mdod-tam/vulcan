@@ -1,7 +1,7 @@
-<%# locals: (groups:, link_products: true) %>
+<%# locals: (groups:, link_products: true, heading_tag: 'h2') %>
 <% groups.each do |group| %>
   <section class="card mt-5 p-5">
-    <h2 class="text-xl font-semibold"><%= t('product_resources.devices.beneficiary', name: group.beneficiary.full_name) %></h2>
+    <%= content_tag heading_tag, t('product_resources.devices.beneficiary', name: group.beneficiary.full_name), class: 'text-xl font-semibold' %>
     <ul class="mt-4 space-y-5">
       <% group.entries.each do |entry| %>
         <li>
@@ -12,9 +12,15 @@
             <p class="font-semibold"><%= entry.product.manufacturer %> <%= entry.product.name %></p>
           <% end %>
           <p class="text-sm text-gray-600"><%= t('product_resources.devices.model', number: entry.product.model_number) %></p>
+          <% if link_products %>
+            <%= link_to t('product_resources.heading'), constituent_portal_product_path(entry.product), class: 'mt-1 inline-block text-primary-700 underline' %>
+          <% end %>
           <ul class="mt-2 text-sm text-gray-700">
             <% entry.sources.each do |source| %>
-              <li><%= t("product_resources.devices.sources.#{source.kind}") %> · <%= l(source.occurred_on, format: :long) %></li>
+              <li>
+                <%= t("product_resources.devices.sources.#{source.status}") %> · <%= t('product_resources.devices.quantity', count: source.quantity) %>
+                <% if source.occurred_on %> · <%= l(source.occurred_on, format: :long) %><% end %>
+              </li>
             <% end %>
           </ul>
         </li>

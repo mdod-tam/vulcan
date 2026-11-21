@@ -18,7 +18,9 @@ module Admin
 
     def index
       @applications_view = applications_view
-      @application_view_counts = { review: Application.active.count, pipeline: Application.status_approved.count }
+      @review_summaries = Applications::ReviewQueueSummary.new.call if @applications_view == 'review'
+      @training_summary = Applications::TrainingQueueSummary.new.call if @applications_view == 'pipeline'
+      @application_view_counts = { review: Application.staff_review_queue.count, pipeline: Application.status_approved.count }
       filtered_status = params[:filter].presence&.to_sym || params[:status].presence&.to_sym
       scoped = application_list_scope
       if @applications_view == 'pipeline'
@@ -27,14 +29,7 @@ module Admin
         prepare_application_list(scoped, filtered_status)
       end
 
-      # Preload notifiable for Notification#message and actor for the view.
-      @recent_notifications = Notification
-                              .includes(:actor, :notifiable)
-                              .includes(notifiable: :application)
-                              .where('created_at > ?', 7.days.ago)
-                              .order(created_at: :desc)
-                              .limit(5)
-      preload_notification_message_dependencies(@recent_notifications)
+      @recent_notifications = recent_admin_notifications
     end
 
     def show
@@ -164,7 +159,7 @@ module Admin
         filtered_scope(Application.status_approved, params.except(:status, :filter, :date_range))
       else
         scope = build_application_base_scope(exclude_statuses: [])
-        scope = scope.active if @applications_view == 'review'
+        scope = scope.merge(Application.staff_review_queue) if @applications_view == 'review'
         filtered_scope(scope)
       end
     end
@@ -181,6 +176,7 @@ module Admin
                end
       @pagy, page_of_apps = paginate_or_first_page(scoped)
       applications = page_of_apps.to_a
+      @pending_income_review_ids = Application.status_approved.awaiting_income_proof_review.where(id: applications.map(&:id)).ids.to_set
       preload_dependent_guardians(applications) unless queue_view
       attachments_index = preload_attachments_for_applications(applications)
       @delivery_attention = EmailDelivery::Visibility.application_attention(applications)
@@ -194,13 +190,34 @@ module Admin
       @pipeline = Applications::ApprovedPipeline.new(scoped.to_a)
       @pipeline_group = params[:group].to_s.to_sym
       @pipeline_group = @pipeline.groups.find { |_group, rows| rows.any? }&.first || :equipment unless @pipeline.groups.key?(@pipeline_group)
-      stages = Applications::ApprovedPipeline::STAGES.fetch(@pipeline_group).map { |definition| definition.key.to_s }
-      @pipeline_stage = stages.include?(params[:stage]) ? params[:stage] : 'all'
-      rows = @pipeline.groups.fetch(@pipeline_group)
-      rows = rows.select { |row| row.stage.to_s == @pipeline_stage } unless @pipeline_stage == 'all'
-      rows = rows.sort_by { |row| [row.entered_at ? row.entered_at.to_f : Float::INFINITY, row.application.id] }
+      rows = filter_pipeline_rows(@pipeline.groups.fetch(@pipeline_group))
+      @pipeline_matching_count = rows.length
       @pagy, @pipeline_rows = paginate_or_first_page(rows)
       preload_pipeline_display
+    end
+
+    def filter_pipeline_rows(rows)
+      requested_stage = params.permit(:stage)[:stage]
+      if @pipeline_group == :voucher && ::Icanconnect::Setting.active?
+        @income_follow_up = ::Icanconnect::IncomeFollowUp.requests_by_application(rows.map { |row| row.application.id })
+        if requested_stage == ::Icanconnect::IncomeFollowUp::STAGE
+          @pipeline_stage = requested_stage
+          return income_follow_up_rows(rows)
+        end
+      end
+
+      stages = Applications::ApprovedPipeline.stage_filters(@pipeline_group)
+      @pipeline_stage = requested_stage.presence_in(stages.keys) || 'all'
+      rows = rows.select { |row| stages.fetch(@pipeline_stage).include?(row.stage) } unless @pipeline_stage == 'all'
+      Applications::ApprovedPipeline.sort_rows(rows)
+    end
+
+    def income_follow_up_rows(rows)
+      rows.select { |row| @income_follow_up.key?(row.application.id) }.sort_by do |row|
+        requested_at = @income_follow_up[row.application.id]
+        since = requested_at || row.application.current_status_entered_at
+        [requested_at ? 1 : 0, since&.to_f || Float::INFINITY, row.application.id]
+      end
     end
 
     def preload_pipeline_display
@@ -208,6 +225,11 @@ module Admin
       oldest_applications = @pipeline.summaries(@pipeline_group).filter_map { |summary| summary.oldest&.application }
       ActiveRecord::Associations::Preloader.new(records: (page_applications + oldest_applications).uniq, associations: :user).call
       ActiveRecord::Associations::Preloader.new(records: page_applications, associations: :managing_guardian).call
+      fulfillment_row = @pipeline.summaries(@pipeline_group).find { |summary| summary.stage == :needs_fulfillment }&.oldest
+      return unless fulfillment_row
+
+      requests = Equipment::FulfillmentStage.new(fulfillment_row.application).requests_to_fulfill
+      ActiveRecord::Associations::Preloader.new(records: requests, associations: :product).call
     end
 
     def approved_pipeline_cutoff
@@ -427,7 +449,7 @@ module Admin
       load_attachment_data
 
       @training_history = @application.training_sessions.includes(:trainer, :product_trained_on).order(:created_at, :id)
-      @max_training_sessions = Policy.max_training_sessions
+      @max_training_sessions = @application.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
       @reserved_training_sessions_count = @application.reserved_training_sessions_count
       @remaining_training_sessions = @application.remaining_training_sessions

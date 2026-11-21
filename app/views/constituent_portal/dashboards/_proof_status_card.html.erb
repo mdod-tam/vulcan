@@ -4,7 +4,9 @@
   <div class="flex items-center justify-between">
     <div>
       <h4 class="text-base font-medium text-gray-900"><%= t('applications.proof_card.heading', proof: t("applications.proof_card.types.#{proof_type}")) %></h4>
-      <% if application.public_send("#{proof_type}_proof_status") == 'approved' %>
+      <% if proof_type.to_s == 'income' && application.income_proof_update_offered? %>
+        <p class="mt-2 text-sm text-warning-800"><%= t('applications.proof_card.income_update_needed') %></p>
+      <% elsif application.public_send("#{proof_type}_proof_status") == 'approved' %>
         <div class="flex items-center mt-2">
           <div class="badge badge-success">
             <%= t('applications.proof_card.approved') %>

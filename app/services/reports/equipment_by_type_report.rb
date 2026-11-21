@@ -46,9 +46,11 @@ module Reports
 
     def non_voucher_equipment_counts
       counts = Hash.new(0)
-      EquipmentItem.active.joins(:purchase_order).includes(:product)
-                   .where(purchase_orders: { sent_at: report_range.begin.to_date..report_range.end.to_date })
-                   .find_each { |item| add_device_type_counts(counts, item.product, 1) }
+      shipment_dates = Range.new(report_range.begin.to_date, report_range.end.to_date, report_range.exclude_end?)
+      product_counts = EquipmentItem.shipped.where(shipped_at: shipment_dates).group(:product_id).count
+      Product.where(id: product_counts.keys).find_each do |product|
+        add_device_type_counts(counts, product, product_counts.fetch(product.id))
+      end
       counts
     end
 
@@ -132,6 +134,5 @@ module Reports
       Rails.error.report(StandardError.new(error.class.name), handled: true, context: context) if Rails.respond_to?(:error)
       log_error(error, context)
     end
-
   end
 end

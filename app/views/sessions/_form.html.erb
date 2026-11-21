@@ -35,8 +35,7 @@
         autofocus: true,
         "aria-required": "true",
         "aria-invalid": (@errors&.include?(:contact) ? "true" : "false"),
-        "aria-describedby": (["contact-hint", (@errors&.include?(:contact) ? "contact-error" : nil)].compact.join(" ")) %>
-    <p id="contact-hint" class="form-hint"><%= t("sessions.form.contact_hint") %></p>
+        'aria-describedby': ('contact-error' if @errors&.include?(:contact)) %>
     <% if @errors&.include?(:contact) %>
       <p id="contact-error" class="mt-1 text-sm text-danger-600">
         <%= @errors[:contact] %>

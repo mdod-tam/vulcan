@@ -1,0 +1,13 @@
+en:
+  activemodel:
+    errors:
+      models:
+        application_form:
+          attributes:
+            household_size:
+              positive_integer: "must be a whole number greater than zero"
+            annual_income:
+              invalid_amount: "must be zero or a positive dollar amount with no more than two decimal places"
+              income_above_limit: "is above the income limit for your household size"
+            base:
+              income_check_unavailable: "We couldn't check the income limit. Please try again later. Your application has not been submitted."

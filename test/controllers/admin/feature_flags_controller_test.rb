@@ -16,6 +16,14 @@ module Admin
       assert_response :success
       assert_includes assigns(:feature_flags), @feature_flag
       assert_includes assigns(:feature_flags), flag2
+      assert_select 'h1', count: 1, text: 'Feature Flags'
+      assert_select 'a[href=?]', admin_policies_path, text: 'System Policies'
+      assert_select 'a[href=?]', admin_dashboard_path, text: 'Back to Dashboard'
+      assert_select 'a[href=?]', admin_email_templates_path(anchor: 'email-delivery'), text: 'communication controls'
+      assert_select 'input[type="submit"][aria-label="Disable Test Feature"]'
+      assert_select 'input[type="submit"][aria-label="Enable Another Feature"]'
+      ids = css_select('[id]').pluck('id')
+      assert_equal ids.uniq, ids
     end
 
     test 'index requires authentication' do

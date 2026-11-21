@@ -1,0 +1,6 @@
+es:
+  icanconnect:
+    unlimited: "Sin límite de sesiones (iCanConnect)"
+    training_available_through: "Capacitación disponible hasta el %{date}."
+    training_equipment: "Dispositivos usados en la capacitación"
+    training_equipment_help: "Seleccione los dispositivos usados en esta sesión. Puede agregarlos o actualizarlos después al registrar los costos de capacitación."

@@ -129,15 +129,15 @@ describe("submit_gate_state", () => {
   })
 
   test("formatIncompleteMessage keeps the base message without a template or labels", () => {
-    const base = "Complete all required confirmations before submitting."
+    const base = "Complete all required fields before submitting."
 
     expect(formatIncompleteMessage(base, null, ["Provider Name"])).toBe(base)
     expect(formatIncompleteMessage(base, "Still needed: %{items}.", [])).toBe(base)
     expect(formatIncompleteMessage(base, "Still needed: %{items}.", ["Provider Name", "Income proof"]))
-      .toBe("Complete all required confirmations before submitting. Still needed: Provider Name, Income proof.")
+      .toBe("Complete all required fields before submitting. Still needed: Provider Name, Income proof.")
     // A label ending in a period is a sentence in the form but a list item here, so the
     // template's period is the only one rendered.
     expect(formatIncompleteMessage(base, "Still needed: %{items}.", ["I authorize the release and sharing of my disability-related information."]))
-      .toBe("Complete all required confirmations before submitting. Still needed: I authorize the release and sharing of my disability-related information.")
+      .toBe("Complete all required fields before submitting. Still needed: I authorize the release and sharing of my disability-related information.")
   })
 })

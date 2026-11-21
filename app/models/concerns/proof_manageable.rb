@@ -15,13 +15,20 @@ module ProofManageable
 
     before_save :sync_proof_review_marker, if: :proof_review_input_changed?
 
+    scope :income_proof_review_applicable, -> { where(income_proof_required: true).or(where(id: approved_deafblind.select(:id))) }
+    scope :awaiting_income_proof_review, lambda {
+      attachments = ActiveStorage::Attachment.where(record_type: base_class.name, name: 'income_proof')
+      income_proof_review_applicable.where(income_proof_status: :not_reviewed, id: attachments.select(:record_id))
+    }
+
     scope :awaiting_proof_review, lambda {
       pending = REVIEW_PROOF_TYPES.map do |type|
+        next awaiting_income_proof_review if type == 'income'
+
         attachments = ActiveStorage::Attachment.where(record_type: base_class.name, name: "#{type}_proof").select(:record_id)
-        relation = where("#{type}_proof_status" => :not_reviewed, id: attachments)
-        type == 'income' ? relation.where(income_proof_required: true) : relation
+        where("#{type}_proof_status" => :not_reviewed, id: attachments)
       end.reduce(&:or)
-      active.merge(pending)
+      active.merge(pending).or(status_approved.awaiting_income_proof_review)
     }
   end
 
@@ -36,7 +43,15 @@ module ProofManageable
   end
 
   def can_submit_proof?
-    !status_archived? && !status_approved?
+    !status_archived? && (!status_approved? || income_proof_update_available?)
+  end
+
+  def income_proof_review_applicable?
+    income_proof_required? || approved_deafblind?
+  end
+
+  def income_proof_review_pending?
+    income_proof_status_not_reviewed? && income_proof_review_applicable? && income_proof.attached?
   end
 
   # Reaching the warning limit still permits one final corrected submission.
@@ -53,9 +68,10 @@ module ProofManageable
 
   # Secure proof links serve rejected proofs or missing proofs with not_reviewed status.
   # An archived application is closed: ProofReview refuses to review it, so an upload could never be reviewed.
-  # Issuance, the admin send button, and public submission all use this rule.
+  # Public submissions keep using this rule after a link has been issued.
   def proof_requestable_via_secure_form?(proof_type)
     return false if status_archived?
+    return true if proof_type.to_s == 'income' && income_proof_update_available?
     return false if proof_type.to_s == 'income' && !income_proof_required?
     return false if public_send("#{proof_type}_proof_status_approved?")
     return true if public_send("#{proof_type}_proof_status_rejected?")
@@ -63,8 +79,17 @@ module ProofManageable
     public_send("#{proof_type}_proof_status_not_reviewed?") && !document_attachment_for(proof_type).attached?
   end
 
-  # The constituent portal accepts only a replacement for a rejected proof.
+  def proof_request_issuable?(proof_type)
+    return income_proof_update_offered? if status_approved? && proof_type.to_s == 'income'
+
+    proof_requestable_via_secure_form?(proof_type)
+  end
+
+  # The constituent portal accepts replacements for rejected proofs and offered income updates.
   def proof_resubmittable_via_portal?(proof_type)
+    return income_proof_update_offered? if status_approved? && proof_type.to_s == 'income'
+    return false if proof_type.to_s == 'income' && !income_proof_required?
+
     can_submit_proof? && public_send("#{proof_type}_proof_status_rejected?")
   end
 
@@ -80,11 +105,11 @@ module ProofManageable
   end
 
   def proof_review_pending?
+    return income_proof_review_pending? if status_approved?
     return false unless workflow_active?
+    return true if income_proof_review_pending?
 
-    REVIEW_PROOF_TYPES.any? do |type|
-      next false if type == 'income' && !income_proof_required?
-
+    %w[id residency].any? do |type|
       public_send("#{type}_proof_status_not_reviewed?") && document_attachment_for(type).attached?
     end
   end
@@ -129,7 +154,7 @@ module ProofManageable
   def sync_proof_review_marker
     if proof_review_pending?
       pending_upload = REVIEW_PROOF_TYPES.any? do |type|
-        (type != 'income' || income_proof_required?) && public_send("#{type}_proof_status_not_reviewed?") &&
+        (type != 'income' || income_proof_review_applicable?) && public_send("#{type}_proof_status_not_reviewed?") &&
           attachment_changes["#{type}_proof"].present?
       end
       self.needs_review_since = Time.current if needs_review_since.nil? || pending_upload

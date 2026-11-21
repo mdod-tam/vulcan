@@ -20,17 +20,17 @@ module Evaluators
       assert_no_selector '#complete-evaluation-form input[type=radio]'
       assert_selector '#catalog-recommendations-group'
       within '#complete-evaluation-form' do
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_no_selector '#submit-report-errors'
       assert_equal 'scheduled', @evaluation.reload.status
       page.execute_script('document.getElementById("complete-evaluation-form").noValidate = true')
       within '#complete-evaluation-form' do
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
       within '#complete-evaluation-form' do
-        assert_field 'Working Notes', with: 'Appointment observations recorded.'
+        assert_field 'Report internal notes', with: 'Appointment observations recorded.'
         assert_field 'Location', with: 'Accessible library meeting room'
       end
       assert_equal 'scheduled', @evaluation.reload.status
@@ -38,8 +38,8 @@ module Evaluators
 
       within '#complete-evaluation-form' do
         check 'No suitable product was found'
-        fill_in 'Non-catalog products and recommendation details', with: 'Arrange a specialist assessment; no suitable product was found.'
-        click_button 'Mark as Completed'
+        fill_in 'Recommendation details', with: 'Arrange a specialist assessment; no suitable product was found.'
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'no_suitable_product', @evaluation.reload.recommendation_outcome
@@ -57,16 +57,16 @@ module Evaluators
         assert_equal false, page.evaluate_script('document.getElementById("complete-evaluation-form").checkValidity()')
         select 'Dissatisfied', from: "trial-#{@product.id}-reaction"
         replace_product_selection('recommended_product_ids', @product)
-        fill_in 'Non-catalog products and recommendation details', with: 'Also recommend a non-catalog visual alert device.'
-        click_button 'Mark as Completed'
+        fill_in 'Recommendation details', with: 'Also recommend a non-catalog visual alert device.'
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
       2.times do |attempt|
         within '#complete-evaluation-form' do
           assert_selector "#trial-#{@product.id}:checked"
           assert_selector :select, 'Satisfaction with Outcome Trial Device', selected: 'Dissatisfied'
-          assert_field 'Non-catalog products and recommendation details', with: 'Also recommend a non-catalog visual alert device.'
-          click_button 'Mark as Completed' if attempt.zero?
+          assert_field 'Recommendation details', with: 'Also recommend a non-catalog visual alert device.'
+          click_button 'Submit completed report' if attempt.zero?
         end
       end
       take_screenshot('recommendations-mixed-restored', html: true, full: true)
@@ -76,8 +76,8 @@ module Evaluators
       page.current_window.resize_to(1200, 800)
       within '#complete-evaluation-form' do
         select 'Neutral', from: "trial-#{@product.id}-reaction"
-        fill_in 'Appointment Date/Time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
-        click_button 'Mark as Completed'
+        fill_in 'Appointment date and time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'Neutral', @evaluation.reload.products_tried.sole['reaction']
@@ -99,22 +99,23 @@ module Evaluators
       within '#complete-evaluation-form' do
         replace_product_selection('products_tried_inputs', @product, reaction: 'Neutral')
         replace_product_selection('recommended_product_ids', @product)
-        fill_in 'Non-catalog products and recommendation details', with: details
+        fill_in 'Recommendation details', with: details
       end
       @product.archive!
 
       within '#complete-evaluation-form' do
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
-      assert_text 'cannot include archived catalog products'
+      assert_text 'Recommended products must contain confirmed available models'
       assert_equal 'submit-report-errors', page.evaluate_script('document.activeElement.id')
       within '#complete-evaluation-form' do
-        assert_no_selector "input[name='evaluation[recommended_product_ids][]'][value='#{@product.id}']"
+        assert_selector "input[name='evaluation[recommended_product_ids][]'][value='#{@product.id}']:checked"
+        assert_text 'This product is unavailable. Uncheck it before submitting the report.'
         assert_selector "#trial-#{@product.id}:checked"
         assert_selector :select, 'Satisfaction with Outcome Trial Device', selected: 'Neutral'
-        assert_field 'Working Notes', with: 'Appointment observations recorded.'
-        assert_field 'Non-catalog products and recommendation details', with: details
+        assert_field 'Report internal notes', with: 'Appointment observations recorded.'
+        assert_field 'Recommendation details', with: details
       end
       assert_equal 'scheduled', @evaluation.reload.status
       assert_nil @evaluation.report_submitted_at
@@ -124,7 +125,7 @@ module Evaluators
 
       within '#complete-evaluation-form' do
         replace_product_selection('recommended_product_ids', replacement)
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'completed', @evaluation.reload.status
@@ -144,13 +145,13 @@ module Evaluators
       within '#complete-evaluation-form' do
         replace_product_selection('products_tried_inputs', @product)
         replace_product_selection('recommended_product_ids', @product)
-        fill_in 'Non-catalog products and recommendation details', with: 'Client-facing next steps.'
+        fill_in 'Recommendation details', with: 'Client-facing next steps.'
         check 'No suitable product was found'
       end
       assert_equal false, page.evaluate_script('document.getElementById("complete-evaluation-form").checkValidity()')
       page.execute_script('document.getElementById("complete-evaluation-form").noValidate = true')
       within '#complete-evaluation-form' do
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
       assert_checked_field 'No suitable product was found'
@@ -163,7 +164,7 @@ module Evaluators
         find("#trial-#{@product.id}").check
         assert_selector :select, 'Satisfaction with Outcome Trial Device', selected: 'Satisfied'
         select 'Dissatisfied', from: "trial-#{@product.id}-reaction"
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'Dissatisfied', @evaluation.reload.products_tried.sole['reaction']
@@ -177,23 +178,39 @@ module Evaluators
       visit evaluators_evaluation_path(@evaluation)
       fill_report(appointment_time: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'))
       within '#complete-evaluation-form' do
+        assert_selector "#trial-#{@product.id}-reaction[disabled]", visible: :all
         find("#trial-#{@product.id}").check
-        select 'Neutral', from: "trial-#{@product.id}-reaction"
+        assert_no_selector "#trial-#{@product.id}-reaction", visible: true
         replace_product_selection('recommended_product_ids', @product)
-        fill_in 'Non-catalog products and recommendation details', with: 'An additional non-catalog recommendation.'
-        click_button 'Mark as Completed'
+        fill_in 'Recommendation details', with: 'An additional non-catalog recommendation.'
+        click_button 'Submit completed report'
+      end
+      assert_single_action_error('submit-report-errors')
+      assert_text 'Products tried requires a satisfaction rating for each selected product'
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+      assert_empty @evaluation.application.equipment_needs
+      within '#complete-evaluation-form' do
+        assert_selector "#trial-#{@product.id}-reaction[required]:not([disabled])"
+        assert_selector :select, 'Satisfaction with Outcome Trial Device', selected: 'Select satisfaction'
+      end
+      take_screenshot('recommendations-rating-required-without-js', html: true, full: true)
+      within '#complete-evaluation-form' do
+        select 'Neutral', from: "trial-#{@product.id}-reaction"
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
       assert_selector "#trial-#{@product.id}:checked"
       assert_selector :select, 'Satisfaction with Outcome Trial Device', selected: 'Neutral'
       take_screenshot('recommendations-restored-without-js', html: true, full: true)
       within '#complete-evaluation-form' do
-        fill_in 'Appointment Date/Time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
-        click_button 'Mark as Completed'
+        fill_in 'Appointment date and time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'Neutral', @evaluation.reload.products_tried.sole['reaction']
       assert_equal 'catalog_products', @evaluation.recommendation_outcome
+      assert_equal 1, Event.where(action: 'evaluation_completed', auditable: @evaluation).count
     ensure
       browser&.page&.command('Emulation.setScriptExecutionDisabled', value: false)
     end
@@ -202,9 +219,9 @@ module Evaluators
       visit evaluators_evaluation_path(@evaluation)
       fill_report
       within '#complete-evaluation-form' do
-        fill_in 'Non-catalog products and recommendation details', with: 'Recommend a specialist hearing clinic assessment.'
+        fill_in 'Recommendation details', with: 'Recommend a specialist hearing clinic assessment.'
         replace_product_selection('products_tried_inputs', @product, reaction: 'Dissatisfied')
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'outside_catalog', @evaluation.reload.recommendation_outcome
@@ -218,8 +235,8 @@ module Evaluators
       visit evaluators_evaluation_path(@evaluation)
       fill_report(appointment_time: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'))
       within '#complete-evaluation-form' do
-        fill_in 'Non-catalog products and recommendation details', with: 'Restored recommendation context.'
-        click_button 'Mark as Completed'
+        fill_in 'Recommendation details', with: 'Restored recommendation context.'
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
       within '#complete-evaluation-form' do
@@ -229,15 +246,55 @@ module Evaluators
         assert_selector '#complete_evaluation_recommendation_notes[required][aria-required="true"]'
         replace_product_selection('recommended_product_ids', @product)
         replace_product_selection('products_tried_inputs', @product, reaction: 'Satisfied')
-        fill_in 'Non-catalog products and recommendation details', with: ''
-        fill_in 'Appointment Date/Time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
-        click_button 'Mark as Completed'
+        fill_in 'Recommendation details', with: ''
+        fill_in 'Appointment date and time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'catalog_products', @evaluation.reload.recommendation_outcome
       assert_equal '', @evaluation.recommendation_notes
       assert_equal [@product.id], @evaluation.recommended_product_ids
       take_screenshot('recommendations-catalog-completed', html: true, full: true)
+    end
+
+    test 'report internal notes remain readable while later supplemental notes are added and extended' do
+      visit evaluators_evaluation_path(@evaluation)
+      fill_report
+      within '#complete-evaluation-form' do
+        fill_in 'Report internal notes', with: 'wanted iphone specifically'
+        fill_in 'Recommendation details', with: 'Review a model outside the catalog.'
+        click_button 'Submit completed report'
+      end
+
+      assert_text 'Evaluation submitted successfully.'
+      assert_selector '#report-internal-notes', text: 'wanted iphone specifically'
+      assert_no_selector 'section[aria-labelledby="working-notes-heading"]'
+      within '#supplemental-notes-form' do
+        assert_field 'Supplemental internal notes', with: ''
+      end
+      report = @evaluation.reload.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
+      take_screenshot('evaluation-report-internal-notes-preserved', html: true, full: true)
+
+      within '#supplemental-notes-form' do
+        fill_in 'Supplemental internal notes', with: 'Follow-up observation.'
+        click_button 'Add Note'
+      end
+      assert_text 'Evaluation updated successfully.'
+      supplement = "Follow-up observation.\nA later update."
+      within '#supplemental-notes-form' do
+        assert_field 'Supplemental internal notes', with: 'Follow-up observation.'
+        fill_in 'Supplemental internal notes', with: supplement
+        click_button 'Update Note'
+      end
+
+      assert_text 'Evaluation updated successfully.'
+      page.refresh
+      assert_selector '#report-internal-notes', text: 'wanted iphone specifically'
+      assert_field 'Supplemental internal notes', with: supplement
+      assert_equal supplement, @evaluation.reload.post_completion_notes
+      assert_nil @evaluation.working_notes
+      assert_equal report, @evaluation.attributes.except('post_completion_notes', 'updated_at', 'lock_version')
+      take_screenshot('evaluation-supplemental-internal-notes-appended', html: true, full: true)
     end
 
     test 'working notes remain separate and editable through rejection replacement refresh and clearing' do
@@ -290,15 +347,17 @@ module Evaluators
       note_errors = ActiveModel::Errors.new(completed)
       note_errors.add(:post_completion_notes, 'could not be saved. Try again.')
       begin
-        Evaluation.any_instance.stubs(:update).returns(false)
         Evaluation.any_instance.stubs(:errors).returns(note_errors)
+        Evaluation.any_instance.stubs(:update!).raises(ActiveRecord::RecordInvalid.new(completed))
         within '#supplemental-notes-form' do
-          fill_in 'Working Notes', with: 'Attempted supplemental follow-up.'
+          fill_in 'Supplemental internal notes', with: 'Attempted supplemental follow-up.'
           click_button 'Add Note'
         end
         assert_selector '#supplemental-notes-errors'
         assert_single_action_error('supplemental-notes-errors')
-        assert_field 'Working Notes', with: 'Attempted supplemental follow-up.'
+        assert_field 'Supplemental internal notes', with: 'Attempted supplemental follow-up.'
+        assert_nil completed.reload.post_completion_notes
+        assert_equal original_report, completed.notes
         assert_equal 'supplemental-notes-errors', page.evaluate_script('document.activeElement.id')
         assert_selector '#supplemental_evaluation_post_completion_notes[aria-invalid=true]'
         assert_selector '#supplemental_evaluation_post_completion_notes[aria-describedby~="supplemental-notes-post-completion-notes-error"]'
@@ -307,22 +366,22 @@ module Evaluators
         assert_equal 'supplemental_evaluation_post_completion_notes', page.evaluate_script('document.activeElement.id')
         take_screenshot('supplemental-notes-restored', html: true, full: true)
       ensure
-        Evaluation.any_instance.unstub(:update)
+        Evaluation.any_instance.unstub(:update!)
         Evaluation.any_instance.unstub(:errors)
       end
 
       within '#supplemental-notes-form' do
-        fill_in 'Working Notes', with: 'Confirmed supplemental next steps.'
+        fill_in 'Supplemental internal notes', with: 'Confirmed supplemental next steps.'
         click_button 'Add Note'
       end
       assert_text 'Evaluation updated successfully.'
       page.refresh
-      assert_field 'Working Notes', with: 'Confirmed supplemental next steps.'
+      assert_field 'Supplemental internal notes', with: 'Confirmed supplemental next steps.'
       assert_equal 'Confirmed supplemental next steps.', completed.reload.post_completion_notes
       take_screenshot('supplemental-notes-saved', html: true, full: true)
 
       within '#supplemental-notes-form' do
-        fill_in 'Working Notes', with: ''
+        fill_in 'Supplemental internal notes', with: ''
         click_button 'Update Note'
       end
       assert_text 'Evaluation updated successfully.'
@@ -349,7 +408,7 @@ module Evaluators
       assert_operator color_contrast(styles.fetch('foreground'), styles.fetch('background')), :>=, 4.5
       page.execute_script('document.getElementById("complete-evaluation-form").noValidate = true')
       find_by_id('complete_evaluation_notes').send_keys(:tab)
-      assert_equal 'Mark as Completed', page.evaluate_script('document.activeElement.value')
+      assert_equal 'Submit completed report', page.evaluate_script('document.activeElement.value')
       page.driver.browser.keyboard.type(:enter)
       assert_selector '#submit-report-errors'
       assert_single_action_error('submit-report-errors')
@@ -409,9 +468,9 @@ module Evaluators
 
     def fill_report(appointment_time: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'))
       within '#complete-evaluation-form' do
-        fill_in 'Appointment Date/Time', with: appointment_time
+        fill_in 'Appointment date and time', with: appointment_time
         fill_in 'Location', with: 'Accessible library meeting room'
-        fill_in 'Working Notes', with: 'Appointment observations recorded.'
+        fill_in 'Report internal notes', with: 'Appointment observations recorded.'
       end
     end
 

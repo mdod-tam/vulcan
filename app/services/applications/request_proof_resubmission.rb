@@ -63,6 +63,20 @@ module Applications
 
     private
 
+    def notify_admins_of_income_request(form)
+      return unless proof_type == :income && application.status_approved?
+
+      notices = Notification.where(action: 'income_proof_update_requested', notifiable: application)
+                            .where("metadata->>'request_batch_id' = ?", form.request_batch_id)
+      User.admins.find_each do |admin|
+        next if notices.exists?(recipient_id: admin.id)
+
+        NotificationService.create_and_deliver!(type: 'income_proof_update_requested', recipient: admin, actor: actor,
+                                                notifiable: application, deliver: false,
+                                                metadata: { secure_request_form_id: form.id, request_batch_id: form.request_batch_id })
+      end
+    end
+
     def issuance
       @issuance ||= SecureRequestIssuance.new(
         application: application,
@@ -87,7 +101,7 @@ module Applications
     end
 
     def requestable_proof_state?
-      application.proof_requestable_via_secure_form?(proof_type)
+      application.proof_request_issuable?(proof_type)
     end
 
     def current_proof_status
@@ -105,6 +119,7 @@ module Applications
           rejection_reason_code: proof_request_rejection_reason_code
         }.compact
       )
+      notify_admins_of_income_request(issued.secure_request_form)
       Delivery.new(
         secure_request_form: issued.secure_request_form,
         raw_token: issued.raw_token,

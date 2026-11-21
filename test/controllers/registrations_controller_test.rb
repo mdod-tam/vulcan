@@ -14,7 +14,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     get sign_up_path
 
     assert_response :success
-    assert_select 'input[name="user[email]"][type=email]'
+    assert_select 'input[name="user[email]"][type=email]:not([aria-describedby])'
     assert_select 'input[type=password]', count: 0
     assert_select 'input[name="user[phone]"]', count: 0
     assert_equal 'no-store', response.headers['Cache-Control']
@@ -69,8 +69,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select 'input[name="user[email]"][value=invalid]'
-    assert_select '[role=alert]', text: I18n.t('registration_verification.invalid_email')
+    assert_select 'input[name="user[email]"][value=invalid][aria-describedby="email-error"]'
+    assert_select '#email-error[role=alert]', text: I18n.t('registration_verification.invalid_email')
   end
 
   test 'initiation performs no account lookup even for a valid address' do

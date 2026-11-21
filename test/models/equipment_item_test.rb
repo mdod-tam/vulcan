@@ -3,27 +3,33 @@
 require 'test_helper'
 
 class EquipmentItemTest < ActiveSupport::TestCase
-  test 'queue scopes agree with persisted device states including tracking-only and withdrawn records' do
+  test 'queue and portal scopes agree with direct and stock predicates across unsent sent shipped and unallocated states' do
+    admin = create(:admin)
     application = create(:application, :approved, :with_all_proofs)
     product = create(:product)
     order = create(:purchase_order)
     attributes = { application: application, product: product, purchase_order: order }
-    items = [create(:equipment_item, **attributes, purchase_order: nil), create(:equipment_item, **attributes),
-             create(:equipment_item, **attributes, tracking_number: 'Label only'),
+    items = [create(:equipment_item, **attributes, purchase_order: nil),
+             create(:equipment_item, **attributes, purchase_order: create(:purchase_order, sent_at: nil)),
+             create(:equipment_item, **attributes), create(:equipment_item, **attributes, tracking_number: 'Label only'),
              create(:equipment_item, **attributes, shipped_at: Date.current, tracking_number: 'Sent package'),
              create(:equipment_item, **attributes, purchase_order: nil, withdrawn_at: Time.current)]
-    item_ids = items.map(&:id)
-
-    assert_equal %w[needs_ordering ordered ordered shipped withdrawn], items.map(&:queue_status)
-    %w[needs_ordering ordered shipped].each do |state|
-      expected_ids = items.select { |item| item.queue_status == state }.map(&:id).sort
-      assert_equal expected_ids, EquipmentItem.public_send(state).where(id: item_ids).order(:id).pluck(:id)
-    end
+    stock = Equipment::StockReceipt.new(actor: admin).existing!(product: product, quantity: 2, received_on: Date.current - 1.day,
+                                                                provenance: 'Verified on-hand devices')
+    need = create(:equipment_need, application: application, product: product)
+    Equipment::StockAllocation.new(actor: admin).allocate!(needs: [{ id: need.id, quantity: 1, lock_version: need.lock_version }], application_versions: equipment_profile_versions(application))
+    items.concat(stock.map(&:reload))
+    ids = items.map(&:id)
+    assert_equal %w[needs_ordering ready_to_send_po awaiting_shipment awaiting_shipment shipped withdrawn awaiting_shipment available_stock], items.map(&:queue_status)
+    assert_equal items.select(&:awaiting_shipment?).map(&:id).sort, EquipmentItem.ordered.where(id: ids).order(:id).pluck(:id)
+    assert_equal items.select(&:portal_visible?).map(&:id).sort, EquipmentItem.portal_visible.where(id: ids).order(:id).pluck(:id)
+    assert_equal [items.first.id], EquipmentItem.needs_ordering.where(id: ids).pluck(:id)
+    assert_equal [items[4].id], EquipmentItem.shipped.where(id: ids).pluck(:id)
   end
 
   test 'tracking alone stays ordered and shipment requires a truthful date and tracking' do
     item = create(:equipment_item, tracking_number: 'Package-1')
-    assert_equal 'ordered', item.queue_status
+    assert_equal 'awaiting_shipment', item.queue_status
     item.shipped_at = Date.current
     assert item.valid?
     item.shipped_at = item.purchase_order.sent_at - 1.day
@@ -43,11 +49,10 @@ class EquipmentItemTest < ActiveSupport::TestCase
     assert_equal '13/45/2026', item.rejected_shipped_at_input
   end
 
-  test 'active serial uniqueness spans duplicate catalog entries and survives shipment' do
+  test 'active serial uniqueness uses the exact catalog identity and survives shipment' do
     product = create(:product, manufacturer: ' Example Corp ', model_number: ' MODEL 1 ')
     first = create(:equipment_item, product: product, serial_number: ' ABC 123 ', shipped_at: Date.current, tracking_number: 'Package')
-    duplicate_product = create(:product, manufacturer: 'example corp', model_number: 'model 1')
-    duplicate = build(:equipment_item, product: duplicate_product, serial_number: 'abc123')
+    duplicate = build(:equipment_item, product: product, serial_number: 'abc123')
     assert_not duplicate.valid?
     assert_includes duplicate.identity_conflicts, first
     assert_raises(ActiveRecord::RecordNotUnique) do
@@ -56,13 +61,11 @@ class EquipmentItemTest < ActiveSupport::TestCase
     end
   end
 
-  test 'potential serial matches on another model need an acknowledgment and confirmed duplicates remain blocked' do
+  test 'serial numbers can match across models of the same manufacturer' do
     first = create(:equipment_item, serial_number: 'MODEL-SERIAL')
     other_model = create(:product, manufacturer: first.product.manufacturer, model_number: 'Different model')
     candidate = build(:equipment_item, product: other_model, serial_number: 'model-serial')
-    assert_not candidate.valid?
-    candidate.serial_duplicate_reason = 'Manufacturer confirmed this serial is reused across its model range.'
-    assert candidate.valid?
+    assert candidate.save
     candidate.product = first.product
     assert_not candidate.valid?
   end
@@ -83,10 +86,11 @@ class EquipmentItemTest < ActiveSupport::TestCase
   test 'catalog edits do not silently rewrite recorded device identity' do
     item = create(:equipment_item)
     identity = item.manufacturer_model_identity
-    item.product.update!(model_number: 'Edited catalog model')
+    assert_not item.product.update(model_number: 'Edited catalog model')
     item.update!(tracking_number: 'Package')
     assert_equal identity, item.reload.manufacturer_model_identity
-    item.update!(product: create(:product))
+    Equipment::Correction.new(actor: create(:admin)).update_item!(item: item, attributes: { product_id: create(:product).id },
+                                                                  expected_version: item.lock_version, reason: 'Verified actual exact model')
     assert_not_equal identity, item.reload.manufacturer_model_identity
   end
 

@@ -1,8 +1,9 @@
 <div class="mx-auto max-w-5xl px-4 py-8">
   <h1 class="text-3xl font-bold"><%= @product.manufacturer %> <%= @product.name %></h1>
-  <p class="mt-2"><%= @product.model_number %><%= ' · Archived product' if @product.archived? %></p>
+  <p class="mt-2"><%= @product.model_number %> · <%= @product.availability_label %></p>
+  <p class="mt-2">MSRP: <%= @product.msrp.nil? ? 'Not recorded' : number_to_currency(@product.msrp) %></p>
   <h2 class="mt-6 text-2xl font-semibold">Public product resources</h2>
-  <p class="mt-2 text-gray-700">Resources are public program guidance. Do not upload personal, application, or session information. Each resource belongs to this exact product and is ordered by title within its language.</p>
+  <p class="mt-2 text-gray-700">Use these resources for public guidance about this product. Do not upload personal details or application or session information. Resources appear alphabetically within each language.</p>
   <%= link_to 'Add resource', new_admin_product_product_resource_path(@product), class: 'btn btn-primary mt-4' %>
   <ul class="mt-5 space-y-4">
     <% @product_resources.each do |resource| %>

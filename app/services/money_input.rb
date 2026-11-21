@@ -7,7 +7,7 @@ class MoneyInput
   FORMAT = /\A\$?(?<digits>\d{1,3}(?:,\d{3})+|\d+)(?:\.(?<cents>\d{1,2}))?\z/
 
   def self.parse(value)
-    return value if value.is_a?(BigDecimal)
+    value = value.to_s('F') if value.is_a?(BigDecimal)
 
     match = value.to_s.strip.match(FORMAT)
     return nil unless match

@@ -137,6 +137,48 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_not_includes body, I18n.t('application_notifications.proof_approved.all_proofs_approved', locale: :en)
   end
 
+  %w[en es].each do |locale|
+    test "#{locale} pending proof request uses normal application review copy in email and letter" do
+      use_real_email_templates('application_notifications_proof_requested')
+      @user.update!(locale: locale)
+      explanation = I18n.t('applications.proof_resubmission.request_explanation.pending',
+                           proof: I18n.t('secure_proof_forms.proof_types.income', locale: locale), locale: locale)
+      assert_proof_request_copy(application: @application, owner: @user, locale: locale, explanation: explanation,
+                                excluded: I18n.t('applications.proof_resubmission.request_explanation.income_update', locale: locale))
+    end
+
+    test "#{locale} approved income update tells the guardian MAT remains approved in email and letter" do
+      use_real_email_templates('application_notifications_proof_requested')
+      guardian = create(:constituent, locale: locale)
+      dependent = create(:constituent, locale: locale == 'en' ? 'es' : 'en', hearing_disability: true, vision_disability: true)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+      application = create(:application, :approved, :with_all_proofs, user: dependent, managing_guardian: guardian,
+                                                                      disability_certification_status: :approved)
+      explanation = I18n.t('applications.proof_resubmission.request_explanation.income_update', locale: locale)
+      assert_includes explanation, locale == 'en' ? 'Your MAT application remains approved.' : 'Su solicitud de MAT sigue aprobada.'
+      assert_proof_request_copy(application: application, owner: guardian, locale: locale, explanation: explanation,
+                                excluded: I18n.t('applications.proof_resubmission.request_explanation.pending',
+                                                 proof: I18n.t('secure_proof_forms.proof_types.income', locale: locale), locale: locale))
+      assert application.reload.status_approved?
+    end
+
+    test "#{locale} rejected ICC proof requests a replacement without reopening MAT approval" do
+      use_real_email_templates('application_notifications_proof_rejected')
+      user = create(:constituent, locale: locale)
+      application = build(:application, :approved, user:, fulfillment_type: :voucher)
+      review = build(:proof_review, application:, proof_type: :income, status: :rejected, rejection_reason: 'Blurry photo')
+      url = 'https://example.test/secure-proof-replacement'
+      message = ApplicationNotificationsMailer.proof_rejected(application, review, secure_upload_url: url).message.body.decoded
+
+      assert_includes message, I18n.t('applications.proof_resubmission.rejection_explanation.income_update', locale:)
+      assert_includes message, I18n.t('applications.proof_resubmission.rejection_explanation.voucher', locale:)
+      assert_not_includes message, I18n.t('applications.proof_resubmission.rejection_explanation.pending', locale:)
+      assert_includes message, review.rejection_reason
+      assert_includes message, url
+      assert_predicate application, :status_approved?
+    end
+  end
+
   test 'a Spanish proof-received email names the proof in Spanish when the ambient locale is English' do
     use_real_email_templates('application_notifications_proof_received')
     application = create(:application, user: create(:constituent, locale: 'es'))
@@ -220,6 +262,40 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   private
+
+  def assert_proof_request_copy(application:, owner:, locale:, explanation:, excluded:)
+    secure_url = 'https://example.test/secure-proof-update'
+    %i[email letter].each do |channel|
+      form = create(:secure_request_form, application: application, recipient: application.user, delivery_owner: owner,
+                                          delivery_source: owner == application.user ? 'constituent' : 'managing_guardian',
+                                          kind: :income_proof_resubmission, recipient_channel: channel,
+                                          recipient_email: channel == :email ? owner.email : nil, recipient_phone: nil)
+      delivery = ApplicationNotificationsMailer.proof_requested(application, :income, recipient: application.user,
+                                                                                      secure_request_form: form, letter_recipient: owner,
+                                                                                      secure_upload_url: channel == :email ? secure_url : nil)
+      body = I18n.with_locale(locale == 'en' ? :es : :en) do
+        if channel == :email
+          email = delivery.deliver_now
+          assert_equal [owner.email], email.to
+          assert_includes email.body.decoded, secure_url
+          email.body.decoded
+        else
+          assert_difference('PrintQueueItem.count', 1) { assert_no_emails { delivery.deliver_now } }
+          item = PrintQueueItem.order(:created_at, :id).last
+          assert_equal owner.id, item.constituent_id
+          text = inflated_pdf_text(item.pdf_letter.download).force_encoding(Encoding::Windows_1252).encode(Encoding::UTF_8)
+          assert_not_includes text, secure_url
+          assert_not_includes text, locale == 'en' ? 'Use the secure upload link below.' : 'Use el enlace de carga segura'
+          text
+        end
+      end
+      compact_body = body.gsub(/\s+/, '')
+      assert_includes compact_body, explanation.gsub(/\s+/, '')
+      assert_not_includes compact_body, excluded.gsub(/\s+/, '')
+      assert_no_match(/%[<{]\w+[>}]s?/, body)
+      form.revoke!(actor: @admin, reason: :replacement_request)
+    end
+  end
 
   # The default mocks return canned bodies that omit the variables generated fragments fill, so render the seeded
   # templates themselves.

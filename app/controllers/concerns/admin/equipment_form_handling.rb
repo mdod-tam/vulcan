@@ -14,9 +14,21 @@ module Admin
       record.attributes.slice(*fields)
     end
 
+    def render_equipment_profile_review
+      @profile_review_refreshed = true
+      respond_to do |format|
+        format.html { render :new }
+        format.turbo_stream do
+          render turbo_stream: turbo_stream.replace(
+            'equipment-profile-review', html: render_to_string(:new, formats: [:html], layout: false)
+          )
+        end
+      end
+    end
+
     def preview_equipment_correction(record, attributes:, fields:)
       @previous_values = equipment_snapshot(record, fields)
-      record.assign_attributes(attributes)
+      record.assign_attributes(attributes.to_h.slice(*fields))
       @reviewing = true
       @impact_token = Equipment::Correction.impact_token(record: record, attributes: attributes, extra: equipment_impact_extra)
     end
@@ -35,7 +47,7 @@ module Admin
     def restore_equipment_correction(record, attributes:, fields:, exception:)
       record.reload
       @previous_values = equipment_snapshot(record, fields)
-      record.assign_attributes(attributes)
+      record.assign_attributes(attributes.to_h.slice(*fields))
       yield record if block_given?
       record.valid?
       @reviewing = params[:reviewing] == '1' && !exception.is_a?(Equipment::Correction::InvalidImpactToken)

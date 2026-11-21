@@ -72,27 +72,27 @@ module Evaluators
       visit evaluators_evaluation_path(@evaluation)
 
       within '#complete-evaluation-form' do
-        fill_in 'Appointment Date/Time', with: appointment_time
+        fill_in 'Appointment date and time', with: appointment_time
         fill_in 'Location', with: 'Retry Library'
         fill_in 'Other Attendees', with: 'Interpreter, Family friend'
-        fill_in 'Working Notes', with: 'Detailed report observations'
+        fill_in 'Report internal notes', with: 'Detailed report observations'
         replace_product_selection('products_tried_inputs', @product)
         replace_product_selection('recommended_product_ids')
-        fill_in 'Non-catalog products and recommendation details', with: 'Non-catalog recommendation retained during retry.'
-        click_button 'Mark as Completed'
+        fill_in 'Recommendation details', with: 'Non-catalog recommendation retained during retry.'
+        click_button 'Submit completed report'
       end
 
       2.times do |attempt|
         assert_text 'Failed to submit evaluation:'
         assert_single_action_error('submit-report-errors')
         within '#complete-evaluation-form' do
-          assert_field 'Appointment Date/Time', with: appointment_time
+          assert_field 'Appointment date and time', with: appointment_time
           assert_field 'Location', with: 'Retry Library'
           assert_field 'Other Attendees', with: 'Interpreter, Family friend'
-          assert_field 'Working Notes', with: 'Detailed report observations'
+          assert_field 'Report internal notes', with: 'Detailed report observations'
           assert_selector "input#trial-#{@product.id}:checked"
           assert_no_selector "input[name='evaluation[recommended_product_ids][]']:checked"
-          click_button 'Mark as Completed' if attempt.zero?
+          click_button 'Submit completed report' if attempt.zero?
         end
       end
       take_screenshot('evaluator-report-restored', html: true, full: true)
@@ -100,21 +100,21 @@ module Evaluators
 
       corrected_time = 2.hours.ago.strftime('%Y-%m-%dT%H:%M')
       within '#complete-evaluation-form' do
-        fill_in 'Appointment Date/Time', with: corrected_time
+        fill_in 'Appointment date and time', with: corrected_time
         fill_in 'Location', with: 'Corrected Library'
         fill_in 'Other Attendees', with: ''
-        fill_in 'Working Notes', with: 'Corrected report observations'
+        fill_in 'Report internal notes', with: 'Corrected report observations'
         replace_product_selection('products_tried_inputs', @replacement_product)
         replace_product_selection('recommended_product_ids', @replacement_product)
       end
       within '#complete-evaluation-form' do
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
 
       assert_text 'Evaluation submitted successfully.'
-      assert_text 'Appointment Completed At'
-      assert_text 'Report Submitted At'
-      assert_text 'Working Notes'
+      assert_text 'Appointment completed'
+      assert_text 'Report submitted'
+      assert_text 'Report internal notes'
       assert_no_selector '#complete-evaluation-form'
       assert_equal 'completed', @evaluation.reload.status
       assert_equal original_date, @evaluation.evaluation_date

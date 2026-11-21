@@ -47,6 +47,12 @@ fpl_8_person:
   created_at: <%= Time.current %>
   updated_at: <%= Time.current %>
 
+fpl_additional_person:
+  key: fpl_additional_person
+  value: 5500
+  created_at: <%= Time.current %>
+  updated_at: <%= Time.current %>
+
 # Modifier percentage (used to calculate income threshold)
 fpl_modifier_percentage:
   key: fpl_modifier_percentage

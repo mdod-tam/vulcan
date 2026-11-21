@@ -1,0 +1,22 @@
+<%# locals: (rate:, error_id: nil) -%>
+<%= form_with model: [:admin, rate], namespace: dom_id(rate), data: { turbo_frame: '_top' },
+              class: 'grid grid-cols-2 items-end gap-3 sm:grid-cols-3',
+              aria: { label: rate.persisted? ? "Edit mileage rate effective from #{accessible_date_value(rate.effective_on_in_database)}" : 'Add mileage rate' } do |form| %>
+  <% if rate.persisted? %><%= form.hidden_field :lock_version %><% end %>
+  <div>
+    <%= form.label :effective_on, 'Effective from', class: 'form-label' %>
+    <%= form.text_field :effective_on, typed_date_field_options(value: typed_date_input_value(rate, :effective_on), required: true,
+                                                                autocomplete: 'off', class: 'form-input w-full',
+                                                                aria: { invalid: rate.errors[:effective_on].any?,
+                                                                        describedby: ['mileage-rate-input-help', error_id].compact.join(' ') }) %>
+  </div>
+  <div>
+    <%= form.label :dollars_per_mile, 'Dollars per mile', class: 'form-label' %>
+    <%= form.text_field :dollars_per_mile, value: mileage_rate_input_value(rate), required: true, inputmode: 'decimal', autocomplete: 'off', class: 'form-input w-full',
+                                           aria: { invalid: rate.errors[:dollars_per_mile].any?,
+                                                   describedby: ['mileage-rate-input-help', error_id].compact.join(' ') } %>
+  </div>
+  <div class="col-span-2 sm:col-span-1">
+    <%= form.submit rate.new_record? ? 'Add mileage rate' : 'Save rate', class: 'btn btn-secondary w-full sm:w-auto' %>
+  </div>
+<% end %>

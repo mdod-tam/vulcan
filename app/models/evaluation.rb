@@ -5,6 +5,7 @@ class Evaluation < ApplicationRecord
 
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include StatusManagement
+  include Icanconnect::ServiceCost
 
   belongs_to :evaluator, class_name: 'User'
   belongs_to :constituent, class_name: 'Users::Constituent'
@@ -146,7 +147,7 @@ class Evaluation < ApplicationRecord
   end
 
   def recommended_products_available?
-    recommended_products.none?(&:archived?)
+    recommended_products.all?(&:available?)
   end
 
   private
@@ -162,7 +163,10 @@ class Evaluation < ApplicationRecord
   end
 
   def validate_available_recommendations
-    errors.add(:recommended_products, 'cannot include archived catalog products') unless recommended_products_available?
+    errors.add(:recommended_products, 'must contain confirmed available models') unless recommended_products_available?
+    return unless recommended_products.any? { |product| !product.eligible_for?(application.program_disability_groups) }
+
+    errors.add(:recommended_products, 'must be eligible for a confirmed application program group')
   end
 
   def validate_attendees_structure
@@ -193,10 +197,8 @@ class Evaluation < ApplicationRecord
                  'must be an array of products tried with product_id and reaction when evaluation is completed')
       return
     end
-    return unless @products_tried_inputs_assigned
-
-    validate_trial_reactions
-    validate_trial_products
+    validate_trial_reactions if @products_tried_inputs_assigned
+    validate_trial_products if @products_tried_inputs_assigned || status_changed_to_completed? || will_save_change_to_products_tried?
   end
 
   def validate_trial_reactions
@@ -207,10 +209,10 @@ class Evaluation < ApplicationRecord
   end
 
   def validate_trial_products
-    ids = products_tried.pluck('product_id')
-    return if ids.all? { |id| id.match?(/\A[1-9]\d*\z/) } && Product.where(id: ids).count == ids.uniq.size
+    ids = products_tried.pluck('product_id').map(&:to_s)
+    return if ids.all? { |id| id.match?(/\A[1-9]\d*\z/) } && Product.model_confirmed.where(id: ids).count == ids.uniq.size
 
-    errors.add(:products_tried, 'must reference catalog products')
+    errors.add(:products_tried, 'must reference confirmed catalog products')
   end
 
   # Checked for a new or changed assignee only, so a former assignee who lost eligibility can still be cancelled or edited.

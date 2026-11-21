@@ -1,5 +1,5 @@
-<%= turbo_frame_tag "policies" do %>
-  <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="policy-changes-title">
+<%= turbo_frame_tag 'policies' do %>
+  <div class="container mx-auto px-4 py-8" aria-labelledby="policy-changes-title">
     <div class="card">
       <div class="p-6 border-b border-gray-200">
         <div class="flex justify-between items-center">
@@ -7,7 +7,7 @@
             Policy Change History
           </h1>
           <%= link_to admin_policies_path,
-              class: "btn btn-outline" do %>
+                      class: 'btn btn-outline' do %>
             <svg class="-ml-1 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
             </svg>
@@ -41,7 +41,7 @@
             <% @policy_changes.each do |change| %>
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <%= change.created_at.strftime("%B %d, %Y %I:%M %p") %>
+                  <%= change.created_at.strftime('%B %d, %Y %I:%M %p') %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <div class="text-sm font-medium text-gray-900">
@@ -80,5 +80,5 @@
         </div>
       <% end %>
     </div>
-  </main>
+  </div>
 <% end %>

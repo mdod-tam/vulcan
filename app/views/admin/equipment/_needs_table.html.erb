@@ -1,0 +1,79 @@
+<%# locals: (product:, rows:, available_stock:, return_context:) -%>
+<div class="relative overflow-x-auto" role="region" aria-label="Equipment requests for <%= product.name %>" tabindex="0">
+  <table class="min-w-[64rem] w-full text-left text-sm">
+    <caption class="sr-only">Equipment requests for <%= product.name %></caption>
+    <thead class="border-y bg-gray-50">
+      <tr>
+        <th scope="col" class="p-3"><span class="sr-only">Select request</span></th>
+        <th scope="col" class="p-3">Constituent name</th>
+        <th scope="col" class="p-3">Disability group</th>
+        <th scope="col" class="p-3">Quantity to fulfill</th>
+        <th scope="col" class="p-3">In stock?</th>
+        <th scope="col" class="p-3">Shipping destination</th>
+        <th scope="col" class="p-3">Review equipment</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rows.each do |row| %>
+        <% quantity = row.available_quantity # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+        <% requested_quantity = row.is_a?(EquipmentNeed) ? row.remaining_quantity : 1 # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+        <% destination = row.is_a?(EquipmentNeed) ? row.application : row # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+        <tr class="border-b align-top" data-equipment-selection-target="row"
+            data-model="<%= product.id %>" data-manufacturer="<%= product.manufacturer %>" data-category="<%= product.category %>"
+            data-program-groups="<%= row.application.program_disability_groups.join(',') %>" data-source="<%= row.is_a?(EquipmentItem) && row.stock? ? 'stock' : 'vendor' %>"
+            data-search-text="<%= row.application.user.full_name %> Application #<%= row.application_id %>"
+            data-available-stock="<%= available_stock %>" data-requested-quantity="<%= requested_quantity %>">
+          <td class="p-3">
+            <%= check_box_tag row.is_a?(EquipmentNeed) ? 'need_ids[]' : 'item_ids[]', row.id, false,
+                              id: "equipment-row-#{row.class.name}-#{row.id}", disabled: quantity.zero?,
+                              aria: { label: "Select #{product.name} for #{row.application.user.full_name}" },
+                              data: { equipment_selection_target: 'rowCheckbox', action: 'equipment-selection#selectRow' } %>
+          </td>
+          <td class="min-w-40 p-3">
+            <%= link_to row.application.user.full_name,
+                        admin_application_path(row.application_id, anchor: 'equipment', return_context: return_context), class: 'underline' %>
+            <p class="mt-1 text-gray-600">Application #<%= row.application_id %></p>
+          </td>
+          <td class="p-3"><%= equipment_request_setup(row) %></td>
+          <td class="p-3">
+            <% if row.is_a?(EquipmentNeed) %>
+              <%= label_tag "quantity-#{row.id}", "Quantity to fulfill for #{product.name} for #{row.application.user.full_name}", class: 'sr-only' %>
+              <%= number_field_tag "quantities[#{row.id}]", quantity,
+                                   min: 1, max: quantity, step: 1, disabled: true,
+                                   id: "quantity-#{row.id}", autocomplete: 'off', class: 'form-input w-24',
+                                   data: { equipment_selection_target: 'quantity', action: 'input->equipment-selection#quantityChanged' } %>
+              <% if row.reserved_quantity.positive? %>
+                <p class="mt-2 text-gray-700"><%= pluralize(row.reserved_quantity, 'device') %> already in a bid</p>
+              <% end %>
+            <% else %>
+              <p><%= quantity %></p>
+              <% if quantity.zero? %><p class="mt-1 text-gray-700">Already in a bid</p><% end %>
+            <% end %>
+          </td>
+          <td class="p-3">
+            <%= tag.output equipment_stock_coverage(available_stock, quantity.positive? ? quantity : requested_quantity),
+                           for: ("quantity-#{row.id}" if row.is_a?(EquipmentNeed)),
+                           aria: { label: "In stock for #{product.name} for #{row.application.user.full_name}" },
+                           data: { stock_coverage: true }, class: 'inline-block rounded bg-gray-100 px-2 py-1 font-medium' %>
+            <p class="mt-1 text-gray-600"><%= pluralize(available_stock, 'device') %> available</p>
+          </td>
+          <td class="min-w-48 p-3">
+            <% if destination.shipping_ready? %>
+              <p class="whitespace-pre-line"><%= destination.shipping_label %></p>
+            <% else %>
+              <span class="font-medium text-warning-900">Address needs review</span>
+            <% end %>
+          </td>
+          <td class="p-3">
+            <% if row.is_a?(EquipmentNeed) %>
+              <%= link_to 'Review equipment', edit_admin_application_equipment_needs_path(row.application_id, return_context: return_context), class: 'underline' %>
+            <% else %>
+              <%= link_to 'Review equipment', edit_admin_equipment_item_path(row, return_context: return_context), class: 'underline' %>
+              <p class="mt-1 text-gray-600">Device #<%= row.id %></p>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

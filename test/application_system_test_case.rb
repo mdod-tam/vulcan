@@ -35,6 +35,7 @@ module SeedLookupHelpers
     admin_david: 'admin@example.com',
     confirmed_user: 'user@example.com',
     confirmed_user2: 'user2@example.com',
+    awaiting_dcf_constituent: 'awaiting.certification@example.com',
     unconfirmed_user: 'unconfirmed@example.com',
     trainer: 'trainer@example.com',
     evaluator: 'evaluator@example.com',

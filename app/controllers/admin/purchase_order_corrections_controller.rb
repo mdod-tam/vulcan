@@ -34,8 +34,6 @@ module Admin
       @return_context = Equipment::RequestParameters.return_context(params)
       @submitted_versions = Equipment::RequestParameters.record_versions(params[:item_versions])
       @items = @purchase_order.equipment_items.includes(:product, :application).order(:id).to_a
-      @vendors = Users::Vendor.equipment_procurement_eligible.order(:business_name, :id).to_a
-      @vendors.unshift(@purchase_order.vendor) if @vendors.exclude?(@purchase_order.vendor)
       @previous_values = equipment_snapshot(@purchase_order, Equipment::Correction::PO_FIELDS)
       @expected_version = action_name == 'edit' ? @purchase_order.lock_version : params[:expected_version]
       @item_versions = action_name == 'edit' ? @items.to_h { |item| [item.id.to_s, item.lock_version.to_s] } : @submitted_versions
@@ -46,7 +44,7 @@ module Admin
     end
 
     def order_params
-      params.expect(purchase_order: %i[vendor_id number sent_at])
+      params.expect(purchase_order: (Equipment::Correction::PO_FIELDS + ['unsend']).map(&:to_sym))
     end
   end
 end

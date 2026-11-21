@@ -20,7 +20,7 @@
     <%= turbo_frame_tag(turbo_frame_request_id || "application_show_#{@application.id}", target: (turbo_frame_request_id ? nil : '_top')) do %>
     <div class="card p-6 mb-6">
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
-        <div class="flex items-center space-x-2">
+        <div class="flex flex-wrap items-center gap-2">
           <%= application_status_badge(@application) %>
           <%= fulfillment_type_badge(@application) %>
           <%= duplicate_review_pending_badge(@application) %>
@@ -179,7 +179,7 @@
     <% if @application.status_approved? %>
       <%= render "evaluation_training_status" %>
     <% end %>
-    <% if @application.equipment_fulfillment? %>
+    <% if @application.equipment_fulfillment? || @application.approved_deafblind? || @equipment_items.any? %>
       <%= render 'equipment_purchasing', application: @application %>
     <% end %>
 

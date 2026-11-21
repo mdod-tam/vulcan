@@ -1,6 +1,13 @@
 <div class="container mx-auto max-w-4xl px-4 py-8">
-  <h1 id="equipment-needs-title" class="text-2xl font-semibold text-gray-900 mb-4">Purchasing needs for application #<%= @application.id %></h1>
-  <p id="equipment-needs-help" class="text-sm text-gray-600 mb-4">These quantities describe new devices still needed. Set a quantity to zero to remove it. To replace a model, set its quantity to zero and add the new model. Previously ordered devices awaiting reorder are edited individually.</p>
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <h1 id="equipment-needs-title" class="text-2xl font-bold text-gray-900">Purchasing needs for application #<%= @application.id %></h1>
+    <% if @return_context.present? %>
+      <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'btn btn-outline' %>
+    <% else %>
+      <%= link_to 'Back to Application', admin_application_path(@application, anchor: 'equipment'), class: 'btn btn-outline' %>
+    <% end %>
+  </div>
+  <p id="equipment-needs-help" class="text-sm text-gray-600 mb-4">Enter how many new devices are still needed. Set a quantity to zero to remove a model. To replace it, set the old model to zero and add the replacement. Edit previously ordered devices on their own pages.</p>
   <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'equipment-needs-errors',
                                             review_path: edit_admin_application_equipment_needs_path(@application, return_context: @return_context) %>
   <%= render 'admin/applications/equipment_recommendations', application: @application, heading_level: 2 %>
@@ -8,8 +15,12 @@
     <%= form_with url: admin_application_equipment_needs_path(@application), method: :patch, scope: :equipment_needs,
                   class: 'space-y-6', aria: { describedby: 'equipment-needs-help' } do |form| %>
       <%= form.hidden_field :expected_initialized_at, value: @expected_initialized_at %>
+      <%= form.hidden_field :expected_profile_version, value: @expected_profile_version %>
       <% @return_context.each do |key, value| %>
         <%= hidden_field_tag "return_context[#{key}]", value %>
+      <% end %>
+      <%= fields_for 'equipment_needs[profile]', @application do |profile| %>
+        <%= render 'admin/equipment/profile', form: profile, application: @application, values: @profile_values %>
       <% end %>
       <% @rows.each_with_index do |row, index| %>
         <fieldset class="rounded-md border border-gray-200 p-4">
@@ -29,6 +40,10 @@
             <%= select_tag 'equipment_needs[rows][][product_id]', options_for_select(equipment_catalog_options(@new_products), row['product_id']),
                            include_blank: 'Choose a model to add', id: "equipment-need-product-#{index}", class: 'form-input mt-1' %>
           <% end %>
+          <%= label_tag "equipment-need-setup-#{index}", 'Device setup', class: 'form-label' %>
+          <%= select_tag 'equipment_needs[rows][][disability_setup_group]',
+                         options_for_select(equipment_need_setup_options(@application, row['disability_setup_group']), row['disability_setup_group']),
+                         include_blank: 'Setup needed', id: "equipment-need-setup-#{index}", class: 'form-input' %>
           <%= label_tag "equipment-need-quantity-#{index}", 'New devices still needed', class: 'form-label mt-3' %>
           <%= number_field_tag 'equipment_needs[rows][][remaining_quantity]', row['remaining_quantity'],
                                id: "equipment-need-quantity-#{index}", min: row['id'].present? ? 0 : 1,
@@ -38,7 +53,7 @@
       <div>
         <%= form.label :reason, 'Reason for adjustment', class: 'form-label' %>
         <%= form.text_field :reason, value: @reason, required: true, aria: { describedby: 'equipment-needs-reason-help' }, class: 'form-input mt-1' %>
-        <p id="equipment-needs-reason-help" class="form-hint">Explain the purchasing decision, including a decision that no new devices are needed.</p>
+        <p id="equipment-needs-reason-help" class="form-hint">Explain what changed or why no new devices are needed.</p>
       </div>
       <div class="flex flex-wrap gap-4 items-center">
         <%= form.submit 'Save purchasing needs', class: 'btn btn-primary' %>
@@ -50,4 +65,8 @@
     <p class="text-gray-600">Purchasing needs can be changed only for approved equipment applications.</p>
     <%= link_to 'Return to application equipment', admin_application_path(@application, anchor: 'equipment'), class: 'text-primary-600 underline' %>
   <% end %>
+  <div class="mt-6">
+    <%= render 'admin/equipment_items/history', events: @history, audit_records: @equipment_audit_records,
+                                                title: 'Purchasing needs history', expanded: true, history_id: 'purchasing-needs-history' %>
+  </div>
 </div>

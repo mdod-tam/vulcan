@@ -1,0 +1,18 @@
+<%# locals: (item:, operation:, label:, expected_version:, return_context:, submitted:) -%>
+<%= tag.details id: 'equipment-disposition', open: submitted, class: 'rounded border border-gray-200 p-4' do %>
+  <summary class="cursor-pointer font-medium text-primary-700"><%= label %></summary>
+  <%= form_with url: admin_equipment_item_path(item), method: :patch, class: 'mt-3 space-y-3' do |form| %>
+    <% if operation == 'detach' %>
+      <p>The device will be removed from this PO. The request stays open so you can reorder it.</p>
+      <% if item.portal_visible? %><p>The device will disappear from the constituent’s equipment list.</p><% end %>
+    <% else %>
+      <p>The device will be removed from the queue. Its history will still be available.</p>
+    <% end %>
+    <%= hidden_field_tag :operation, operation, id: nil %>
+    <%= hidden_field_tag :expected_version, expected_version, id: nil %>
+    <% return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value, id: nil %><% end %>
+    <%= label_tag 'equipment-disposition-reason', 'Reason for this action', class: 'form-label' %>
+    <%= text_area_tag :reason, (params[:reason] if submitted), id: 'equipment-disposition-reason', required: true, rows: 2, class: 'form-input' %>
+    <%= form.submit label, class: 'btn btn-outline', data: { turbo_confirm: "#{label}?", turbo_submits_with: 'Saving...' } %>
+  <% end %>
+<% end %>

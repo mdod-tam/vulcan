@@ -1,0 +1,576 @@
+# Seeded fields are authoritative. Unseeded fields and existing discontinuations are preserved.
+# USD MSRP or manufacturer/supplier/user reference price; basis and configuration are noted per row.
+# null means unverified, never free. REVIEW comments flag unresolved information.
+# Research and remaining gaps: docs/operations/product_catalog_pricing.md (2026-11-13).
+devices:
+  - name: Apple iPhone 18 Pro
+    catalog_key: apple-iphone-18-pro
+    manufacturer: Apple
+    model_number: iPhone 18 Pro
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/newsroom/2026/09/apple-debuts-iphone-18-pro-and-iphone-18-pro-max/
+    msrp: 1199.00
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Apple starting list price; 256GB. Confirm storage and carrier configuration before ordering."
+  - name: Apple iPhone 18 Pro Max
+    catalog_key: apple-iphone-18-pro-max
+    manufacturer: Apple
+    model_number: iPhone 18 Pro Max
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/newsroom/2026/09/apple-debuts-iphone-18-pro-and-iphone-18-pro-max/
+    msrp: 1299.00
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Apple starting list price; 256GB. Confirm storage and carrier configuration before ordering."
+  - name: Apple iPhone 17
+    catalog_key: apple-iphone-17
+    manufacturer: Apple
+    model_number: iPhone 17
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/shop/buy-iphone/iphone-17
+    msrp: 929.00
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Apple current list price; 256GB, Connect on your own later. Confirm storage and carrier configuration before ordering."
+  - name: Apple iPhone 17 Pro Max
+    catalog_key: apple-iphone-17-pro-max
+    manufacturer: Apple
+    model_number: iPhone 17 Pro Max
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/newsroom/2025/09/apple-unveils-iphone-17-pro-and-iphone-17-pro-max/
+    msrp: 1199.00
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Historical Apple launch list price; 256GB. Confirm current availability, storage and carrier configuration before ordering."
+  - name: Samsung Galaxy S26 5G
+    catalog_key: samsung-galaxy-s26-5g
+    manufacturer: Samsung
+    model_number: Galaxy S26 5G
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://images.samsung.com/is/content/samsung/assets/us/business/solutions/industries/government/msrp-price-sheets/Samsung-HHP-MSRP-Price-File-November-2026.pdf
+    msrp: 799.99
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Samsung November 2026 MSRP; 128GB unlocked, SM-S942UZKAXAA. Confirm configuration; the 256GB model has a different MSRP."
+  - name: Samsung Galaxy A57 5G
+    catalog_key: samsung-galaxy-a57-5g
+    manufacturer: Samsung
+    model_number: Galaxy A57 5G
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://images.samsung.com/is/content/samsung/assets/us/business/solutions/industries/government/msrp-price-sheets/Samsung-HHP-MSRP-Price-File-November-2026.pdf
+    msrp: 599.99
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Samsung November 2026 MSRP; 8GB RAM, 128GB unlocked, SM-A576UDBAXAA. Confirm configuration before ordering."
+  - name: Google Pixel 11
+    catalog_key: google-pixel-11
+    manufacturer: Google
+    model_number: Pixel 11
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://blog.google/products-and-platforms/devices/pixel/google-pixel-11-pro-xl/
+    msrp: 899.00
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Google starting list price; 256GB. Confirm storage and carrier configuration before ordering."
+  - name: Google Pixel 11 Pro XL
+    catalog_key: google-pixel-11-pro-xl
+    manufacturer: Google
+    model_number: Pixel 11 Pro XL
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://blog.google/products-and-platforms/devices/pixel/google-pixel-11-pro-xl/
+    msrp: 1299.00
+    device_types: [Smartphone]
+    eligible_disability_groups: [deaf, hard_of_hearing, low_vision_blind, speech, mobility]
+    compatibility_notes: "Google launch starting list price; 256GB. Confirm storage and carrier configuration before ordering."
+  - name: Apple iPad Pro 11-inch (M5)
+    catalog_key: apple-ipad-pro-11-inch-m5
+    manufacturer: Apple
+    model_number: iPad Pro 11-inch (M5)
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/shop/buy-ipad/ipad-pro/11-inch-display-256gb-space-black-wifi-standard-glass
+    msrp: 1199.00
+    device_types: [Tablet]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, mobility]
+    compatibility_notes: "Apple current M5 list price; 256GB, Wi-Fi, standard glass. Confirm storage and Wi-Fi versus cellular before ordering."
+  - name: Apple iPad Pro 13-inch (M5)
+    catalog_key: apple-ipad-pro-13-inch-m5
+    manufacturer: Apple
+    model_number: iPad Pro 13-inch (M5)
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/shop/buy-ipad/ipad-pro/13-inch-display-256gb-silver-wifi-standard-glass
+    msrp: 1499.00
+    device_types: [Tablet]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, mobility]
+    compatibility_notes: "Apple current M5 list price; 256GB, Wi-Fi, standard glass. Confirm storage and Wi-Fi versus cellular before ordering."
+  - name: Apple iPad mini (7th generation, A17 Pro)
+    catalog_key: apple-ipad-mini-7th-generation-a17-pro
+    manufacturer: Apple
+    model_number: iPad mini (7th generation, A17 Pro)
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/newsroom/2024/10/apple-introduces-powerful-new-ipad-mini-built-for-apple-intelligence/
+    msrp: 499.00
+    device_types: [Tablet]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, mobility]
+    compatibility_notes: "Historical Apple launch list price; A17 Pro, 128GB, Wi-Fi. Confirm current availability; do not substitute a newer iPad mini generation or its price."
+  - name: Samsung Galaxy Tab (model to be selected)
+    catalog_key: android-tablet-model-to-be-selected
+    manufacturer: Samsung
+    model_number: null
+    model_confirmed: false
+    # Manufacturer source: user confirmation, 2026-11-13.
+    # REVIEW: Missing exact Galaxy Tab model, storage/connectivity configuration and MSRP.
+    msrp: null
+    device_types: [Tablet]
+    eligible_disability_groups: [deaf]
+    compatibility_notes: "Samsung Galaxy Tab family selected. Choose the exact model, screen size, storage and Wi-Fi/cellular configuration before confirming this entry or its price."
+  - name: Windows laptop (model to be selected)
+    catalog_key: windows-laptop-model-to-be-selected
+    manufacturer: null
+    model_number: null
+    model_confirmed: false
+    # REVIEW: Intentionally generic Windows laptop; no consistent supplied brand. Exact model and MSRP remain unselected.
+    msrp: null
+    device_types: [Computer]
+    eligible_disability_groups: [deafblind]
+    compatibility_notes: "Intentionally generic: the program does not consistently supply one Windows laptop brand. Manufacturer, model/configuration and price depend on procurement; no fixed catalog model or MSRP is selected."
+  - name: Apple MacBook Air 13-inch (M5)
+    catalog_key: apple-macbook-air-13-inch-m5
+    manufacturer: Apple
+    model_number: MacBook Air 13-inch (M5)
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/education/purchase/contracts/docs/NASPO_PSS_Apple_Branded.pdf
+    msrp: 1299.00
+    device_types: [Computer]
+    eligible_disability_groups: [deafblind]
+    description: 13-inch MacBook Air with M5, priced for 16GB memory and 512GB SSD storage.
+    compatibility_notes: "Apple consumer MSRP; M5 with 10-core CPU, 8-core GPU, 16GB memory and 512GB SSD. Reference part MDH74LL/A (silver). Confirm configuration and required macOS-compatible assistive software before ordering."
+    documentation_url: https://www.apple.com/macbook-air/specs/
+  - name: Apple MacBook Air 15-inch (M5)
+    catalog_key: apple-macbook-air-15-inch-m5
+    manufacturer: Apple
+    model_number: MacBook Air 15-inch (M5)
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.apple.com/education/purchase/contracts/docs/NASPO_PSS_Apple_Branded.pdf
+    msrp: 1499.00
+    device_types: [Computer]
+    eligible_disability_groups: [deafblind]
+    description: 15-inch MacBook Air with M5, priced for 16GB memory and 512GB SSD storage.
+    compatibility_notes: "Apple consumer MSRP; M5 with 10-core CPU, 10-core GPU, 16GB memory and 512GB SSD. Reference part MDV94LL/A (silver). Confirm configuration and required macOS-compatible assistive software before ordering."
+    documentation_url: https://www.apple.com/macbook-air/specs/
+  - name: ClearSounds CSC500 Amplified Telephone
+    catalog_key: clearsounds-csc500-amplified-telephone
+    manufacturer: ClearSounds
+    model_number: CSC500
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://clearsounds.com/collections/corded
+    msrp: 89.95
+    device_types: [Amplified Phone]
+    eligible_disability_groups: [hard_of_hearing]
+    compatibility_notes: "ClearSounds regular list price, excluding the sale discount. Manufacturer lists this model as sold out; confirm availability."
+  - name: Serene Innovations HD-40P Photo Speed-Dial Speakerphone
+    catalog_key: serene-innovations-hd-40p-photo-speakerphone
+    manufacturer: Serene Innovations
+    model_number: HD-40P
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.sereneinnovations.com/products/high-definition-amplified-speakerphone-with-photo-memory
+    msrp: 139.95
+    device_types: [Amplified Phone, Memory Aid Device]
+    eligible_disability_groups: [hard_of_hearing, low_vision_blind, mobility]
+    description: Landline speakerphone with nine photo speed-dial buttons, large keys, incoming sound amplification and visual ring flashers.
+    compatibility_notes: "Manufacturer regular reference price, excluding the sale discount. Requires an analog-compatible telephone line; the phone is line-powered without an AC adapter. Incoming amplification is up to 26 dB; this is not an outgoing speech-amplification phone. Photo dialing supports memory and visual access needs. Manufacturer lists sold out; verify current supplier stock."
+    documentation_url: https://www.sereneinnovations.com/products/high-definition-amplified-speakerphone-with-photo-memory
+  - name: Clarity P300-HCO Hearing Carry Over Kit
+    catalog_key: clarity-p300-hco-hearing-carry-over-kit
+    manufacturer: Clarity
+    model_number: P300-HCO
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://teltex.com/p300-hco/
+    msrp: 369.95
+    device_types: [Speech Device]
+    eligible_disability_groups: [speech]
+    description: Telephone speech-generating kit with Android tablet and AAC app, QWERTY keyboard, stereo speakers, interface box and photo speed-dial telephone.
+    compatibility_notes: "Teltex public supplier reference price for the complete Clarity P300-HCO kit, not an explicitly labeled MSRP. For people unable to speak who can hear telephone audio; typed words are spoken through the telephone and incoming speech plays through the speakers. No relay service is required. Confirm the included tablet model, AAC application/license, power requirements and telephone connection before ordering. Only the base telephone is specified as line-powered."
+    documentation_url: https://teltex.com/p300-hco/
+  - name: BlindShell Classic 3 Accessible Mobile Phone
+    catalog_key: blindshell-classic-3-accessible-mobile-phone
+    manufacturer: BlindShell
+    model_number: Classic 3
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.blindshell.com/us/eshop/blindshell-classic-3
+    msrp: 790.00
+    device_types: [Smartphone]
+    eligible_disability_groups: [low_vision_blind]
+    compatibility_notes: "BlindShell US direct price; Classic 3 with included charging cradle and accessories."
+  - name: Clarity JV35 Amplified Telephone
+    catalog_key: clarity-jv35-amplified-telephone
+    manufacturer: Clarity
+    model_number: JV35
+    model_confirmed: true
+    # REVIEW: Exact current-generation MSRP unverified; dealer lists USD 149.95 MSRP for older JV-35B (37dB), while current manufacturer lists 50dB.
+    msrp: null
+    device_types: [Amplified Phone]
+    eligible_disability_groups: [low_vision_blind]
+    compatibility_notes: "Exact current-generation MSRP unverified; dealer lists USD 149.95 MSRP for older JV-35B (37dB), while current manufacturer lists 50dB."
+  - name: Clarity JV35W Amplified Telephone (White)
+    catalog_key: clarity-jv35w-amplified-telephone-white
+    manufacturer: Clarity
+    model_number: JV35W
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://global.channelonline.com/9to5computer/storesite/Products/overview/M016459810
+    msrp: 149.95
+    device_types: [Amplified Phone]
+    eligible_disability_groups: [low_vision_blind]
+    compatibility_notes: "Distributor-published MSRP for Clarity part 76557.101. White buttons; distinct from the JV35 black-button variant. Confirm current supplier quote."
+  - name: Lingraphica TouchTalk AAC Device
+    catalog_key: lingraphica-touchtalk-aac-device
+    manufacturer: Lingraphica
+    model_number: TouchTalk
+    model_confirmed: true
+    # REVIEW: Missing public MSRP; request a manufacturer quote and confirm device configuration.
+    msrp: null
+    device_types: [Speech Device]
+    eligible_disability_groups: [speech]
+    compatibility_notes: "Missing public MSRP; request a manufacturer quote and confirm device configuration."
+  - name: Lingraphica MiniTalk AAC Device
+    catalog_key: lingraphica-minitalk-aac-device
+    manufacturer: Lingraphica
+    model_number: MiniTalk
+    model_confirmed: true
+    # REVIEW: Missing public MSRP; request a manufacturer quote and confirm device configuration.
+    msrp: null
+    device_types: [Speech Device]
+    eligible_disability_groups: [speech]
+    compatibility_notes: "Missing public MSRP; request a manufacturer quote and confirm device configuration."
+  - name: Lingraphica TouchTalk Plus AAC Device
+    catalog_key: lingraphica-touchtalk-plus-aac-device
+    manufacturer: Lingraphica
+    model_number: TouchTalk Plus
+    model_confirmed: true
+    # REVIEW: Missing public MSRP; request a manufacturer quote and confirm device configuration.
+    msrp: null
+    device_types: [Speech Device]
+    eligible_disability_groups: [speech]
+    compatibility_notes: "Missing public MSRP; request a manufacturer quote and confirm device configuration."
+  - name: Provox TruTone EMOTE Electrolarynx
+    catalog_key: atos-medical-trutone-emote-electrolarynx
+    manufacturer: Atos Medical
+    model_number: TruTone EMOTE
+    model_confirmed: true
+    # REVIEW: Missing public manufacturer MSRP; request quote for Atos Medical reference 7439.
+    msrp: null
+    device_types: [Speech Device]
+    eligible_disability_groups: [speech]
+    compatibility_notes: "Missing public manufacturer MSRP; request quote for Atos Medical reference 7439."
+  - name: Servox Digital XL Electrolarynx
+    catalog_key: servox-digital-xl-electrolarynx
+    manufacturer: Servona GmbH
+    model_number: Digital XL
+    model_confirmed: true
+    # REVIEW: Missing manufacturer MSRP; retailer list/sale prices are reference offers only. Confirm Servona model 37575 and kit contents.
+    msrp: null
+    device_types: [Speech Device]
+    eligible_disability_groups: [speech]
+    compatibility_notes: "Missing manufacturer MSRP; retailer list/sale prices are reference offers only. Confirm Servona model 37575 and kit contents."
+  - name: Amazon Echo Smart Speaker with Alexa
+    catalog_key: amazon-echo-smart-speaker-with-alexa
+    manufacturer: Amazon
+    model_number: null
+    model_confirmed: false
+    # REVIEW: Missing exact Echo model/generation and MSRP.
+    msrp: null
+    device_types: [Smart Home Device]
+    eligible_disability_groups: [mobility]
+    compatibility_notes: "Missing exact Echo model/generation and MSRP."
+
+  - name: Dot Pad X
+    catalog_key: dot-dot-pad-x
+    manufacturer: Dot Inc.
+    model_number: DPA320X
+    model_confirmed: true
+    # REVIEW: Manufacturer MSRP for Dot Pad X is unverified.
+    msrp: null
+    device_types: [Braille Device]
+    eligible_disability_groups: [deafblind]
+    description: Refreshable tactile graphics and multiline Braille display for reading text and exploring images and diagrams by touch.
+    documentation_url: https://www.dotincorp.com/en/product/dotpadx
+  - name: Tobii Dynavox TD I-Series (exact model to confirm)
+    catalog_key: tobii-dynavox-td-i-series
+    manufacturer: Tobii Dynavox
+    model_number: TD I-Series
+    model_confirmed: false
+    # REVIEW: Missing exact TD I-13 or TD I-16 configuration and public MSRP; request a quote.
+    msrp: null
+    device_types: [Eye-Tracking System, Speech Device]
+    eligible_disability_groups: [deafblind]
+    description: Windows-based eye gaze communication device family with speech-generating and computer-access software.
+    compatibility_notes: Select the quoted TD I-13 or TD I-16 exact model before confirming this catalog entry. Individual access assessment is required.
+    documentation_url: https://us.tobiidynavox.com/pages/td-i-series
+alerters_accessories_equipment:
+  - name: SquareGlow Home Notification Kit
+    catalog_key: squareglow-home-notification-kit
+    manufacturer: SquareGlow
+    model_number: Home Notification Kit
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.squareglow.com/products/squareglow-home-kit
+    msrp: 264.99
+    device_types: [Signaler]
+    eligible_disability_groups: [deaf, hard_of_hearing, speech, mobility]
+    compatibility_notes: "SquareGlow regular list price for the non-Wi-Fi HomeKit with two flashers, doorbell and Phone/VP signaler. Confirm this bundle before ordering."
+  - name: SquareGlow Smart HomeKit
+    catalog_key: squareglow-smart-homekit
+    manufacturer: SquareGlow
+    model_number: Smart HomeKit
+    model_confirmed: true
+    # Price source (USD): user-supplied SquareGlow price list, 2026-11-13.
+    msrp: 415.00
+    device_types: [Signaler, Smart Home Device]
+    eligible_disability_groups: [deaf, hard_of_hearing, speech, mobility]
+    compatibility_notes: "User-supplied SquareGlow price list; Smart HomeKit reference price. Confirm bundle contents before ordering."
+  - name: SquareGlow Smart Strobe Alert
+    catalog_key: squareglow-smart-strobe-alert
+    manufacturer: SquareGlow
+    model_number: Smart Strobe Alert
+    model_confirmed: true
+    # Price source (USD): user-supplied SquareGlow price list, 2026-11-13.
+    msrp: 79.99
+    device_types: [Signaler]
+    eligible_disability_groups: [deaf, hard_of_hearing, speech, mobility]
+    compatibility_notes: "User-supplied SquareGlow price list; Smart Strobe Alert reference price."
+  - name: SquareGlow Adapter
+    catalog_key: squareglow-adapter
+    manufacturer: SquareGlow
+    model_number: Adapter
+    model_confirmed: true
+    # Price source (USD): user-supplied SquareGlow price list, 2026-11-13.
+    msrp: 9.99
+    device_types: [Accessory]
+    eligible_disability_groups: [deaf, hard_of_hearing, speech, mobility]
+    compatibility_notes: null
+  - name: SquareGlow Chime Kit
+    catalog_key: squareglow-chime-kit
+    manufacturer: SquareGlow
+    model_number: Chime Kit
+    model_confirmed: true
+    # Price source (USD): user-supplied SquareGlow price list, 2026-11-13.
+    msrp: 49.99
+    device_types: [Signaler]
+    eligible_disability_groups: [deaf, hard_of_hearing, speech, mobility]
+    compatibility_notes: "User-supplied SquareGlow price list; Chime Kit reference price. Confirm kit contents before ordering."
+  - name: HomeAware Home Alerting System
+    catalog_key: homeaware-home-alerting-system
+    manufacturer: Sonic Alert
+    model_number: HomeAware
+    model_confirmed: false
+    # REVIEW: Missing exact Sonic Alert HomeAware kit/generation and MSRP.
+    msrp: null
+    device_types: [Signaler]
+    eligible_disability_groups: [deaf]
+    compatibility_notes: "Missing exact Sonic Alert HomeAware kit/generation and MSRP."
+  - name: Bellman & Symfon Visit Alerting System
+    catalog_key: bellman-symfon-visit-alerting-system
+    manufacturer: Bellman & Symfon
+    model_number: Visit
+    model_confirmed: false
+    # REVIEW: Missing exact Visit transmitter/receiver bundle and MSRP.
+    msrp: null
+    device_types: [Signaler]
+    eligible_disability_groups: [deaf]
+    compatibility_notes: "Missing exact Visit transmitter/receiver bundle and MSRP."
+  - name: Freedom Scientific Focus 40 Blue (5th Generation) Refreshable Braille Display
+    catalog_key: freedom-scientific-focus-40-blue-5th-generation-refreshable-braille-display
+    manufacturer: Freedom Scientific
+    model_number: Focus 40 Blue (5th Generation)
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://shop.vispero.com/products/focus-40-blue-5th-generation
+    msrp: 3748.50
+    device_types: [Braille Device]
+    eligible_disability_groups: [deafblind, low_vision_blind]
+    compatibility_notes: "Manufacturer direct USD price; fifth generation, SKU 900728-007. Store lists backorder; confirm availability."
+  - name: HumanWare Brailliant BI 40X Refreshable Braille Display
+    catalog_key: humanware-brailliant-bi-40x-refreshable-braille-display
+    manufacturer: HumanWare
+    model_number: Brailliant BI 40X
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://store.humanware.com/hus/brailliant-bi-40x-braille-display.html
+    msrp: 3759.00
+    device_types: [Braille Device]
+    eligible_disability_groups: [deafblind, low_vision_blind]
+    compatibility_notes: "HumanWare US regular list price for the BI 40X, excluding promotional discounts."
+  - name: Tap-It Assistive Technology System (model to confirm)
+    catalog_key: tap-it-assistive-technology-system-model-to-confirm
+    manufacturer: null
+    model_number: null
+    model_confirmed: false
+    # REVIEW: Missing confirmed manufacturer, exact model and MSRP; TAPit touchscreen system and SquareGlow Tap It are different products.
+    msrp: null
+    device_types: [Accessory]
+    eligible_disability_groups: [deafblind, low_vision_blind]
+    compatibility_notes: "Missing confirmed manufacturer, exact model and MSRP; TAPit touchscreen system and SquareGlow Tap It are different products."
+  - name: LogicKeyboard Large-Print Keyboard (model to confirm)
+    catalog_key: large-print-keyboard
+    manufacturer: LogicKeyboard
+    model_number: null
+    model_confirmed: false
+    # Manufacturer source: user confirmation, 2026-11-13.
+    # REVIEW: Missing exact LogicKeyboard model, OS/layout, contrast/backlighting selection and MSRP.
+    msrp: null
+    device_types: [Accessory]
+    eligible_disability_groups: [deafblind, low_vision_blind]
+    compatibility_notes: "LogicKeyboard selected. Confirm the exact keyboard model, Mac/Windows compatibility, layout, key contrast and backlighting before confirming this entry or its price."
+  - name: SkyAngel 911 Pendant Emergency Response Unit
+    catalog_key: skyangel-911-pendant-emergency-response-unit
+    manufacturer: SkyAngel
+    model_number: 911 Pendant
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.assistivetechnologyservices.com/onsalenow.html
+    msrp: 229.99
+    device_types: [Cellular 911 Alerter]
+    eligible_disability_groups: [hard_of_hearing, mobility]
+    compatibility_notes: "SkyAngel supplier regular list price for the 911FD pendant, excluding sale discounts. Confirm intended 911FD version and current cellular compatibility."
+  - name: SkyAngel Wrist Emergency Response Unit
+    catalog_key: skyangel-wrist-emergency-response-unit
+    manufacturer: SkyAngel
+    model_number: Wrist
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.assistivetechnologyservices.com/onsalenow.html
+    msrp: 189.99
+    device_types: [Cellular 911 Alerter]
+    eligible_disability_groups: [hard_of_hearing, mobility]
+    compatibility_notes: "SkyAngel supplier regular list price for SkyAngel911Wrist, excluding sale discounts. Confirm version and current cellular compatibility."
+  - name: BlindShell Beep
+    catalog_key: blindshell-beep-product-name-to-confirm
+    manufacturer: BlindShell
+    model_number: Beep
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.blindshell.com/us/eshop/blindshell-beep-282
+    msrp: 30.00
+    device_types: [Accessory]
+    eligible_disability_groups: [low_vision_blind]
+    compatibility_notes: "BlindShell US direct price for one Beep object finder. Requires a compatible BlindShell Classic 2 or Classic 3 phone."
+  - name: Hable One Braille Keyboard
+    catalog_key: hable-one-braille-keyboard
+    manufacturer: Hable
+    model_number: One
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://www.iamhable.com/en-am/products/hable-one-keyboard
+    msrp: 239.00
+    device_types: [Braille Device]
+    eligible_disability_groups: [low_vision_blind]
+    compatibility_notes: "Hable US direct USD price for one Hable One keyboard."
+  - name: TeliTalk Kit (product specifications to confirm)
+    catalog_key: telitalk-kit-product-specifications-to-confirm
+    manufacturer: Atos Medical
+    model_number: null
+    model_confirmed: false
+    # Manufacturer source: user confirmed Atos Medical acquired Griffin Laboratories, 2026-11-13.
+    # REVIEW: Missing exact TeliTalk kit model/contents and MSRP.
+    msrp: null
+    device_types: [Accessory]
+    eligible_disability_groups: [speech]
+    compatibility_notes: "Atos Medical selected as the manufacturer following its acquisition of Griffin Laboratories. Confirm the exact TeliTalk kit, included telephone/accessories and quoted price; the original kit configuration remains unresolved."
+  - name: 2-in-1 Wrist/Body Strap with Adapter / Midnight Gray
+    catalog_key: moshi-2-in-1-wrist-body-strap-with-adapter-midnight-gray
+    manufacturer: Moshi
+    model_number: 99MO2252613
+    model_confirmed: true
+    # Price and SKU: user-supplied, 2026-11-15. Manufacturer US price also checked at the link below.
+    msrp: 39.95
+    device_types: [Accessory]
+    eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+    description: Adjustable phone strap that converts between wrist and crossbody use, with a color-matched adapter.
+    compatibility_notes: "Includes a matching strap adapter. Confirm the adapter fits the constituent's phone case before ordering."
+    documentation_url: https://us.moshi.com/products/2-in-1-wrist-body-strap-with-adapter?variant=47163633238154
+  - name: Enabling Devices Easy Flex Stylus
+    catalog_key: accessible-stylus
+    manufacturer: Enabling Devices
+    model_number: '9079'
+    model_confirmed: true
+    # Price source (USD, checked 2026-11-13): https://enablingdevices.com/product/easy-flex-stylus/
+    msrp: 80.95
+    device_types: [Accessory]
+    eligible_disability_groups: [mobility]
+    description: Adjustable stylus with straps for use around the hand, wrist or fingers on capacitive touchscreens.
+    compatibility_notes: "Manufacturer direct USD price for Easy Flex Stylus item 9079, selected by the user. Includes two adjustable straps and one replaceable tip; replacement tips item 9091 are sold separately. Confirm the user's positioning and touchscreen compatibility."
+    documentation_url: https://enablingdevices.com/product/easy-flex-stylus/
+  - name: Wheelchair-Compatible Device Mount
+    catalog_key: wheelchair-compatible-device-mount
+    manufacturer: Rehadapt
+    model_number: null
+    model_confirmed: false
+    # Manufacturer source: user-supplied Rehadapt wheelchair-mount screenshot, 2026-11-13.
+    # REVIEW: Missing exact Rehadapt model, chair clamp/device interface and MSRP.
+    msrp: null
+    device_types: [Hands-free Device]
+    eligible_disability_groups: [mobility]
+    compatibility_notes: "Rehadapt wheelchair-mount family confirmed by the supplied screenshot. Select the exact mount, wheelchair clamp and device interface before confirming the model or price."
+  - name: Adjustable Tablet Mount
+    catalog_key: adjustable-tablet-mount
+    manufacturer: Oak Hill Brands Corp.
+    model_number: null
+    model_confirmed: false
+    # Manufacturer source: user-supplied ModularHose screenshot; https://www.modularhose.com/corporate (2026-11-13).
+    # REVIEW: Missing exact ModularHose holder/arm/clamp configuration, tablet fit and MSRP.
+    msrp: null
+    device_types: [Hands-free Device]
+    eligible_disability_groups: [mobility]
+    compatibility_notes: "Brand: ModularHose, a division of Oak Hill Brands Corp. Select the exact tablet holder, arm and clamp configuration; confirm tablet size, weight and attachment surface before ordering. Model and price remain unconfirmed."
+  - name: Flexible Smartphone Mount
+    catalog_key: flexible-smartphone-mount
+    manufacturer: Oak Hill Brands Corp.
+    model_number: null
+    model_confirmed: false
+    # Manufacturer source: user-supplied ModularHose screenshot; https://www.modularhose.com/corporate (2026-11-13).
+    # REVIEW: Missing exact ModularHose holder/arm/clamp configuration, phone fit and MSRP.
+    msrp: null
+    device_types: [Hands-free Device]
+    eligible_disability_groups: [mobility]
+    compatibility_notes: "Brand: ModularHose, a division of Oak Hill Brands Corp. Select the exact phone holder, arm length and clamp; confirm phone dimensions and mounting surface before ordering. Model and price remain unconfirmed."
+  - name: Freedom Scientific JAWS Screen Reader
+    catalog_key: freedom-scientific-jaws
+    manufacturer: Freedom Scientific
+    model_number: JAWS
+    model_confirmed: true
+    # REVIEW: Missing license edition, term/SMA and exact MSRP; Home, Professional and subscriptions have different prices.
+    msrp: null
+    device_types: [Accessory]
+    eligible_disability_groups: [deafblind]
+    description: Screen reader software for Windows with speech and refreshable Braille display support.
+    compatibility_notes: Software license only. Confirm the required license edition and compatible computer and Braille display before ordering.
+    documentation_url: https://vispero.com/jaws-screen-reader-software/
+  - name: Freedom Scientific ZoomText
+    catalog_key: freedom-scientific-zoomtext
+    manufacturer: Freedom Scientific
+    model_number: ZoomText
+    model_confirmed: true
+    # REVIEW: Missing license edition, term/SMA and exact MSRP; Magnifier, Magnifier/Reader and subscriptions have different prices.
+    msrp: null
+    device_types: [Accessory]
+    eligible_disability_groups: [deafblind]
+    description: Screen magnification software for Windows, with an optional Magnifier/Reader edition.
+    compatibility_notes: Software license only. Confirm the required edition and usable visual access before ordering.
+    documentation_url: https://vispero.com/zoomtext-screen-magnifier-software/
+  - name: Tatum Robotics Tatum1
+    catalog_key: tatum-robotics-tatum1
+    manufacturer: Tatum Robotics
+    model_number: Tatum1
+    model_confirmed: true
+    # REVIEW: Missing public MSRP; manufacturer requires an order request/quote.
+    msrp: null
+    device_types: [Accessory]
+    eligible_disability_groups: [deafblind]
+    description: Robotic tactile fingerspelling system that presents English communication through a signing hand.
+    compatibility_notes: Manufacturer accepts limited-capacity order requests for DeafBlind users. Confirm the current quote and lead time directly.
+    documentation_url: https://tatumrobotics.com/pages/tatum1
+  - name: nWise myMMX db
+    catalog_key: nwise-mymmx-db
+    manufacturer: nWise
+    model_number: myMMX db
+    model_confirmed: true
+    # REVIEW: Missing public MSRP and license/service-provider configuration; request a quote.
+    msrp: null
+    device_types: [Accessory]
+    eligible_disability_groups: [deafblind]
+    description: Accessible communication app combining video, audio and real-time text with compatible refreshable Braille displays.
+    compatibility_notes: App for iPhone or iPad. Confirm the compatible Braille display and regional service-provider setup before ordering.
+    documentation_url: https://nwise.se/solutions/deafblind-telecommunication/

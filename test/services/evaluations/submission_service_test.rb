@@ -88,12 +88,13 @@ module Evaluations
       assert_equal({ @product.id.to_s => { 'selected' => '1', 'reaction' => 'Satisfied' } }, permitted['products_tried_inputs'])
     end
 
-    test 'report completion preserves proof review bookkeeping and initializes needs without resubmitting historical intake' do
+    test 'report completion preserves proof review bookkeeping while saving the explicit equipment profile' do
       application = @evaluation.application
-      application.update_columns(maryland_resident: false, needs_review_since: 1.day.ago)
+      application.update!(needs_review_since: 1.day.ago)
       review_marker = application.reload.needs_review_since
-      original = application.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
-      assert_not application.valid?
+      bookkeeping = %w[needs_review_since equipment_needs_initialized_at equipment_source_evaluation_id updated_at lock_version]
+      original = application.attributes.except(*bookkeeping)
+      assert application.valid?
 
       assert_difference 'Event.where(action: "evaluation_completed").count', 1 do
         result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
@@ -103,7 +104,8 @@ module Evaluations
       assert_equal 'completed', @evaluation.reload.status
       assert_equal review_marker, application.reload.needs_review_since
       assert application.equipment_needs_initialized_at
-      assert_equal original, application.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
+      assert_equal original, application.attributes.except(*bookkeeping)
+      assert_equal @evaluation.id, application.equipment_source_evaluation_id
       assert_equal [@product.id], application.equipment_needs.pluck(:product_id)
       assert_equal 1, application.events.where(action: 'equipment_needs_initialized').count
     end

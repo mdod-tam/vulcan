@@ -1,0 +1,24 @@
+<% content_for :title, "PO #{@order.number}" %>
+<div class="space-y-5">
+  <h1 class="text-2xl font-bold">Purchase order <%= @order.number %></h1>
+  <p>Use this page to add tracking after each package ships.</p>
+  <% if flash[:notice].present? %>
+    <p role="status" class="rounded border border-success-300 bg-success-50 p-3"><%= flash[:notice] %></p>
+  <% end %>
+  <% if @error %>
+    <p role="alert" class="rounded border border-danger-300 bg-danger-50 p-3"><%= @error %></p>
+  <% end %>
+  <% if @shipping_request.shipping_instructions.present? %>
+    <section class="card p-4">
+      <h2 class="font-semibold">Shipping instructions</h2>
+      <p class="whitespace-pre-line"><%= @shipping_request.shipping_instructions %></p>
+    </section>
+  <% end %>
+  <% if @destinations.empty? %>
+    <p>There are no devices to ship on this order. Contact MAT if you need help.</p>
+  <% end %>
+  <% @destinations.each do |destination| %>
+    <%= render 'destination', token: @token, **destination %>
+  <% end %>
+  <p class="text-sm text-gray-700">Need to correct tracking? <%= mail_to support_email, 'Email MAT' %> with your PO number.</p>
+</div>

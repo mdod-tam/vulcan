@@ -22,7 +22,7 @@ module Evaluations
     end
 
     test 'saving working notes leaves appointment report products and application unchanged and sends nothing' do
-      original_evaluation = @evaluation.attributes.except('working_notes', 'updated_at')
+      original_evaluation = @evaluation.attributes.except('working_notes', 'updated_at', 'lock_version')
       original_application = @application.reload.attributes
       original_recommendations = @evaluation.recommended_product_ids
       narrative = 'Left a voicemail; call again next week'
@@ -43,7 +43,7 @@ module Evaluations
 
       @evaluation.reload
       assert_equal narrative, @evaluation.working_notes
-      assert_equal original_evaluation, @evaluation.attributes.except('working_notes', 'updated_at')
+      assert_equal original_evaluation, @evaluation.attributes.except('working_notes', 'updated_at', 'lock_version')
       assert_equal original_application, @application.reload.attributes
       assert_equal original_recommendations, @evaluation.recommended_product_ids
 

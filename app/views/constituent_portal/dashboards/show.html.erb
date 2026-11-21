@@ -16,6 +16,17 @@
 
     <main id="main-content">
       <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <section class="card mb-6 p-6" aria-labelledby="my-equipment-heading">
+          <h2 id="my-equipment-heading" class="text-xl font-semibold"><%= t('product_resources.devices.dashboard_heading') %></h2>
+          <% if @equipment_history.groups.any? %>
+            <%= render 'constituent_portal/products/history', groups: @equipment_history.groups, heading_tag: 'h3' %>
+          <% else %>
+            <p class="mt-3 text-gray-700">
+              <%= t(@equipment_history.fulfillment_in_progress? ? 'product_resources.devices.in_progress_details' : 'product_resources.devices.empty') %>
+            </p>
+          <% end %>
+          <%= link_to t('product_resources.devices.heading'), constituent_portal_products_path, class: 'mt-4 inline-block text-primary-700 underline' %>
+        </section>
           <div class="card overflow-hidden rounded-none sm:rounded-lg p-6 mb-6">
             <div class="px-4 py-5 sm:px-6 space-y-6">
               <section aria-labelledby="my-application-status-title">
@@ -326,7 +337,7 @@
               <% end %>
             </div>
             <div class="px-4 py-5 sm:p-6 space-y-6">
-              <% if @active_application&.income_proof_required? %>
+              <% if @active_application&.income_proof_review_applicable? %>
                 <%= render 'proof_status_card', application: @active_application, proof_type: 'income' %>
               <% end %>
               <%= render 'proof_status_card', application: @active_application, proof_type: 'residency' %>
@@ -347,7 +358,7 @@
                 </p>
               </div>
               <div class="px-4 py-5 sm:p-6 space-y-6">
-                <% if managed_app.income_proof_required? %>
+                <% if managed_app.income_proof_review_applicable? %>
                   <%= render 'proof_status_card', application: managed_app, proof_type: 'income' %>
                 <% end %>
                 <%= render 'proof_status_card', application: managed_app, proof_type: 'residency' %>
@@ -416,17 +427,20 @@
                 <% end %>
 
                 <% if @active_application.service_window_active? %>
+                  <% unlimited_training = @active_application.unlimited_training_sessions? # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
                   <% if service_window_end.present? %>
                     <p class="text-xs text-gray-500 mb-3">
-                      Training available through <%= service_window_end.strftime("%b %-d, %Y") %> or until all sessions are used.
+                      <%= t(unlimited_training ? 'icanconnect.training_available_through' : 'trainer_workflow.capacity.available_through',
+                            date: l(service_window_end.to_date, format: :long)) %>
                     </p>
                   <% end %>
 
                   <p class="text-sm text-gray-700 mb-4">
-                    <span class="font-medium"><%= @remaining_training_sessions %></span>
-                    of
-                    <span class="font-medium"><%= @max_training_sessions %></span>
-                    training sessions remaining.
+                    <% if unlimited_training %>
+                      <%= t('icanconnect.unlimited') %>
+                    <% else %>
+                      <%= t('trainer_workflow.capacity.remaining', count: @remaining_training_sessions, max: @max_training_sessions) %>
+                    <% end %>
                   </p>
 
                   <% if @active_application.training_request_pending? %>
@@ -476,7 +490,7 @@
                     <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-elevation-1">
                       Training Assigned
                     </button>
-                  <% elsif @remaining_training_sessions > 0 %>
+                  <% elsif @active_application.training_capacity_available? %>
                     <%= button_to "Request Training",
                         { controller: "constituent_portal/applications", action: "request_training", id: @active_application.id },
                         method: :post,

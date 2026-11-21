@@ -25,7 +25,6 @@ en:
         idle_other: "Your session expires in %{minutes} minutes. Choose Keep working to stay signed in."
     form:
       contact_label: "Email Address or Phone Number"
-      contact_hint: "Use your account email or phone number. Text access links are sent only to text-capable numbers."
       error_heading: "Please address the following errors:"
       password_label: "Password"
       password_hint: "Enter your password"
@@ -107,6 +106,8 @@ en:
       on_file: "On file:"
   activerecord:
     attributes:
+      mileage_rate:
+        effective_on: "Effective from"
       user:
         date_of_birth: "Date of birth"
       application:
@@ -261,9 +262,10 @@ en:
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
     submit_gate:
-      incomplete: "Complete all required confirmations before submitting."
+      incomplete: "Complete all required fields before submitting."
       ready: "Application is ready to submit."
       detail: "Still needed: %{items}."
+    income_proof_required: "This proof is required to submit your application."
     form_labels:
       maryland_resident: "I certify that I am a resident of Maryland"
       household_size: "Household Size"
@@ -1000,10 +1002,10 @@ en:
       update:
         product_updated_pass: "Product successfully updated."
       archive:
-        product_archive_pass: "Product archived."
+        product_archive_pass: "Product discontinued."
         product_archive_fail: "Could not archive product"
       unarchive:
-        product_unarchive_pass: "Product unarchived."
+        product_unarchive_pass: "Availability restored."
         product_unarchive_fail: "Could not unarchive product"
       set_product:
         product_not_found: "Product not found"

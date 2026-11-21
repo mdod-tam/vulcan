@@ -1,0 +1,66 @@
+<div class="max-w-6xl mx-auto p-6 space-y-4">
+  <h1 class="text-2xl font-bold">Receive PO <%= @purchase_order.number %> into stock</h1>
+  <p class="whitespace-pre-line">
+<%= @purchase_order.shipping_label %>
+</p>
+<%= render 'admin/equipment/form_errors', errors: @form_errors %>
+<% if @form_errors.present? %>
+  <p role="status" class="rounded bg-primary-50 p-3">The counts below are up to date. We kept your entries. Check them before saving again.</p>
+<% end %>
+<%= form_with url: admin_purchase_order_stock_receipt_path(@purchase_order), scope: :receipt, data: { controller: 'stock-receipt' }, class: 'space-y-4' do |form| %>
+<%= form.hidden_field :expected_version, value: @expected_version %>
+<% @item_versions.each do |id, version| %>
+<%= hidden_field_tag "receipt[item_versions][#{id}]", version %>
+<% end %>
+<%= form.label :received_on, 'Received on', class: 'form-label' %>
+<%= form.text_field :received_on, typed_date_field_options(value: accessible_date_value(@received_on), required: true, autocomplete: 'off', class: 'form-input') %>
+<div class="overflow-x-auto"><table class="w-full text-left"><thead><tr><th>Product</th><th>Ordered</th><th>Previously received</th><th>Cancelled</th><th>Outstanding</th><th>Receiving now</th></tr></thead><tbody>
+<% @batches.each do |batch, items| %>
+<% product = items.first.product # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% line = items.first.acquisition_bid_group_line # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% setup = Product::PROGRAM_GROUPS.fetch(line.supplier_setup_group, 'Unassigned') # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% counts = @purchase_order.stock_receipt_counts(items) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% outstanding = counts.outstanding # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% attempted = @attempted[batch] || {} # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<tr class="border-b" data-stock-receipt-target="row" data-batch="<%= batch %>">
+          <td class="py-4">
+<%= equipment_catalog_label(product) %>
+<p class="text-sm text-gray-600"><%= setup %> · Bid <%= line.bid_group.number %></p>
+</td><td>
+<%= counts.ordered %>
+</td><td>
+<%= counts.received %>
+</td><td>
+<%= counts.cancelled %>
+</td><td>
+<%= outstanding %>
+</td>
+          <td>
+<%= hidden_field_tag 'receipt[rows][][batch]', batch, id: nil %>
+<%= label_tag "receive-#{batch}", "Receiving #{product.name} — #{setup}, bid #{line.bid_group.number}",
+              class: 'sr-only' %>
+<%= number_field_tag 'receipt[rows][][quantity]',
+                     attempted['quantity'] || 0,
+                     min: 0, max: outstanding, step: 1, autocomplete: 'off', id: "receive-#{batch}",
+                     data: { stock_receipt_target: 'quantity', action: 'input->stock-receipt#update' },
+                     class: 'form-input w-24' %>
+<button type="button" data-action="stock-receipt#remaining" class="underline">Receive remaining</button></td>
+        </tr>
+        <tr><td colspan="6"><div data-stock-receipt-target="identifiers" data-batch="<%= batch %>" class="space-y-2">
+<% [outstanding, Array(attempted['identifiers']).size].max.clamp(0, items.size).times do |index| %>
+<% identifier = Array(attempted['identifiers'])[index].to_h # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<div data-unit-index="<%= index %>" hidden>
+<%= label_tag "receive-serial-#{batch}-#{index}", "Device #{index + 1} serial number (optional)" %>
+<%= text_field_tag 'receipt[rows][][identifiers][][serial_number]',
+                   identifier['serial_number'], id: "receive-serial-#{batch}-#{index}", disabled: true, autocomplete: 'off', class: 'form-input' %>
+<%= label_tag "receive-imei-#{batch}-#{index}", 'IMEI (optional)' %>
+<%= text_field_tag 'receipt[rows][][identifiers][][imei]', identifier['imei'],
+                   id: "receive-imei-#{batch}-#{index}", disabled: true, autocomplete: 'off', class: 'form-input' %>
+</div>
+<% end %>
+</div></td></tr>
+<% end %>
+</tbody></table></div>
+<%= form.submit 'Receive 0 units into stock', disabled: true, data: { stock_receipt_target: 'submit' }, class: 'btn btn-primary' %>
+<% end %>
+</div>

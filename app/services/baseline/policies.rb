@@ -14,6 +14,7 @@ module Baseline
       'fpl_6_person' => 43_150,
       'fpl_7_person' => 48_650,
       'fpl_8_person' => 54_150,
+      'fpl_additional_person' => 5_500,
       'max_training_sessions' => 3,
       'waiting_period_years' => 3,
       'proof_submission_rate_limit_web' => 10,

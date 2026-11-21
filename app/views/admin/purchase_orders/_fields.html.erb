@@ -1,10 +1,5 @@
-<%# locals: (form:, purchase_order:, vendors:, prefix: '') -%>
-<div class="grid gap-4 sm:grid-cols-3">
-  <div>
-    <%= form.label :vendor_id, "#{prefix}Vendor", class: 'form-label' %>
-    <%= form.collection_select :vendor_id, vendors, :id, :business_name,
-                               { include_blank: 'Select a vendor' }, class: 'form-input mt-1' %>
-  </div>
+<%# locals: (form:, purchase_order:, prefix: '') -%>
+<div class="grid gap-4 sm:grid-cols-2">
   <div>
     <%= form.label :number, "#{prefix}PO number", class: 'form-label' %>
     <%= form.text_field :number, maxlength: 100, class: 'form-input mt-1' %>
@@ -23,3 +18,11 @@
     <% end %>
   </div>
 </div>
+<% if purchase_order.program_stock? %>
+  <fieldset class="mt-4 grid gap-4 sm:grid-cols-2">
+    <legend class="font-medium">Confirmed program receiving address</legend>
+    <% EquipmentShipping::FIELDS.each do |field| %>
+      <div><%= form.label field, class: 'form-label' %><%= form.text_field field, class: 'form-input mt-1' %></div>
+    <% end %>
+  </fieldset>
+<% end %>

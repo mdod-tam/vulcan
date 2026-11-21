@@ -47,6 +47,10 @@ module Vouchers
       success('Voucher successfully processed', { transaction: transaction, voucher: voucher })
     rescue Voucher::SubmissionConflict
       failure('This form was already used for a different purchase. Start a new redemption.', { error_type: :submission_conflict })
+    rescue ActiveRecord::RecordInvalid => e
+      failure(e.record.errors.full_messages.to_sentence, { error_type: :invalid_input })
+    rescue ActiveRecord::RecordNotFound
+      failure('A selected product is no longer available. Choose a current model.', { error_type: :invalid_input })
     rescue StandardError => e
       log_error(e, { voucher_id: voucher&.id, vendor_id: vendor&.id, amount: amount&.to_s })
       failure('Unable to process voucher redemption. Please try again.')
@@ -81,9 +85,7 @@ module Vouchers
 
     # The form collects product IDs without quantities, so each product has quantity 1.
     def build_product_data
-      product_ids.each_with_object({}) do |product_id, hash|
-        hash[product_id.to_s] = 1
-      end
+      product_ids.to_h { |product_id| [product_id.to_s, 1] }
     end
 
     def formatted_amount(value)

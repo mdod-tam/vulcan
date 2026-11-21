@@ -1,4 +1,4 @@
-<li class="p-4 hover:bg-gray-50 transition-colors duration-150 flex items-start" id="notification_<%= notification.id %>">
+<li class="notification-row p-4 hover:bg-gray-50 transition-colors duration-150 flex items-start" id="notification_<%= notification.id %>">
   <div class="flex-shrink-0 mr-3">
     <span class="inline-flex items-center justify-center h-8 w-8 rounded-full <%= notification_icon_classes(notification) %>">
       <% case notification_icon_type(notification)
@@ -34,8 +34,8 @@
     </span>
   </div>
 
-  <div class="flex-1 min-w-0">
-    <div class="flex justify-between">
+  <div class="notification-content flex-1 min-w-0">
+    <div class="notification-summary flex justify-between">
       <p class="text-sm font-medium text-gray-900 <%= notification.read_at.nil? ? 'font-semibold' : '' %>">
         <%= notification.message(current_user, locale: I18n.locale) %>
       </p>
@@ -48,7 +48,7 @@
       <% end %>
     </div>
 
-    <p class="text-xs text-gray-500 mt-1">
+    <p class="notification-timestamp text-xs text-gray-500 mt-1">
       <%= t('notification_delivery.ago', time: time_ago_in_words(notification.created_at)) %>
     </p>
 

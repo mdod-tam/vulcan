@@ -1,0 +1,7 @@
+es:
+  applications:
+    income_validation:
+      title: "Los ingresos superan el límite"
+      limit: "El límite de ingresos para el tamaño de su hogar es de %{threshold} al año."
+      ineligible: "Los hogares cuyos ingresos superan este límite no son elegibles para este programa."
+      unavailable: "No pudimos comprobar el límite de ingresos. Inténtelo de nuevo más tarde."

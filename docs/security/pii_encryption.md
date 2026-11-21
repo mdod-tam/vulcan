@@ -21,6 +21,7 @@ Encryption covers the declarations below, not every piece of personal informatio
 | [ContactChangeRequest](../../app/models/contact_change_request.rb) | — | `old_value`, `proposed_value`, `notification_email` |
 | [SmsVerificationAttempt](../../app/models/sms_verification_attempt.rb) | — | `phone_number` |
 | [EquipmentItem](../../app/models/equipment_item.rb) | `normalized_imei`, `normalized_serial_number` | `imei`, `serial_number`, `tracking_number` |
+| [EquipmentShipping](../../app/models/concerns/equipment_shipping.rb), on Application, EquipmentItem and PurchaseOrder | — | `shipping_care_of`, `shipping_address_1`, `shipping_address_2`, `shipping_city`, `shipping_state`, `shipping_zip_code` |
 | [Event](../../app/models/event.rb) | — | `change_values` (see [audit events](#audit-events)) |
 
 Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. Ciphertext is the encrypted form of a value. This supports equality searches and unique indexes, but it reveals which values match. Use it only when lookup or uniqueness requires it.
@@ -31,9 +32,13 @@ Contact proof snapshots are retained for the notice and ownership workflow, with
 
 Equipment identifiers use normalized encrypted equality for duplicate checks. Normalized means reformatted to one standard form before comparing. Partial database indexes enforce one active IMEI — a device identifier for mobile equipment — and one active serial within the recorded normalized manufacturer/model identity, including duplicate catalog entries. Shipped and detached devices retain those assignments. Withdrawn historical devices release them. Device identifier corrections use the encrypted audit values described below, and identifiers are excluded from bid exports.
 
+Shipping defaults and unit/stock-PO snapshots use nondeterministic encryption. Authorized administrators can read and copy complete confirmed destinations for purchasing and dispatch. The beneficiary remains the application user; care-of does not replace apartment/unit. Later profile changes do not rewrite recorded unit or supplier snapshots.
+
 ### Audit events
 
 [`AuditEventService.log`](../../app/services/audit_event_service.rb) applies one [audit privacy policy](../../app/services/audit_metadata_privacy.rb) before logging or storing metadata. Personal changes keep their existing old/new, from/to, or array shape. Emails retain the first character of the local part and domain plus the final domain suffix; phone and tax IDs retain their last four digits; names retain initials. Birth dates, street addresses, cities, ZIP codes, notes, identity rationale, and free-text rejection/decline reasons are withheld. Passwords, digests, tokens, and bearer links retain no fragments. Boolean presence flags, record IDs, reason codes, sources, actors, and event times remain usable. Workflow records retain their own authorized detail views.
+
+Shipping names, including care-of and shipping state, and beneficiary program/setup groups are explicitly withheld across auditable models. Audit metadata retains actor/record IDs and changed field names, without a recoverable plaintext address copy.
 
 The same classifications apply inside nested hashes and record collections. An enclosing secret or withheld field also protects its nested values. Staff name snapshots, including assignment and completion names, are masked. The actor's exact `Event#user_id`, its account association, and any role metadata remain intact; authorized views can resolve that account's current identity. Masked name snapshots do not replace accountable actor IDs or their access-controlled account records.
 
@@ -48,6 +53,12 @@ Training report `internal_notes`, `constituent_summary`, and private cancellatio
 The applicant or current managing guardian receives the deliberately authored shared summary. Shared text is not inferred from private notes. Completion notifications link to the authenticated report instead of copying private report content into delivery metadata. Adding note encryption would require a separate design for both training and evaluation content.
 
 Product resources have a different audience: they are public program guidance with an explicit language and exact catalog-product target. Resource PDFs use signed Active Storage proxy links without a resource-specific login guard. Editors must not include personal, application, or session information in a resource URL or file. Device associations and shared training history remain authorized even though their linked guidance is public. A demo model's guidance can appear on its authorized training summary without adding that model to Devices.
+
+## ICC financial evidence
+
+ICC invoices, timesheets and filing packages are private evidence. They use the existing cleared-upload and authenticated-download owners, with a separate `financial_evidence` format policy. Every attachment of a shared blob must authorize the audience; linking a private invoice elsewhere does not make it public guidance. ZIP exports recheck authorization and scan clearance and use generated document names.
+
+Filed costs and their shared invoice context resist ordinary amount, attachment and deletion changes. A reviewed correction records its external reference and reason; replaced filed invoices remain attached privately as superseded evidence. The [ICC operating guide](../operations/icanconnect.md) describes the local filing workflow. MSRP is public catalog information; actual purchase and service costs remain staff financial data.
 
 ## Looking up encrypted contacts
 
@@ -86,7 +97,7 @@ Diagnostic logs and error reports use the exception class and limited context su
 
 Training request filters cover exact `internal_notes`, `constituent_summary`, cancellation and no-show reason keys, and reschedule reasons. Audit and notification metadata contains structural training facts instead of those text bodies. [Product resource filtering](../../config/initializers/product_resource_parameter_filter.rb) hides uploaded document parameters, signed upload references, resource URLs, and manufacturer-documentation URLs. Model filtering also hides resource and manufacturer URLs from SQL and inspection output, because an external URL can carry query credentials even when its guidance is public.
 
-Equipment request filtering covers serial, IMEI, tracking, correction reasons, and the signed `impact_token` confirmation payload. That signature binds the reviewed values. It does not encrypt the payload, so it needs explicit log filtering even when the individual identifier fields are filtered. The staff access dialog posts its signed impact token as `confirmation`, which is filtered under that exact name so unrelated fields that mention confirmation stay visible.
+Equipment request filtering covers every shipping snapshot name, beneficiary `program_disability_groups`, `disability_setup_group`, `supplier_setup_group`, serial, IMEI, tracking, correction reasons, and the signed `impact_token` confirmation payload. That signature binds the reviewed values. It does not encrypt the payload, so it needs explicit log filtering even when the individual identifier fields are filtered. The staff access dialog posts its signed impact token as `confirmation`, which is filtered under that exact name so unrelated fields that mention confirmation stay visible.
 
 SQL binds need names for filtering to work. A bind is a query value sent separately from the SQL text. A hash condition carries its column name. A positional value in `where('LOWER(first_name) = ?', value)` does not. [Constituent duplicate matching](../../app/models/users/constituent.rb) uses named query attributes for this reason.
 

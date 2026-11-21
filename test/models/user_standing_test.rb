@@ -34,7 +34,7 @@ class UserStandingTest < ActiveSupport::TestCase
     end
   end
 
-  test 'vendors for equipment procurement are the vendors in standing' do
+  test 'vendor account standing excludes merged suspended and inactive accounts' do
     survivor = create(:vendor)
     null_status = create(:vendor)
     null_status.update_column(:status, nil)
@@ -46,7 +46,7 @@ class UserStandingTest < ActiveSupport::TestCase
       merged: create(:vendor, status: :active, merged_into_user: survivor)
     }
 
-    selected = Users::Vendor.equipment_procurement_eligible.where(id: vendors.values.map(&:id)).ids
+    selected = Users::Vendor.in_standing.where(id: vendors.values.map(&:id)).ids
 
     assert_equal %i[active legacy_null_status], standings_in(vendors, selected)
   end

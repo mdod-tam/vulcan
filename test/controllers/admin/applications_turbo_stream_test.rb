@@ -36,7 +36,7 @@ module Admin
 
     test 'reject income proof responds with turbo streams: update modals container and replace attachments' do
       attach_income_proof!
-      product = create(:product, name: 'Historical purchasing model')
+      product = create(:product, name: 'Historical purchasing model', model_number: 'Historical purchasing model')
       AuditEventService.log(action: 'equipment_needs_updated', actor: @admin, auditable: @application,
                             metadata: { changes: { equipment_needs: { old: [], new: [{ product_id: product.id, remaining_quantity: 2 }] } } })
 

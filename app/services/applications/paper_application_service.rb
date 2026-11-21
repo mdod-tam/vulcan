@@ -131,11 +131,12 @@ module Applications
     end
 
     def create_application
-      application_attrs = params[:application]
+      application_attrs = params[:application]&.dup
       return add_error('Application params missing') if application_attrs.blank?
 
       return false unless validate_income_threshold(application_attrs)
 
+      application_attrs.merge!(annual_income: nil, household_size: nil) if income_satisfied_by_benefits?
       constituent.reload
       build_and_save_application(application_attrs)
     end
@@ -144,17 +145,19 @@ module Applications
       return true if @skip_income_validation
       return true unless FeatureFlag.income_proof_required?
       return true unless income_proof_action_requires_income_validation?
+      return true if income_satisfied_by_benefits?
 
       household_size = application_attrs[:household_size]
-      annual_income = application_attrs[:annual_income]
+      annual_income = MoneyInput.parse(application_attrs[:annual_income])
+      return add_error('Enter annual income as zero or a positive amount.') unless annual_income&.finite? && annual_income >= 0
 
       threshold_service = IncomeThresholdCalculationService.new(household_size)
       result = threshold_service.call
 
-      return false unless result.success?
+      return add_error('Income thresholds could not be checked. Please try again later.') unless result.success?
 
       threshold = result.data[:threshold]
-      return true if annual_income.to_i <= threshold
+      return true if annual_income <= threshold
 
       add_error('Income exceeds the maximum threshold for the household size.')
       false
@@ -162,6 +165,10 @@ module Applications
 
     def income_proof_action_requires_income_validation?
       params[:income_proof_action].to_s.in?(%w[accept approved])
+    end
+
+    def income_satisfied_by_benefits?
+      income_proof_action_requires_income_validation? && ActiveModel::Type::Boolean.new.cast(params[:no_income_information])
     end
 
     def build_and_save_application(application_attrs)

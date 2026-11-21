@@ -89,10 +89,12 @@ module VendorPortal
     private
 
     def render_redemption_form(submission_id:, status: :ok)
-      @products = Product.order(:name)
       @submission_id = submission_id
       @amount_input = params[:amount]
       @selected_product_ids = Array(params[:product_ids]).map(&:to_s)
+      scope = Product.available
+      scope = scope.or(Product.where(id: @selected_product_ids)) if status == :unprocessable_content
+      @products = scope.order(:name, :id)
       render :redeem, status: status
     end
 

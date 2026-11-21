@@ -1,0 +1,146 @@
+<div class="max-w-7xl mx-auto space-y-6 p-4">
+  <%= render 'admin/shared/index_header', title: 'iCanConnect filing preparation', applications_link: false %>
+  <p>Review data and prepare iCanConnect filings here. Check the data and add any missing costs. Share the worksheet and supporting documents with your iCanConnect contact.</p>
+  <% if @error %>
+    <p role="alert" class="text-danger-700"><%= @error %></p>
+  <% end %>
+  <% if @selection_notice %>
+    <p role="status"><%= @selection_notice %></p>
+  <% end %>
+  <%= form_with url: admin_icanconnect_filing_prep_path, method: :get, class: 'flex flex-wrap items-end gap-4' do |form| %>
+    <div>
+      <%= form.label :from, 'From', class: 'form-label' %>
+      <%= form.text_field :from, typed_date_field_options(value: accessible_date_value(@from), required: true, class: 'form-input') %>
+    </div>
+    <div>
+      <%= form.label :through, 'Through', class: 'form-label' %>
+      <%= form.text_field :through, typed_date_field_options(value: accessible_date_value(@through), required: true, class: 'form-input') %>
+    </div>
+    <div>
+      <%= form.label :view, class: 'form-label' %>
+      <%= form.select :view,
+                      [['Unclaimed expenses', 'unclaimed'], ['Period activity, including filed costs', 'activity']], { selected: @view }, class: 'form-input' %>
+    </div>
+    <div>
+      <%= form.label :category, class: 'form-label' %>
+      <%= form.select :category, Icanconnect::FilingPrep::CATEGORIES.map { |category|
+            [category.humanize, category]
+          }, { include_blank: 'All categories', selected: params[:category] }, class: 'form-input' %>
+    </div>
+    <%= form.submit 'Review period', class: 'btn btn-primary' %>
+  <% end %>
+  <% if @prep.nil? %>
+    <p class="card p-6">Choose a valid date range to review costs.</p>
+  <% elsif @prep.rows.empty? %>
+    <p class="card p-6">
+      <% if @view == 'activity' %>
+        No ICC activity matches these dates and this category.
+      <% else %>
+        No unclaimed expenses match these dates and this category. Choose Period activity to include costs already filed.
+      <% end %>
+    </p>
+  <% else %>
+    <p><%= @prep.rows.count(&:ready?) %> of <%= @prep.rows.size %> costs have the information needed for filing. Costs with missing information are shown below.</p>
+    <dl class="flex flex-wrap gap-6" aria-label="Costs by category">
+      <% @prep.category_totals.each do |category, total| %>
+        <div>
+          <dt class="font-semibold"><%= category.humanize %></dt>
+          <dd><%= total[:amount].nil? ? 'Cost not entered' : number_to_currency(total[:amount]) %>
+            <% if total[:missing].positive? %> · <%= pluralize(total[:missing], 'cost') %> not entered<% end %>
+          </dd>
+        </div>
+      <% end %>
+    </dl>
+    <div class="flex gap-4">
+      <%= link_to 'Download filing worksheet (CSV)',
+                  admin_icanconnect_filing_prep_path(from: @from, through: @through, view: @view, category: params[:category], format: :csv),
+                  class: 'btn btn-outline' %>
+      <%= link_to 'Download supporting documents (ZIP)',
+                  admin_icanconnect_filing_prep_path(from: @from, through: @through, view: @view, category: params[:category], format: :zip), class: 'btn btn-outline' %>
+    </div>
+    <%= form_with url: admin_icanconnect_filing_prep_path, method: :patch, class: 'space-y-4' do |form| %>
+      <%= form.hidden_field :from, value: @from, id: nil %>
+      <%= form.hidden_field :through, value: @through, id: nil %>
+      <%= form.hidden_field :view, value: @view, id: nil %>
+      <%= form.hidden_field :category, value: params[:category], id: nil %>
+      <div class="overflow-x-auto"><table class="min-w-full border-collapse text-left text-sm">
+        <caption class="sr-only">ICC costs, service and receipt dates, and missing documents</caption>
+        <thead><tr><th class="p-3">Select cost</th><th class="p-3">Cost / details</th><th class="p-3">Applicant</th><th class="p-3">Service / receipt date</th><th class="p-3">Cost</th><th class="p-3">Documents / readiness</th><th class="p-3">Filed</th></tr></thead>
+        <tbody>
+          <% @prep.rows.each_with_index do |row, index| %>
+            <tr class="border-t align-top">
+              <td class="p-3">
+                <%= hidden_field_tag "rows[#{index}][key]", row.key %>
+                <%= hidden_field_tag "rows[#{index}][lock_version]", row.record.lock_version %>
+                <%= hidden_field_tag "rows[#{index}][review_version]", row.review_version %>
+                <%= check_box_tag "rows[#{index}][selected]", '1', Array(@selected_keys).include?(row.key),
+                                  disabled: !row.ready? || row.claimed?, aria: { label: "Select #{icc_cost_label(row.record)}" } %>
+              </td>
+              <td class="p-3">
+                <strong><%= row.category.humanize %></strong><br>
+                <%= icc_cost_label(row.record) %><br>
+                <% if row.record.is_a?(EquipmentItem) %>
+                  <span class="block text-gray-600"><%= row.record.product.name %></span>
+                  <% if row.record.source_evaluation&.report_submitted_at %>
+                    <span class="block text-gray-600">Requested: <%= row.record.source_evaluation.report_submitted_at.to_date %></span>
+                  <% end %>
+                <% elsif row.record.is_a?(PurchaseOrder) %>
+                  <span class="block text-gray-600">Shipping: <%= number_to_currency(row.record.shipping_cost) || 'Not entered' %></span>
+                  <span class="block text-gray-600">Tax: <%= number_to_currency(row.record.tax_cost) || 'Not entered' %></span>
+                  <% if row.record.other_cost.to_d.positive? %>
+                    <span class="block text-gray-600"><%= row.record.other_cost_category %>: <%= number_to_currency(row.record.other_cost) %></span>
+                  <% end %>
+                <% elsif row.record.is_a?(Evaluation) %>
+                  <span class="block text-gray-600">Evaluator: <%= row.record.evaluator.full_name %></span>
+                <% elsif row.record.is_a?(ApplicationServiceExpense) %>
+                  <span class="block text-gray-600">Provider: <%= row.record.vendor_name.presence || 'Not entered' %></span>
+                  <span class="block text-gray-600">Device #<%= row.record.equipment_item.id %>: <%= row.record.equipment_item.product.name %></span>
+                  <% if row.record.equipment_item.purchase_order %>
+                    <span class="block text-gray-600">PO: <%= row.record.equipment_item.purchase_order.number %></span>
+                  <% end %>
+                <% end %>
+                <% if row.record.is_a?(TrainingSession) %>
+                  <% icc_training_details(row.record).each do |detail| %>
+                    <span class="block text-gray-600"><%= detail %></span>
+                  <% end %>
+                <% end %>
+                <%= link_to 'Review cost and documents', edit_admin_icanconnect_financial_record_path(row.key), class: 'underline' %>
+              </td>
+              <td class="p-3"><% if row.application %>
+      <%= link_to row.application.constituent_full_name, admin_application_path(row.application), class: 'underline' %><% else %>Shared PO charges<% end %></td>
+              <td class="p-3"><%= row.source_on %></td>
+              <td class="p-3"><%= row.amount.nil? ? 'Missing' : number_to_currency(row.amount) %></td>
+              <td class="p-3"><%= row.ready? ? 'Ready for review' : row.missing.join('; ') %>
+                <% row.documents.each do |attachment| %>
+                  <div class="mt-1">
+                    <%= link_to "Current evidence · #{attachment.filename}", document_attachment_path(attachment), class: 'underline' %>
+                    <span class="block text-xs text-gray-600"><%= Icanconnect::FilingPrep.document_reference(attachment) %></span>
+                  </div>
+                <% end %>
+              </td>
+              <td class="p-3"><%= row.claimed? ? "#{row.record.icc_claim_period} — #{row.record.icc_external_filing_reference}" : 'Unclaimed' %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table></div>
+      <fieldset class="card p-4 space-y-3"><legend>Record a completed filing</legend>
+        <p>Select the costs included in the filing, then enter its period and reference. Device costs and shared PO charges are separate entries.</p>
+        <div>
+      <%= form.label :claim_period, 'Filing period', class: 'form-label' %>
+      <%= form.text_field :claim_period, value: params[:claim_period], required: true,
+                                         class: 'form-input' %>
+    </div>
+        <div>
+      <%= form.label :external_reference, 'External filing reference', class: 'form-label' %>
+      <%= form.text_field :external_reference,
+                          value: params[:external_reference], required: true, class: 'form-input' %>
+    </div>
+        <%= form.submit 'Mark selected costs as filed', class: 'btn btn-primary',
+                                                        data: {
+                                                          turbo_confirm: 'Were these costs included in the external filing? ' \
+                                                                         'Changes after this need a correction reason.'
+                                                        } %>
+      </fieldset>
+    <% end %>
+  <% end %>
+</div>

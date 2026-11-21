@@ -1,0 +1,87 @@
+<div class="max-w-7xl mx-auto p-6 space-y-4">
+  <%= render 'admin/shared/index_header', title: 'Program stock' %>
+  <%= render 'admin/equipment/navigation' %>
+  <div class="flex flex-wrap gap-3">
+    <%= link_to 'Create a bid to buy stock', '#buy-stock', class: 'btn btn-primary' %>
+    <%= link_to 'Record existing stock', new_admin_stock_path, class: 'btn btn-outline' %>
+  </div>
+  <p>Stock purchase orders buy devices for inventory. Assign them to constituents later through Needs bid number.</p>
+  <div class="grid gap-4 sm:grid-cols-3">
+    <%= link_to "Open bids for stock: #{@open_bids}", admin_bid_groups_path(purpose: 'program_stock', state: 'open'), class: 'border rounded p-4 underline' %>
+    <%= link_to "Stock purchase orders missing a sent date: #{@unsent_orders}",
+                admin_purchase_orders_path(purpose: 'program_stock', state: 'unsent'), class: 'border rounded p-4 underline' %>
+    <div class="border rounded p-4">
+      <strong>Stock purchase orders awaiting delivery: <%= @awaiting_receipt.size %></strong>
+      <% @awaiting_receipt.each do |order| %>
+        <p><%= link_to "Receive PO #{order.number}", admin_purchase_order_path(order), class: 'underline' %></p>
+      <% end %>
+    </div>
+  </div>
+  <section id="buy-stock" class="space-y-3" aria-labelledby="buy-stock-heading">
+    <h2 id="buy-stock-heading" class="text-xl font-semibold">Buy devices for stock</h2>
+    <p>Enter quantities below, then review and assign a bid number. Use “Add another setup” to buy the same model for more than one disability group.</p>
+    <p id="stock-setup-help">Disability group tells the supplier which setup to prepare. Unassigned means no setup is specified. Stock is shared by model; setup is checked again before shipping to a constituent.</p>
+    <%= form_with url: new_admin_bid_group_path, method: :get, class: 'space-y-4' do |form| %>
+      <div class="relative overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600" role="region" aria-label="Stock quantities and purchasing" tabindex="0">
+        <table class="w-full min-w-[68rem] table-fixed text-left">
+          <caption class="sr-only">Current inventory and quantities to buy by model</caption>
+          <colgroup>
+            <col class="w-[34%]">
+            <col class="w-[9%]">
+            <col class="w-[13%]">
+            <col class="w-[9%]">
+            <col class="w-[35%]">
+          </colgroup>
+          <thead class="border-b bg-gray-50">
+            <tr>
+              <th scope="col" class="px-4 py-3">Model</th>
+              <th scope="col" class="px-4 py-3 text-right">Available</th>
+              <th scope="col" class="px-4 py-3 text-right">Reserved for dispatch</th>
+              <th scope="col" class="px-4 py-3 text-right">Incoming</th>
+              <th scope="col" class="px-4 py-3">Buy for stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @products.each do |product| %>
+              <tr class="border-b align-top">
+                <th scope="row" class="break-words px-4 py-4 font-normal">
+                  <%= link_to equipment_catalog_label(product), admin_stock_index_path(product_id: product.id), class: 'underline' %>
+                </th>
+                <td class="px-4 py-4 text-right tabular-nums"><%= @available_counts[product.id].to_i %></td>
+                <td class="px-4 py-4 text-right tabular-nums"><%= @reserved_counts[product.id].to_i %></td>
+                <td class="px-4 py-4 text-right tabular-nums"><%= @incoming_counts[product.id].to_i %></td>
+                <td class="px-4 py-4" data-controller="stock-purchase">
+                  <% if product.available? %>
+                    <div data-stock-purchase-target="rows" class="space-y-3">
+                      <%= render 'purchase_batch', product: product, batch_index: 0 %>
+                    </div>
+                    <template data-stock-purchase-target="template">
+                      <%= render 'purchase_batch', product: product, batch_index: '__BATCH_INDEX__' %>
+                    </template>
+                    <button type="button" data-action="stock-purchase#add" class="mt-3 text-sm text-primary-700 underline"
+                            aria-label="Add another setup for <%= product.name %>">Add another setup</button>
+                  <% else %>
+                    Discontinued
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+      <p>Leave quantity at zero for models you are not buying.</p>
+      <%= form.submit 'Review stock bid', class: 'btn btn-primary' %>
+    <% end %>
+  </section>
+  <h2 class="text-xl font-semibold">Devices in stock</h2>
+  <% @units.each do |unit| %>
+    <p>
+      <%= link_to "Device ##{unit.id} — #{equipment_catalog_label(unit.product)}", edit_admin_equipment_item_path(unit), class: 'underline' %>
+      · <%= unit.queue_status.humanize %>
+      · <%= unit.serial_number.presence || 'Identifier not recorded' %>
+    </p>
+  <% end %>
+  <% if @units.empty? %>
+    <p>No devices recorded in stock.</p>
+  <% end %>
+</div>

@@ -1,0 +1,85 @@
+<div class="max-w-5xl mx-auto p-6 space-y-4 [overflow-wrap:anywhere]">
+  <%= render 'admin/shared/index_header', title: "Bid #{@group.number}" %>
+<%= render 'admin/equipment/navigation' %>
+<p>
+<%= @group.purpose.humanize %>
+ · <%= equipment_funding_label(@group) %>
+</p>
+<% if @group.membership_changed_at %>
+<p class="rounded bg-yellow-50 p-4">This bid has changed. Review the products and quantities before awarding it.</p>
+<% end %>
+<% if @group.purchase_order %>
+<%= link_to "View PO #{@group.purchase_order.number}", admin_purchase_order_path(@group.purchase_order), class: 'underline' %>
+<% end %>
+<% if @group.open? && !@has_active_lines %>
+  <p class="rounded bg-gray-50 p-4">No products are reserved under this bid.
+    <%= link_to 'Choose products',
+                @group.program_stock? ? admin_stock_index_path(anchor: 'buy-stock') : admin_equipment_index_path(tab: 'needs_ordering'),
+                class: 'underline' %>
+    and select this bid from the open bids list, or cancel it below.</p>
+<% end %>
+<%= form_with model: @group, url: admin_bid_group_path(@group), method: :patch, class: 'space-y-4' do |form| %>
+<%= hidden_field_tag :expected_version, @group.lock_version %>
+<% @group.bid_group_lines.each do |line| %>
+<article class="space-y-4 rounded-lg border border-gray-200 bg-white p-5" aria-labelledby="bid-line-<%= line.id %>-model">
+  <h2 id="bid-line-<%= line.id %>-model" class="text-lg font-semibold"><%= equipment_catalog_label(line.product) %></h2>
+  <% if line.released_at %><span class="rounded bg-gray-100 px-2 py-1 text-sm text-gray-700">Released</span><% end %>
+<% if @group.open? && !line.released_at %>
+<%= hidden_field_tag 'lines[][id]', line.id, id: nil %>
+<%= hidden_field_tag 'lines[][lock_version]', line.lock_version, id: nil %>
+<div class="space-y-1">
+<%= label_tag "line-quantity-#{line.id}", 'Reserved quantity', class: 'form-label' %>
+<%= number_field_tag 'lines[][quantity]', line.quantity, min: 1, step: 1, autocomplete: 'off',
+                                                         id: "line-quantity-#{line.id}", class: 'form-input w-24' %>
+</div>
+<% else %>
+<p><span class="font-medium">Reserved quantity:</span> <%= line.quantity %></p>
+<% end %>
+<dl class="space-y-2">
+  <div class="flex flex-wrap gap-x-2">
+    <dt class="font-medium">Destination:</dt>
+    <dd>
+      <% if line.application %>
+        <%= link_to "Application ##{line.application.id}", admin_application_path(line.application, anchor: 'equipment'), class: 'underline' %>
+      <% else %>
+        Stock
+      <% end %>
+    </dd>
+  </div>
+  <div class="flex flex-wrap gap-x-2">
+    <dt class="font-medium">Configurations:</dt>
+    <dd>
+      <%= line.quantity %>
+      <% if @group.program_stock? %>
+        <%= Product::PROGRAM_GROUPS[line.supplier_setup_group] || 'Unassigned' %>
+      <% else %>
+        <%= Product::PROGRAM_GROUPS[(line.equipment_need || line.equipment_item).disability_setup_group] || 'Setup needed' %>
+      <% end %>
+    </dd>
+  </div>
+</dl>
+<% if @group.open? && !line.released_at %>
+<label class="flex items-center gap-2">
+  <%= check_box_tag 'line_ids[]', line.id, false, id: nil %>
+  <span>Release this reservation</span>
+</label>
+<% end %>
+      </article>
+<% end %>
+<% if @group.open? %>
+<%= label_tag :reason, 'Reason for change' %>
+<%= text_field_tag :reason, nil, required: true, autocomplete: 'off', class: 'form-input' %>
+<% if @has_active_lines %>
+<%= button_tag 'Save quantities', name: :amend_quantities, value: '1', class: 'btn btn-outline' %>
+<%= form.submit 'Release selected reservations', class: 'btn btn-outline' %>
+<% end %>
+<%= button_tag 'Cancel entire bid', name: :cancel, value: '1', class: 'btn btn-outline', data: { turbo_confirm: 'Release every reservation and cancel this bid?' } %>
+<% end %>
+<% end %>
+<% if @group.open? && @has_active_lines %>
+<%= link_to 'Enter PO details for this bid', new_admin_purchase_order_path(bid_group_id: @group.id, return_context: @return_context),
+            class: 'btn btn-primary' %>
+<% end %>
+<%= render 'admin/equipment_items/history', events: @history, audit_records: @equipment_audit_records,
+                                            title: 'Bid history', expanded: true, history_id: 'bid-history' %>
+</div>

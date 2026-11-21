@@ -3,6 +3,7 @@
 class TrainingSession < ApplicationRecord
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include StatusManagement
+  include Icanconnect::ServiceCost
 
   # `rescheduled` is a legacy display status. Current reschedules keep sessions scheduled.
   OPEN_STATUSES = %i[requested scheduled confirmed].freeze
@@ -12,6 +13,8 @@ class TrainingSession < ApplicationRecord
   belongs_to :trainer, class_name: 'User'
   has_one :constituent, through: :application, source: :user
   belongs_to :product_trained_on, class_name: 'Product', optional: true
+  has_many :training_session_equipment_items, inverse_of: :training_session, dependent: :restrict_with_error
+  has_many :equipment_items, through: :training_session_equipment_items, before_remove: :retain_claimed_equipment_link
 
   enum :cancellation_initiator, {
     constituent: 0,
@@ -59,6 +62,8 @@ class TrainingSession < ApplicationRecord
   validates :reschedule_reason, presence: true, if: :rescheduling?
   validate :trainer_must_be_trainer_type, if: -> { new_record? || will_save_change_to_trainer_id? }
   validate :scheduled_time_must_be_future
+  validate :linked_equipment_includes_training_product
+  validate :confirmed_training_product
   validate :recorded_outcome_cannot_change
   validate :training_session_capacity_available, if: :entering_open_status?
 
@@ -147,6 +152,13 @@ class TrainingSession < ApplicationRecord
 
   private
 
+  def retain_claimed_equipment_link(_equipment_item)
+    return unless icc_claimed? && !icc_correction_write
+
+    errors.add(:base, 'Filed equipment links require an audited correction')
+    raise ActiveRecord::RecordInvalid, self
+  end
+
   def entering_open_status?
     return false unless application_id
     return false unless OPEN_STATUSES.include?(status&.to_sym)
@@ -155,7 +167,23 @@ class TrainingSession < ApplicationRecord
     new_record? || will_save_change_to_status?
   end
 
+  def linked_equipment_includes_training_product
+    return unless status_completed? && equipment_items.any?
+    return if equipment_items.any? { |item| item.product_id == product_trained_on_id }
+
+    errors.add(:equipment_items, 'must include the catalog product trained on')
+  end
+
+  def confirmed_training_product
+    return unless status_completed? && (new_record? || will_save_change_to_status? || will_save_change_to_product_trained_on_id?)
+    return if product_trained_on&.model_confirmed?
+
+    errors.add(:product_trained_on, 'must be a confirmed catalog model')
+  end
+
   def training_session_capacity_available
+    return if application.unlimited_training_sessions?
+
     reserved_count = application.training_sessions
                                 .where(status: OPEN_STATUSES + [:completed])
                                 .where.not(id: id)

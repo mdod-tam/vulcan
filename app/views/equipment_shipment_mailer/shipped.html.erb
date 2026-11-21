@@ -1,0 +1,15 @@
+<div lang="<%= @locale %>">
+  <p><%= @greeting %></p>
+  <p><%= @intro %></p>
+  <p>
+    <strong><%= t('equipment_shipping.tracking_label', locale: @locale) %></strong> —
+    <% if (tracking_url = equipment_tracking_url(@tracking_item)) %>
+      <%= link_to @tracking_item.tracking_number, tracking_url %>
+    <% else %>
+      <%= @tracking_item.tracking_number %>
+    <% end %>
+    <% if @carrier %>(<%= @carrier %>)<% end %>
+  </p>
+  <p><%= @help %></p>
+  <p><%= @signature %></p>
+</div>

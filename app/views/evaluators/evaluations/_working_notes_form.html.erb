@@ -1,7 +1,9 @@
 <%# locals: (evaluation:, can_edit:) -%>
 <% form_values = @evaluation_form_values.fetch(:save_working_notes, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <section class="mt-8 card p-6" aria-labelledby="working-notes-heading">
-  <h2 id="working-notes-heading" class="text-lg font-semibold text-gray-900"><%= t('evaluators.evaluations.working_notes.title') %></h2>
+  <h2 id="working-notes-heading" class="text-lg font-semibold text-gray-900">
+    <%= t("evaluators.evaluations.working_notes.#{evaluation.status_completed? ? 'completed_title' : 'title'}") %>
+  </h2>
   <p id="working-notes-help" class="form-hint">
     <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
     <%= t('evaluators.evaluations.working_notes.help') %>

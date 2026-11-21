@@ -15,6 +15,7 @@ module ConstituentPortal
     helper_method :get_latest_rejection_reason, :get_latest_rejection_date
 
     def show
+      @equipment_history = Applications::ProductHistory.new(applications: Application.accessible_by(current_user), mode: :portal_visible)
       set_active_and_draft_applications
       load_voucher_information
       load_training_sessions_information
@@ -84,7 +85,7 @@ module ConstituentPortal
     def load_training_sessions_information
       return unless @active_application
 
-      @max_training_sessions = Policy.max_training_sessions
+      @max_training_sessions = @active_application&.max_training_sessions
 
       all_sessions = @active_application.training_sessions
       @completed_training_sessions = all_sessions.completed_sessions

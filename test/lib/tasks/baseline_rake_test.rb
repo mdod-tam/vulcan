@@ -19,6 +19,26 @@ class BaselineRakeTest < ActiveSupport::TestCase
     end
   end
 
+  test 'seed_products is repeatable and leaves staff settings and manual drafts intact' do
+    require Rails.root.join('db/seeds/products')
+    key = Seeds::Products.catalog.find { |entry| entry['model_confirmed'] }.fetch('catalog_key')
+    model = Product.find_by!(catalog_key: key)
+    draft = create(:product, model_confirmed: false)
+    policy = Policy.find_by!(key: 'max_proof_rejections')
+    policy.update_columns(value: 7)
+    template = EmailTemplate.first
+    template.update!(description: 'Staff edited description')
+    2.times do
+      assert_no_difference 'Product.count' do
+        run_task('db:seed_products')
+      end
+      assert_equal model.id, Product.available.find_by!(catalog_key: key).id
+      assert_not draft.reload.model_confirmed?
+      assert_equal 7, policy.reload.value
+      assert_equal 'Staff edited description', template.reload.description
+    end
+  end
+
   test 'seed_feature_flags resets flags and controls on each run' do
     2.times do
       FeatureFlag.find_by!(name: 'vouchers_enabled').update_columns(enabled: true)

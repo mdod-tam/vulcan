@@ -69,6 +69,8 @@
                       end
                     when log.is_a?(Event)
                       case log.action
+                      when /\Aequipment_/, 'icc_financial_evidence_updated', 'icc_filed_cost_corrected', 'icc_cost_marked_claimed', 'icc_service_expense_recorded'
+                        equipment_audit_action_label(log)
                       when "application_created"
                         submission_method = log.metadata['submission_method']&.titleize || "Unknown"
                         "Application Created (#{submission_method})"
@@ -207,6 +209,8 @@
                     when 'max_rejections_reached'
                       safe_join(['The application was archived at the rejection limit. ',
                                  delivery_visibility(log, locale: :en)])
+                    when 'equipment_shipment_notice'
+                      delivery_visibility(log, locale: :en)
                     when "proof_approved"
                       proof_type = log.metadata.try(:[], 'proof_type') || 'Unknown'
                       "Constituent notified: #{ProofNotificationCopy.approved_text(proof_type)}"
@@ -221,7 +225,7 @@
                     end
                   when log.is_a?(Event)
                     case log.action
-                    when /\Aequipment_/
+                    when /\Aequipment_/, 'icc_financial_evidence_updated', 'icc_filed_cost_corrected', 'icc_cost_marked_claimed', 'icc_service_expense_recorded'
                       equipment_audit_details(log, records: equipment_records)
                     when "duplicate_review_case_resolved"
                       link_to "Identity review: #{log.metadata['resolution_determination'].to_s.humanize}",

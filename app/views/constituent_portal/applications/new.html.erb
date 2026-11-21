@@ -16,38 +16,34 @@
       <%# The server resolves the draft for this applicant. A dependent page must name the
           dependent here, or every save goes to the guardian's own draft. %>
       <% new_app_form_data = {
-        controller: "final-submit-gate currency-formatter accessibility-announcer autosave",
-        action: %w[
-          input->autosave#fieldInput change->autosave#fieldChange focusout->autosave#fieldLeave
-          submit->autosave#prepareSubmission turbo:submit-start->autosave#submissionStarted
-          turbo:submit-end->autosave#submissionEnded turbo:before-cache@document->autosave#beforeCache
-        ].join(' '),
-        autosave_url_value: autosave_field_constituent_portal_applications_path(user_id: (@application.user_id if @applicant_type == 'dependent')),
-        autosave_debounce_wait_value: 1000,
-        final_submit_gate_incomplete_message: t('applications.submit_gate.incomplete', locale: form_message_locale),
-        final_submit_gate_incomplete_detail_message: t('applications.submit_gate.detail', locale: form_message_locale),
-        final_submit_gate_ready_message: t('applications.submit_gate.ready', locale: form_message_locale),
-        autosave_saving_text_value: t('applications.autosave.saving', locale: form_message_locale),
-        autosave_saved_text_value: t('applications.autosave.saved', locale: form_message_locale),
-        autosave_failed_text_value: t('applications.autosave.failed', locale: form_message_locale),
-        autosave_unsaved_text_value: t('applications.autosave.unsaved', locale: form_message_locale),
-        autosave_form_dirty_value: @form.present?
-      }
-        if FeatureFlag.income_proof_required?
-          new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
-          new_app_form_data[:"income-validation-fpl-thresholds-value"] = fpl_thresholds_json
-          new_app_form_data[:"income-validation-modifier-value"] = fpl_modifier_value
-        end
-        if @applicant_type == "dependent"
-          new_app_form_data[:controller] = "dependent-fields #{new_app_form_data[:controller]}"
-        end
-        # Present only while an identity review is pending. The submit gate treats it as a hard
-        # block and announces it, so the constituent is never invited to select documents that a
-        # refusal would discard. Localized here rather than in the gate, which must not compose a
-        # user-facing string in JavaScript.
-        if @submission_blocked_message.present?
-          new_app_form_data[:final_submit_gate_blocked_message] = @submission_blocked_message
-        end %>
+           controller: 'final-submit-gate currency-formatter accessibility-announcer autosave',
+           action: %w[
+             input->autosave#fieldInput change->autosave#fieldChange focusout->autosave#fieldLeave
+             submit->autosave#prepareSubmission turbo:submit-start->autosave#submissionStarted
+             turbo:submit-end->autosave#submissionEnded turbo:before-cache@document->autosave#beforeCache
+           ].join(' '),
+           autosave_url_value: autosave_field_constituent_portal_applications_path(user_id: (@application.user_id if @applicant_type == 'dependent')),
+           autosave_debounce_wait_value: 1000,
+           final_submit_gate_incomplete_message: t('applications.submit_gate.incomplete', locale: form_message_locale),
+           final_submit_gate_incomplete_detail_message: t('applications.submit_gate.detail', locale: form_message_locale),
+           final_submit_gate_ready_message: t('applications.submit_gate.ready', locale: form_message_locale),
+           autosave_saving_text_value: t('applications.autosave.saving', locale: form_message_locale),
+           autosave_saved_text_value: t('applications.autosave.saved', locale: form_message_locale),
+           autosave_failed_text_value: t('applications.autosave.failed', locale: form_message_locale),
+           autosave_unsaved_text_value: t('applications.autosave.unsaved', locale: form_message_locale),
+           autosave_form_dirty_value: @form.present?
+         }
+         if @application.income_collection_enabled?
+           new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
+           new_app_form_data.merge!(income_validation_data(locale: form_message_locale))
+         end
+         new_app_form_data[:controller] = "dependent-fields #{new_app_form_data[:controller]}" if @applicant_type == 'dependent'
+         # Present only while an identity review is pending. The submit gate treats it as a hard
+         # block and announces it, so the constituent is never invited to select documents that a
+         # refusal would discard. Localized here rather than in the gate, which must not compose a
+         # user-facing string in JavaScript.
+         new_app_form_data[:final_submit_gate_blocked_message] = @submission_blocked_message if @submission_blocked_message.present? %>
+
       <%= form_with(model: [:constituent_portal, @application],
           local: true,
           class: "space-y-6",
@@ -241,7 +237,7 @@
         <fieldset class="space-y-6 p-4 bg-gray-50 rounded">
           <legend class="text-lg font-medium text-gray-900">Required Documentation</legend>
 
-          <% if FeatureFlag.income_proof_required? %>
+          <% if @application.income_collection_enabled? %>
           <div class="space-y-4">
             <h3 class="text-base font-medium text-gray-900">Income Verification</h3>
 
@@ -249,14 +245,15 @@
                  data-income-validation-target="incomeFieldsContainer">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <%= form.label :household_size, t('applications.form_labels.household_size', locale: form_message_locale), class: 'form-label required-label' %>
+                  <%= form.label :household_size, t('applications.form_labels.household_size', locale: form_message_locale),
+                                 class: class_names('form-label', 'required-label': @application.income_collection_enabled?) %>
                   <div class="mt-1">
                     <%= form.number_field :household_size,
                         min: 1,
-                        required: true,
+                        required: @application.income_collection_enabled?,
                         class: "form-input border-gray-500",
                         "aria-describedby": "household_size_help",
-                        "aria-required": "true",
+                        'aria-required': @application.income_collection_enabled? ? 'true' : nil,
                         data: {
                           "income-validation-target": "householdSize"
                         } %>
@@ -267,17 +264,19 @@
                 </div>
 
                 <div>
-                  <%= form.label :annual_income, t('applications.form_labels.annual_income', locale: form_message_locale), class: 'form-label required-label' %>
+                  <%= form.label :annual_income, t('applications.form_labels.annual_income', locale: form_message_locale),
+                                 class: class_names('form-label', 'required-label': @application.income_collection_enabled?) %>
                   <div class="mt-1 relative rounded-md">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span class="text-gray-700 sm:text-sm font-medium" aria-hidden="true">$</span>
                     </div>
                     <%= form.number_field :annual_income,
                         step: "0.01",
-                        required: true,
+                        min: 0,
+                        required: @application.income_collection_enabled?,
                         class: "form-input pl-7 border-gray-500",
                         "aria-describedby": "annual_income_help",
-                        "aria-required": "true",
+                        'aria-required': @application.income_collection_enabled? ? 'true' : nil,
                         inputmode: "decimal",
                         data: {
                           "income-validation-target": "annualIncome",
@@ -300,9 +299,9 @@
                 <strong>Tax return</strong> (preferred), <strong>current year SSA award letter</strong> (less than 2 months old),
                 <strong>recent bank statement</strong> showing your SSA deposit, <strong>current, unexpired SSA/SSI/SSDI documentation</strong>,
                 <strong>current, unexpired Medicaid and/or SNAP award letter</strong>, or <strong>current, unexpired VA Benefits letter</strong>.
-                <span class="font-semibold text-danger-600">This proof is required to submit your application.</span>
+                <span class="font-semibold text-danger-600"><%= t('applications.income_proof_required', locale: form_message_locale) %></span>
               </p>
-              <%= render 'shared/document_upload', form: form, model: @application, field: :income_proof,
+              <%= render 'shared/document_upload', form: form, model: @application, field: :income_proof, blob: @retained_proofs&.dig('income'),
                                                    input_id: 'application_income_proof', described_by: 'income-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
@@ -334,7 +333,7 @@
                 <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>.
                 <span class="font-semibold text-danger-600">This proof is required to submit your application.</span>
               </p>
-              <%= render 'shared/document_upload', form: form, model: @application, field: :residency_proof,
+              <%= render 'shared/document_upload', form: form, model: @application, field: :residency_proof, blob: @retained_proofs&.dig('residency'),
                                                    input_id: 'application_residency_proof', described_by: 'residency-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
@@ -352,7 +351,7 @@
                 <strong>identification card</strong>, or <strong>passport</strong>.
                 <span class="font-semibold text-danger-600">This proof is required to submit your application.</span>
               </p>
-              <%= render 'shared/document_upload', form: form, model: @application, field: :id_proof,
+              <%= render 'shared/document_upload', form: form, model: @application, field: :id_proof, blob: @retained_proofs&.dig('id'),
                                                    input_id: 'application_id_proof', described_by: 'id-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
@@ -377,6 +376,7 @@
         </div>
 
         <div class="px-6 py-4 bg-gray-50">
+          <p class="mb-3 text-sm text-gray-700"><%= t('applications.form_labels.icc_disclosure', locale: form_message_locale) %></p>
           <div class="flex items-start">
             <%= form.check_box :information_verified,
                 id: "information_verified",

@@ -1,0 +1,25 @@
+<%# locals: (setting:) -%>
+<section id="icanconnect-participation" class="card p-6 space-y-4" aria-labelledby="icanconnect-participation-title">
+  <h2 id="icanconnect-participation-title" class="text-lg font-semibold text-gray-900">iCanConnect participation</h2>
+  <p id="icanconnect-start-date-help" class="text-sm text-gray-700">
+    Staff can start iCanConnect purchases, record new iCanConnect costs and request income proof on or after this date.
+    Leave it blank to keep those actions off.
+  </p>
+  <% if setting.errors.any? %>
+    <p id="icanconnect-start-date-error" class="rounded border border-danger-300 bg-danger-50 p-3 text-danger-800" role="alert">
+      Enter a valid date in MM/DD/YYYY format.
+    </p>
+  <% end %>
+  <%= form_with model: setting, url: admin_icanconnect_settings_path, method: :patch,
+                scope: :icanconnect_setting, data: { turbo_frame: '_top' }, class: 'flex flex-wrap items-end gap-3' do |form| %>
+    <div>
+      <%= form.label :starts_on, 'Start date', class: 'form-label' %>
+      <%= form.text_field :starts_on, typed_date_field_options(
+            value: typed_date_input_value(setting, :starts_on),
+            class: 'form-input', autocomplete: 'off',
+            aria: { invalid: setting.errors.any?, describedby: class_names('icanconnect-start-date-help', 'icanconnect-start-date-error' => setting.errors.any?) }
+          ) %>
+    </div>
+    <%= form.submit 'Save start date', class: 'btn btn-secondary' %>
+  <% end %>
+</section>

@@ -6,14 +6,16 @@ module EquipmentNeeds
       application = evaluation.application
       initialized = false
       application.with_lock do
-        if application.equipment_fulfillment? && application.equipment_needs_initialized_at.nil?
-          Equipment::Mutation.eligible!(application)
+        if application.equipment_procurement_eligible? && application.equipment_needs_initialized_at.nil?
           validate_report!(evaluation, actor)
           if evaluation.recommendation_outcome_catalog_products?
             evaluation.recommended_products.order(:id).each do |product|
-              application.equipment_needs.create!(product: product, remaining_quantity: 1, source_evaluation: evaluation)
+              application.equipment_needs.create!(product: product, remaining_quantity: 1, source_evaluation: evaluation, unfulfilled_since: Time.current,
+                                                  disability_setup_group: application.default_equipment_setup_group)
             end
           end
+          application.equipment_source_evaluation = evaluation
+          application.save!
           stamp_initialization!(application)
           Equipment::Mutation.audit!(application, actor: actor, action: 'equipment_needs_initialized',
                                                   changes: { equipment_needs: { old: [], new: snapshot(application.equipment_needs.order(:id)) } },
@@ -40,9 +42,11 @@ module EquipmentNeeds
         before = snapshot(needs)
         save_rows!(application, needs, submitted)
         after = snapshot(application.equipment_needs.order(:id))
+        refresh_reserved_bids!(after.reject { |row| before.include?(row) }.pluck('id'))
         first_edit = application.equipment_needs_initialized_at.nil?
         stamp_initialization!(application) if first_edit
-        first_decision = !application.equipment_needs_events.exists?(action: 'equipment_needs_updated')
+        first_decision = application.equipment_needs_decided_at.nil?
+        application.update!(equipment_needs_decided_at: Time.current) if first_decision
         if before != after || first_edit || first_decision
           Equipment::Mutation.audit!(application, actor: actor, action: 'equipment_needs_updated',
                                                   changes: { equipment_needs: { old: before, new: after } }, reason: reason.to_s.strip)
@@ -79,6 +83,7 @@ module EquipmentNeeds
           id: row[:id].present? ? Integer(row[:id].to_s, 10) : nil,
           product_id: Integer(row[:product_id].to_s, 10),
           remaining_quantity: Integer(row[:remaining_quantity].to_s, 10),
+          disability_setup_group: row[:disability_setup_group].presence,
           lock_version: row[:id].present? ? row[:lock_version] : nil
         }
       end
@@ -111,20 +116,53 @@ module EquipmentNeeds
         raise Equipment::Conflict, 'A selected catalog product no longer exists.' unless product
 
         quantity = row[:remaining_quantity]
-        next if need&.remaining_quantity == quantity
+        setup = row[:disability_setup_group]
+        setup ||= application.default_equipment_setup_group if need.nil?
+        next if need && need.remaining_quantity == quantity && need.disability_setup_group == setup
 
-        raise Equipment::Conflict, 'A new purchasing need must request at least one device.' if need.nil? && quantity <= 0
-
-        raise Equipment::Conflict, 'Choose an available catalog product before adding devices.' if product.archived? && quantity.positive?
+        validate_change!(application, need, product, quantity, setup)
 
         need ||= application.equipment_needs.build(product: product)
-        need.update!(remaining_quantity: quantity)
+        need.update!(remaining_quantity: quantity, disability_setup_group: setup,
+                     unfulfilled_since: (quantity.positive? && need.remaining_quantity.to_i.zero? ? Time.current : need.unfulfilled_since))
       end
     end
     private_class_method :save_rows!
 
+    def self.refresh_reserved_bids!(need_ids)
+      groups = BidGroup.where(id: BidGroupLine.reserved.where(equipment_need_id: need_ids).select(:bid_group_id))
+      groups.order(:id).lock.each { |group| group.update!(membership_changed_at: Time.current) }
+    end
+    private_class_method :refresh_reserved_bids!
+
+    def self.validate_change!(application, need, product, quantity, setup)
+      reserved_quantity = need&.reserved_quantity
+      if reserved_quantity&.positive? && quantity < reserved_quantity
+        raise Equipment::Conflict, "Keep at least #{reserved_quantity} while devices are reserved in bids. Reduce the bid quantity first to request fewer."
+      end
+      if quantity.positive? && setup.present? && application.program_disability_groups.exclude?(setup)
+        raise Equipment::Conflict, 'Choose a setup from the confirmed application program groups.'
+      end
+
+      raise Equipment::Conflict, 'A new purchasing need must request at least one device.' if need.nil? && quantity <= 0
+
+      validate_product_request!(application, need, product, quantity)
+    end
+    private_class_method :validate_change!
+
+    def self.validate_product_request!(application, need, product, quantity)
+      increasing = need.nil? || quantity > need.remaining_quantity
+      return unless increasing && quantity.positive?
+
+      raise Equipment::Conflict, 'Choose an available catalog product before adding devices.' unless product.available?
+      return if product.eligible_for?(application.program_disability_groups)
+
+      raise Equipment::Conflict, 'Confirm the program groups and choose an eligible exact model.'
+    end
+    private_class_method :validate_product_request!
+
     def self.snapshot(needs)
-      needs.map { |need| need.attributes.slice('id', 'product_id', 'remaining_quantity', 'source_evaluation_id') }
+      needs.map { |need| need.attributes.slice('id', 'product_id', 'remaining_quantity', 'source_evaluation_id', 'disability_setup_group') }
     end
     private_class_method :snapshot
   end

@@ -1,0 +1,13 @@
+es:
+  activemodel:
+    errors:
+      models:
+        application_form:
+          attributes:
+            household_size:
+              positive_integer: "debe ser un número entero mayor que cero"
+            annual_income:
+              invalid_amount: "debe ser cero o un importe positivo en dólares con un máximo de dos decimales"
+              income_above_limit: "supera el límite de ingresos para el tamaño de su hogar"
+            base:
+              income_check_unavailable: "No pudimos comprobar el límite de ingresos. Inténtelo de nuevo más tarde. Su solicitud no se ha enviado."

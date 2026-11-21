@@ -9,11 +9,16 @@ module Admin
     def assign_evaluator
       evaluator = selected_practitioner(:can_evaluate, :evaluator_id)
       result = Applications::EvaluatorAssignment.assign(@application, evaluator, actor: current_user)
+      destination = if params[:return_context] == 'evaluation_dashboard'
+                      evaluators_dashboard_path(anchor: 'needs-evaluator-section')
+                    else
+                      admin_application_path(@application)
+                    end
 
       if result.success?
-        redirect_to admin_application_path(@application), notice: t('admin.applications.assign_evaluator.eval_assign_pass')
+        redirect_to destination, notice: t('admin.applications.assign_evaluator.eval_assign_pass')
       else
-        redirect_to admin_application_path(@application),
+        redirect_to destination,
                     alert: result.message.presence || t('admin.applications.assign_evaluator.eval_assign_fail')
       end
     end

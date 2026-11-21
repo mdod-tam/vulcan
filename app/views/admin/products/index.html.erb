@@ -1,6 +1,6 @@
 <div class="container mx-auto px-4 py-8">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">Products Management</h1>
+  <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <h1 class="text-2xl font-bold">Product catalog</h1>
     <div class="flex space-x-3">
       <a href="<%= admin_dashboard_path %>"
          class="btn btn-outline"
@@ -8,91 +8,128 @@
          aria-label="Return to applications dashboard">
         Back to Dashboard
       </a>
-      <%= link_to "Add New Product", 
-          new_admin_product_path, 
-          class: "btn btn-primary" %>
+      <%= link_to 'Add product', new_admin_product_path, class: 'btn btn-primary' %>
     </div>
   </div>
 
   <div class="mb-6">
-    <%= form_tag admin_products_path, method: :get, class: "space-y-4", data: { turbo_frame: "products_list" } do %>
+    <%= form_tag admin_products_path, method: :get, class: 'space-y-4', data: { turbo_frame: 'products_list' } do %>
       <div class="card p-4">
-        <h2 class="text-lg font-medium mb-4">Filter by Device Types</h2>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <% Product::DEVICE_TYPES.sort.each do |device_type| %>
-            <div class="flex items-center">
-              <%= check_box_tag "device_types[]", 
-                  device_type, 
-                  params[:device_types]&.include?(device_type),
-                  id: "device_type_#{device_type.parameterize}",
-                  class: "h-4 w-4 text-primary-600 border-gray-300 rounded" %>
-              <%= label_tag "device_type_#{device_type.parameterize}", 
-                  device_type,
-                  class: "ml-2 text-sm text-gray-700" %>
-            </div>
-          <% end %>
+        <div class="mb-6 grid gap-4 sm:grid-cols-3">
+          <div class="min-w-0 space-y-1 sm:col-span-2">
+            <%= label_tag :q, 'Search by manufacturer, model, or name', class: 'form-label' %>
+            <%= search_field_tag :q, @query, autocomplete: 'off', class: 'form-input w-full min-w-0' %>
+          </div>
+          <div class="min-w-0 space-y-1">
+            <%= label_tag :sort, 'Sort by', class: 'form-label' %>
+            <%= select_tag :sort, options_for_select([['Manufacturer A–Z', 'manufacturer'], ['Model A–Z', 'model']], @selected_sort),
+                           class: 'form-input w-full min-w-0' %>
+          </div>
         </div>
-        <%= submit_tag "Apply Filters", class: "btn btn-primary mt-4" %>
+        <div class="grid gap-6 lg:grid-cols-2">
+          <fieldset>
+            <legend class="text-lg font-medium mb-4">Device type</legend>
+            <div class="grid grid-cols-2 gap-4">
+              <% Product::DEVICE_TYPES.sort.each do |device_type| %>
+                <div class="flex items-center">
+                  <%= check_box_tag 'device_types[]', device_type, @selected_device_types.include?(device_type),
+                                    id: "device_type_#{device_type.parameterize}",
+                                    class: 'h-4 w-4 text-primary-600 border-gray-300 rounded' %>
+                  <%= label_tag "device_type_#{device_type.parameterize}", device_type, class: 'ml-2 text-sm text-gray-700' %>
+                </div>
+              <% end %>
+            </div>
+          </fieldset>
+          <fieldset aria-describedby="catalog-disability-filter-help">
+            <legend class="text-lg font-medium mb-2">Disability</legend>
+            <p id="catalog-disability-filter-help" class="form-hint mb-4">Show products matching any selected disability.</p>
+            <div class="grid grid-cols-2 gap-4">
+              <% Product::PROGRAM_GROUPS.each do |group, label| %>
+                <div class="flex items-center">
+                  <%= check_box_tag 'disability_groups[]', group, @selected_disability_groups.include?(group),
+                                    id: "disability_group_#{group}",
+                                    class: 'h-4 w-4 text-primary-600 border-gray-300 rounded' %>
+                  <%= label_tag "disability_group_#{group}", label, class: 'ml-2 text-sm text-gray-700' %>
+                </div>
+              <% end %>
+            </div>
+          </fieldset>
+        </div>
+        <label class="mt-4 flex items-center gap-2">
+          <%= check_box_tag :include_discontinued, '1', params[:include_discontinued] == '1' %>
+          Include discontinued products
+        </label>
+        <div class="mt-4 flex flex-wrap gap-3">
+          <%= submit_tag 'Apply Filters', class: 'btn btn-primary' %>
+          <%= link_to 'Clear filters', admin_products_path, class: 'btn btn-outline' %>
+        </div>
       </div>
     <% end %>
   </div>
 
   <div id="products_list">
-    <% Product::DEVICE_TYPES.sort.each do |device_type| %>
-      <% if @products_by_type[device_type].present? %>
-        <%
-          details_attributes = { class: "card mb-6" }
-          details_attributes[:open] = true if params[:device_types]&.include?(device_type)
-        %>
-        <%= tag.details **details_attributes do %>
+    <% if @products.empty? %>
+      <p class="card p-6 text-gray-700">No products match these filters.</p>
+    <% end %>
+    <% Product::CATEGORIES.each do |category, label| %>
+      <% disability_groups = @products_by_category.fetch(category, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <% if disability_groups.present? %>
+        <details open class="card mb-6" data-catalog-category="<%= category %>">
           <summary class="px-6 py-4 cursor-pointer">
-            <div class="flex items-center justify-between">
-              <h2 class="text-lg font-medium"><%= device_type %></h2>
-              <span class="text-gray-500">(<%= @products_by_type[device_type].count %> products)</span>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2 class="text-lg font-medium"><%= label %></h2>
+              <span class="text-gray-500"><%= pluralize(disability_groups.values.sum(&:size), 'product') %> on this page</span>
             </div>
           </summary>
-          
-          <div class="border-t border-gray-200">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manufacturer</th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
-                  <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendors</th>
-                  <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200">
-                <% @products_by_type[device_type].each do |product| %>
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-6 py-4 whitespace-nowrap text-sm"><%= product.manufacturer %></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm"><%= product.name %></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm"><%= product.model_number %></td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm">
-                      <%= product.vendors.map(&:full_name).join(", ") %>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <%= link_to 'Resources', admin_product_path(product), class: 'text-primary-600 hover:text-primary-900 mr-4' %>
-                      <%= link_to "Edit", edit_admin_product_path(product), 
-                          class: "text-primary-600 hover:text-primary-900 mr-4" %>
-                      <% if product.archived? %>
-                        <%= button_to "Unarchive", unarchive_admin_product_path(product),
-                            method: :post,
-                            class: "text-success-600 hover:text-success-900" %>
-                      <% else %>
-                        <%= button_to "Archive", archive_admin_product_path(product),
-                            method: :post,
-                            class: "text-danger-600 hover:text-danger-900" %>
-                      <% end %>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </div>
-        <% end %>
+          <% disability_groups.each do |groups, products| %>
+            <section class="border-t border-gray-200" aria-labelledby="catalog-<%= category %>-<%= groups.join('-') %>"
+                     data-disability-groups="<%= groups.join(' ') %>">
+              <h3 id="catalog-<%= category %>-<%= groups.join('-') %>" class="px-6 py-3 font-semibold text-gray-800">
+                <%= groups.map { |group| Product::PROGRAM_GROUPS.fetch(group) }.join(', ') %>
+              </h3>
+              <div class="overflow-x-auto" role="region" aria-labelledby="catalog-<%= category %>-<%= groups.join('-') %>" tabindex="0">
+                <table class="min-w-full divide-y divide-gray-200" aria-labelledby="catalog-<%= category %>-<%= groups.join('-') %>">
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Manufacturer</th>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">MSRP</th>
+                      <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Availability</th>
+                      <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="bg-white divide-y divide-gray-200">
+                    <% products.each do |product| %>
+                      <tr id="<%= dom_id(product) %>" class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm"><%= product.manufacturer %></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm"><%= product.name %></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm"><%= product.model_number %></td>
+                        <td class="px-6 py-4 text-sm"><%= product.msrp.nil? ? 'Not recorded' : number_to_currency(product.msrp) %></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                          <%= product.availability_label %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <%= link_to 'Resources', admin_product_path(product), class: 'text-primary-600 hover:text-primary-900 mr-4' %>
+                          <%= link_to 'Edit', edit_admin_product_path(product), class: 'text-primary-600 hover:text-primary-900 mr-4' %>
+                          <% if product.archived? %>
+                            <%= button_to 'Restore availability', unarchive_admin_product_path(product),
+                                          method: :post, class: 'text-success-600 hover:text-success-900' %>
+                          <% else %>
+                            <%= button_to 'Discontinue product', archive_admin_product_path(product),
+                                          method: :post, class: 'text-danger-600 hover:text-danger-900' %>
+                          <% end %>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          <% end %>
+        </details>
       <% end %>
     <% end %>
+    <%= render 'shared/pagination', pagy: @pagy, label: 'Products' %>
   </div>
 </div>

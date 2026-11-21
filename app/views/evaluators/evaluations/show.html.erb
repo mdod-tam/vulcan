@@ -101,8 +101,8 @@
         </div>
 
         <% if @evaluation.notes.present? && @evaluation.status_completed? %>
-          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.working_notes.label') %></dt>
+          <div id="report-internal-notes" class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.forms.report_internal_notes') %></dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <p><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
               <%= simple_format(@evaluation.notes) %>
@@ -161,8 +161,7 @@
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <ul class="list-disc pl-5">
                 <% @evaluation.products_tried.each do |product| %>
-                  <% product_name = Product.find_by(id: product['product_id'])&.name || "Unknown Product" %>
-                  <li><%= product_name %> — <%= product['reaction'] %></li>
+                  <li><%= @tried_product_names.fetch(product['product_id'].to_s, 'Unknown Product') %> — <%= product['reaction'] %></li>
                 <% end %>
               </ul>
             </dd>
@@ -201,8 +200,10 @@
     </div>
   </section>
 
-  <%= render 'working_notes_form', evaluation: @evaluation,
-                                   can_edit: @can_manage_evaluation && @evaluation.working_notes_editable? %>
+  <% if !@evaluation.status_completed? || @evaluation.working_notes.present? || @evaluation_form_errors.key?(:save_working_notes) %>
+    <%= render 'working_notes_form', evaluation: @evaluation,
+                                     can_edit: @can_manage_evaluation && @evaluation.working_notes_editable? %>
+  <% end %>
 
   <% visible_form_actions = evaluation_visible_form_actions(@evaluation, can_manage: @can_manage_evaluation) # rubocop:disable Lint/UselessAssignment -- ERB local. %>
   <section aria-label="<%= @can_manage_evaluation ? 'Evaluation Actions' : 'Evaluation Status' %>" class="mt-8">

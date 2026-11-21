@@ -1,0 +1,14 @@
+en:
+  applications:
+    proof_resubmission:
+      request_explanation:
+        pending: "We are reviewing your MAT application and still need your %{proof} before we can continue processing your application."
+        income_update: "We need proof of income to confirm your eligibility for iCanConnect equipment or services. Your MAT application remains approved."
+      rejection_explanation:
+        pending: "We need a corrected copy before we can continue processing your MAT application."
+        income_update: "Please send a replacement document for iCanConnect. Your MAT application remains approved."
+        voucher: "This does not affect your MAT voucher."
+    form_labels:
+      icc_disclosure: "If I receive iCanConnect equipment or services, I authorize MAT and any successor program to verify my information and share it with the FCC and the TRS Fund Administrator to run and oversee the program. I will use program equipment and services only as intended and will not sell, give away or lend the equipment. I understand that false information or misuse may end program services and may lead to legal action."
+    proof_card:
+      income_update_needed: "Updated income proof needed for additional iCanConnect equipment or services."

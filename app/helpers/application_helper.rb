@@ -56,9 +56,8 @@ module ApplicationHelper
   end
 
   def admin_fulfillment_badge(application)
-    labels = { voucher_no_equipment: 'Voucher - No Equipment Order',
-               needs_action: 'Needs Ordering', po_sent: 'Ordered', shipped: 'Shipped', no_equipment: 'No equipment needed',
-               needs_catalog_product: 'Needs a catalog product', outside_catalog: 'Outside-catalog recommendation' }
+    labels = Equipment::FulfillmentStage::DEFINITIONS.to_h { |definition| [definition.key, definition.label] }
+    labels.merge!(voucher_no_equipment: 'Voucher - No Equipment Order', no_equipment: 'No equipment needed')
     state = application.admin_fulfillment_responsibility_state
     label = labels[state]
     return unless label

@@ -791,33 +791,13 @@ module Admin
     end
 
     test 'show page displays the correct application status' do
-      approved_app = create(:application,
-                            user: create(:constituent, email: generate(:email)),
-                            status: :approved)
-      get admin_application_path(approved_app)
-      assert_response :success
-      assert_select 'div.flex.items-center.space-x-2 span', text: 'Approved'
-
-      rejected_app = create(:application,
-                            user: create(:constituent, email: generate(:email)),
-                            status: :rejected)
-      get admin_application_path(rejected_app)
-      assert_response :success
-      assert_select 'div.flex.items-center.space-x-2 span', text: 'Rejected'
-
-      draft_app = create(:application,
-                         user: create(:constituent, email: generate(:email)),
-                         status: :draft)
-      get admin_application_path(draft_app)
-      assert_response :success
-      assert_select 'div.flex.items-center.space-x-2 span', text: 'Draft'
-
-      in_progress_app = create(:application,
-                               user: create(:constituent, email: generate(:email)),
-                               status: :in_progress)
-      get admin_application_path(in_progress_app)
-      assert_response :success
-      assert_select 'div.flex.items-center.space-x-2 span', text: 'In progress'
+      labels = { approved: 'Approved', rejected: 'Rejected', draft: 'Draft', in_progress: 'In progress' }
+      labels.each do |status, label|
+        application = create(:application, user: create(:constituent, email: generate(:email)), status:)
+        get admin_application_path(application)
+        assert_response :success
+        assert_select "#application_show_#{application.id} > .card:first-child span.badge", text: label, count: 1
+      end
     end
 
     test 'show page displays the fulfillment type badge' do

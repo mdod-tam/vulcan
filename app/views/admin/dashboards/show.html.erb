@@ -1,12 +1,10 @@
 <div class="container mx-auto px-4 py-8">
   <div class="max-w-7xl mx-auto">
-    <a href="#common-tasks" class="skip-link">
-      Skip to Common Application Tasks
+    <a href="#dashboard-content" class="skip-link">
+      Skip to application status
     </a>
     
     <div class="mb-6">
-      <h1 class="sr-only">Dashboard</h1>
-      
       <div class="flex items-start justify-between gap-4 mb-4">
         <h1 class="text-3xl font-bold" id="page-title">
           Admin Dashboard
@@ -67,34 +65,12 @@
         </section>
       <% end %>
 
-    <section aria-labelledby="notifications-heading" class="card p-4 mb-6">
-      <div class="flex items-center justify-between mb-4">
-        <h2 id="notifications-heading" class="text-lg font-medium text-gray-900">Recent Notifications</h2>
-        <%= link_to notifications_path(scope: 'all'), 
-            class: "text-sm font-medium text-primary-600 hover:text-primary-500 flex items-center",
-            aria: { label: "View all notifications" } do %>
-          View All
-          <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        <% end %>
-      </div>
-      
-      <% if @recent_notifications.present? %>
-        <ul class="divide-y divide-gray-200">
-          <% @recent_notifications.each do |notification| %>
-            <%= render "notifications/notification", notification: notification %>
-          <% end %>
-        </ul>
-      <% else %>
-        <p class="text-sm text-gray-500">No recent notifications</p>
-      <% end %>
-    </section>
+    <%= render 'admin/shared/recent_notifications', notifications: @recent_notifications %>
 
       <div class="mb-8 space-y-8">
         <div>
-          <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Application Management</h3>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h2 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Application Management</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-4">
             <%= link_to new_admin_paper_application_path,
                 class: "btn btn-primary group justify-start",
                 aria: { label: "Apply for constituent" } do %>
@@ -140,8 +116,8 @@
         </div>
 
         <div>
-          <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Review</h3>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h2 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Review</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-4">
             <%= link_to trainers_dashboard_path,
                 class: "btn btn-outline group justify-start",
                 aria: { label: "View trainings dashboard" } do %>
@@ -186,10 +162,38 @@
           </div>
         </div>
 
+        <section aria-labelledby="equipment-tools-heading">
+          <h2 id="equipment-tools-heading" class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Equipment and Reimbursement</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-4">
+            <%= link_to admin_equipment_index_path, class: 'btn btn-outline group justify-start', aria: { label: 'Equipment' } do %>
+              <div class="flex items-center gap-3">
+                <svg class="h-6 w-6 flex-shrink-0 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m0 0l8 4m-8-4v10l8 4m0-10l8-4m0 0v10l-8 4m0-10v10" />
+                </svg>
+                <div class="text-left">
+                  <div class="font-semibold text-sm">Equipment</div>
+                  <div class="text-xs text-gray-600">Bids, purchase orders, stock and shipments</div>
+                </div>
+              </div>
+            <% end %>
+            <%= link_to admin_icanconnect_filing_prep_path, class: 'btn btn-outline group justify-start', aria: { label: 'iCanConnect filing preparation' } do %>
+              <div class="flex items-center gap-3">
+                <svg class="h-6 w-6 flex-shrink-0 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v10a2 2 0 01-2 2z" />
+                </svg>
+                <div class="text-left">
+                  <div class="font-semibold text-sm">iCanConnect Filing Preparation</div>
+                  <div class="text-xs text-gray-600">Prepare reimbursement filings</div>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </section>
+
         <% if FeatureFlag.enabled?(:vouchers_enabled) %>
           <div>
-            <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Vouchers</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <h2 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Vouchers</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-4">
               <%= link_to admin_vouchers_path,
                   class: "btn btn-outline group justify-start",
                   aria: { label: "Manage Vouchers" } do %>
@@ -221,9 +225,9 @@
           </div>
         <% end %>
 
-        <div>
-          <h3 class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Configuration</h3>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <section aria-labelledby="configuration-tools-heading">
+          <h2 id="configuration-tools-heading" class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Configuration</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-4">
             <%= link_to admin_policies_path,
                 class: "btn btn-outline group justify-start",
                 aria: { label: "Edit system policies and settings" } do %>
@@ -235,6 +239,18 @@
                 <div class="text-left">
                   <div class="font-semibold text-sm">Edit Policies</div>
                   <div class="text-xs text-gray-600">System settings</div>
+                </div>
+              </div>
+            <% end %>
+
+            <%= link_to admin_feature_flags_path, class: 'btn btn-outline group justify-start', aria: { label: 'Feature Flags' } do %>
+              <div class="flex items-center gap-3">
+                <svg class="h-6 w-6 flex-shrink-0 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 21V4m0 0c5-4 9 4 14 0v10c-5 4-9-4-14 0" />
+                </svg>
+                <div class="text-left">
+                  <div class="font-semibold text-sm">Feature Flags</div>
+                  <div class="text-xs text-gray-600">Turn workflows on or off</div>
                 </div>
               </div>
             <% end %>
@@ -262,12 +278,12 @@
                 </svg>
                 <div class="text-left">
                   <div class="font-semibold text-sm">Email Templates</div>
-                  <div class="text-xs text-gray-600">Manage email templates and related messaging</div>
+                  <div class="text-xs text-gray-600">Content and delivery settings</div>
                 </div>
               </div>
             <% end %>
           </div>
-        </div>
+        </section>
       </div>
       </div>
 
@@ -278,6 +294,18 @@
           <h3 id="active-applications-heading" class="text-lg font-medium text-gray-900">In Progress Applications</h3>
           <p class="text-3xl font-bold text-primary-600" aria-labelledby="active-applications-heading" aria-live="polite"><%= @metrics[:open_applications_count] || 0 %></p>
           <p class="text-sm text-gray-500">All active applications: submitted but unapproved</p>
+          <ul class="mt-3 space-y-1 text-sm text-gray-700">
+            <li><%= link_to "#{pluralize(@metrics.fetch(:active_awaiting_proofs_count), 'application')} awaiting proofs from constituents",
+                            admin_applications_path(view: 'review', status: 'active', filter: 'awaiting_proofs'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@metrics.fetch(:active_proofs_needing_review_count), 'application')} with proofs to review",
+                            admin_applications_path(view: 'review', status: 'active', filter: 'proofs_needing_review'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@metrics.fetch(:active_cert_requests_needed_count), 'application')} needing cert request",
+                            admin_applications_path(view: 'review', status: 'active', filter: 'cert_requests_needed'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@metrics.fetch(:active_awaiting_certifications_count), 'application')} awaiting certifications from providers",
+                            admin_applications_path(view: 'review', status: 'active', filter: 'certifications_awaiting_provider'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@metrics.fetch(:active_disability_certs_to_review_count), 'application')} with disability certifications to review",
+                            admin_applications_path(view: 'review', status: 'active', filter: 'certifications_needing_review'), class: 'text-primary-700 underline' %></li>
+          </ul>
           <div class="mt-2">
             <%= link_to admin_applications_path(status: 'active'),
                 class: "inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-500",
@@ -293,7 +321,19 @@
         <div class="card p-6">
           <h3 id="approved-heading" class="text-lg font-medium text-gray-900">Approved</h3>
           <p class="text-3xl font-bold text-primary-600" aria-labelledby="approved-heading" aria-live="polite"><%= @metrics[:pending_services_count] || 0 %></p>
-          <p class="text-sm text-gray-500">Approved and awaiting services</p>
+          <p class="text-sm text-gray-500">Approved applications</p>
+          <ul class="mt-3 space-y-1 text-sm text-gray-700">
+            <li><%= link_to "#{pluralize(@metrics.fetch(:approved_training_waiting_count), 'application')} awaiting training",
+                            admin_applications_path(view: 'all', filter: 'awaiting_training'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@metrics.fetch(:approved_stage_group_counts).fetch(:awaiting_evaluation), 'application')} awaiting evaluation",
+                            admin_applications_path(view: 'pipeline', group: 'equipment', stage: 'awaiting_evaluation'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@metrics.fetch(:approved_stage_group_counts).fetch(:getting_bids), 'application')} getting bids",
+                            admin_applications_path(view: 'pipeline', group: 'equipment', stage: 'getting_bids'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@approved_stage_counts[:ready_to_send_po], 'application')} needing a PO sent date",
+                            admin_applications_path(view: 'pipeline', group: 'equipment', stage: 'ready_to_send_po'), class: 'text-primary-700 underline' %></li>
+            <li><%= link_to "#{pluralize(@approved_stage_counts[:awaiting_shipment], 'application')} needing shipping info",
+                            admin_applications_path(view: 'pipeline', group: 'equipment', stage: 'awaiting_shipment'), class: 'text-primary-700 underline' %></li>
+          </ul>
           <div class="mt-2">
             <%= link_to admin_applications_path(view: 'pipeline'),
                 class: "inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-500",
@@ -308,53 +348,6 @@
       </div>
     </section>
     
-    <section id="common-tasks" aria-labelledby="common-tasks-heading" class="card p-4 mb-6">
-      <h2 id="common-tasks-heading" class="text-lg font-medium text-gray-900 mb-4">Common Tasks</h2>
-      <div class="flex flex-wrap gap-4">
-        <%= link_to admin_applications_path(filter: 'proofs_needing_review'),
-            class: "btn btn-outline",
-            aria: { label: "View applications with proofs needing review" } do %>
-          <span>Proofs Needing Review (<%= @metrics[:proofs_needing_review_count] %>)</span>
-        <% end %>
-        
-        <%= link_to admin_applications_path(filter: 'disability_certs_to_review'),
-            class: "btn btn-outline",
-            aria: { label: "View applications with disability certifications to review" } do %>
-          <span>Disability Certs to Review (<%= @metrics[:disability_certs_to_review_count] %>)</span>
-        <% end %>
-
-        <%= link_to admin_applications_path(filter: 'digitally_signed_needs_review'),
-            class: "btn btn-outline",
-            aria: { label: "View applications digitally signed but needing admin review" } do %>
-          <span>Digitally Signed (Needs Review) (<%= @metrics[:digitally_signed_needs_review_count] %>)</span>
-        <% end %>
-        
-        <%= link_to admin_applications_path(filter: 'training_requests'),
-            class: "btn btn-outline",
-            aria: { label: "View applications with training requests" } do %>
-          <span>Training Requests (<%= @metrics[:training_requests_count] %>)</span>
-        <% end %>
-
-        <%= link_to admin_applications_path(filter: 'evaluation_requests'),
-            class: "btn btn-outline",
-            aria: { label: "View applications with evaluation requests" } do %>
-          <span>Evaluation Requests (<%= @metrics[:evaluation_requests_count] %>)</span>
-        <% end %>
-
-        <%= link_to admin_applications_path(filter: 'evaluations_needing_reassignment'),
-            class: "btn btn-outline",
-            aria: { label: "View applications whose open evaluation needs a new evaluator" } do %>
-          <span>Evaluations Needing Reassignment (<%= @metrics[:evaluations_needing_reassignment_count] %>)</span>
-        <% end %>
-
-        <%= link_to admin_applications_path(filter: 'training_needing_reassignment'),
-            class: "btn btn-outline",
-            aria: { label: "View applications whose open training needs a new trainer" } do %>
-          <span>Training Needing Reassignment (<%= @metrics[:training_needing_reassignment_count] %>)</span>
-        <% end %>
-      </div>
-    </section>
-
     <%= turbo_frame_tag "charts_section", src: charts_admin_applications_path, loading: "lazy" do %>
       <div class="mb-6 card p-6">
         <div class="flex items-center justify-center">
