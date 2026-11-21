@@ -120,8 +120,8 @@ module Admin
       assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_equal original_number, item.purchase_order.reload.number
       assert_text '2 devices across 1 application, including 1 shipped device'
-      assert_selector '.bg-warning-50 dt', text: 'PO number:', count: 1
-      assert_selector '.bg-warning-50 dt', count: 1
+      assert_selector '.bg-warning-50 th[scope=row]', text: 'PO number', count: 1
+      assert_selector '.bg-warning-50 th[scope=row]', count: 1
       check 'I reviewed these changes for every device and application in this PO.'
       take_screenshot('equipment-shared-po-impact', html: true, full: true)
       assert_difference -> { item.purchase_order.events.count }, 1 do
@@ -140,19 +140,19 @@ module Admin
       fill_in 'Correction reason', with: 'Correct the individual parcel reference'
       assert_no_difference('Event.count') do
         find_button('Review correction').double_click
-        assert_text 'OriginalPackage → CorrectedPackage'
+        assert_selector 'tbody tr', text: /Tracking number\s+OriginalPackage\s+CorrectedPackage/
       end
       assert_correction_submission(0, review: true)
-      assert_selector '#equipment-correction-impact-heading:focus', text: 'Changes:'
+      assert_selector '#equipment-correction-impact-heading:focus', text: 'Changes'
       assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_equal 'OriginalPackage', item.reload.tracking_number
-      assert_selector '.bg-warning-50 dt', text: 'Tracking number:', count: 1
-      assert_selector '.bg-warning-50 dt', count: 1
+      assert_selector '.bg-warning-50 th[scope=row]', text: 'Tracking number', count: 1
+      assert_selector '.bg-warning-50 th[scope=row]', count: 1
       reviewed_token = find('input[name=impact_token]', visible: false).value
       assert_no_field 'Tracking number'
       assert_no_link 'Reload latest record'
-      assert_unchecked_field 'Email the updated tracking number'
-      check 'Email the updated tracking number'
+      assert_unchecked_field 'Email updated tracking'
+      check 'Email updated tracking'
       assert_no_difference 'Event.count' do
         click_button 'Back to edit'
         assert_field 'Tracking number', with: 'CorrectedPackage'
@@ -167,19 +167,19 @@ module Admin
       select 'FedEx', from: 'Carrier'
       fill_in 'IMEI (15 digits)', with: '123456789012345'
       find_button('Review correction').double_click
-      assert_selector '.bg-warning-50 dd', text: 'USPS → FedEx'
+      assert_selector '.bg-warning-50 tbody tr', text: /Carrier\s+USPS\s+FedEx/
       assert_correction_submission(2, review: true)
       assert_selector '#equipment-correction-impact-heading:focus'
       assert_equal 3, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_not_equal reviewed_token, find('input[name=impact_token]', visible: false).value
-      assert_selector '.bg-warning-50 dt', text: 'IMEI (15 digits):'
-      assert_selector '.bg-warning-50 dt', count: 4
+      assert_selector '.bg-warning-50 th[scope=row]', text: 'IMEI (15 digits)'
+      assert_selector '.bg-warning-50 th[scope=row]', count: 4
       assert_no_selector '#equipment-disposition, select[name=operation]'
       assert_no_text 'Shipped devices affected'
-      assert_unchecked_field 'Email the updated tracking number'
+      assert_unchecked_field 'Email updated tracking'
       assert_button 'Save correction'
       take_screenshot('equipment-shipped-correction-review', html: true, full: true)
-      check 'Email the updated tracking number'
+      check 'Email updated tracking'
       assert_difference -> { Notification.where(action: 'equipment_shipment_notice').count }, 1 do
         find_button('Save correction').double_click
         assert_text 'Equipment item updated.'
@@ -197,9 +197,9 @@ module Admin
       fill_in 'Date shipped', with: ''
       fill_in 'Correction reason', with: 'Shipment date was entered in error'
       click_button 'Review correction'
-      assert_selector '.bg-warning-50 dt', text: 'Date shipped:'
-      assert_selector '.bg-warning-50 dd', text: "#{Date.current.strftime('%m/%d/%Y')} → Not recorded"
-      assert_no_field 'Email the updated tracking number'
+      assert_selector '.bg-warning-50 th[scope=row]', text: 'Date shipped'
+      assert_selector '.bg-warning-50 tbody tr', text: /Date shipped\s+#{Date.current.strftime('%m/%d/%Y')}\s+Cleared/
+      assert_no_field 'Email updated tracking'
       click_button 'Save correction'
       assert_text 'Equipment item updated.'
       assert_nil item.reload.shipped_at

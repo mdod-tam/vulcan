@@ -29,9 +29,10 @@ module Admin
       assert_select '#equipment-correction form[data-turbo=false]', count: 0
       assert_select 'input[name=confirmed_impact][required]'
       assert_select 'textarea[name=reason]', text: 'Wrong PO reference'
-      assert_select 'dt', text: 'PO number:', count: 1
-      assert_select 'dt', count: 1
-      assert_select 'dd', text: "#{@order.number} → Reviewed Number"
+      assert_select '.bg-warning-50 th[scope=row]', text: 'PO number', count: 1
+      assert_select '.bg-warning-50 tbody tr', count: 1
+      assert_select '.bg-warning-50 td:first-of-type', text: @order.number
+      assert_select '.bg-warning-50 td:last-of-type', text: 'Reviewed Number'
       assert_not_equal 'Reviewed Number', @order.reload.number
 
       headers = { 'Accept' => Mime[:turbo_stream].to_s }

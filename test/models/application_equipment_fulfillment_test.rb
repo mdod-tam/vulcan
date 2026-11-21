@@ -32,7 +32,7 @@ class ApplicationEquipmentFulfillmentTest < ActiveSupport::TestCase
     create(:equipment_item, application: application, purchase_order: nil, withdrawn_at: Time.current)
     assert_equal :awaiting_shipment, application.reload.admin_fulfillment_responsibility_state
     ordered.update!(shipped_at: Date.current, tracking_number: 'Other shipment')
-    assert_equal :shipment_recorded, application.reload.admin_fulfillment_responsibility_state
+    assert_equal :awaiting_delivery, application.reload.admin_fulfillment_responsibility_state
     need = create(:equipment_need, application: application)
     assert_equal :needs_fulfillment, application.reload.admin_fulfillment_responsibility_state
     need.update!(remaining_quantity: 0)
@@ -150,6 +150,7 @@ class ApplicationEquipmentFulfillmentTest < ActiveSupport::TestCase
     create(:equipment_item, application: applications[4], purchase_order: create(:purchase_order, sent_at: nil))
     create(:equipment_item, application: applications[5])
     create(:equipment_item, application: applications[6], shipped_at: Date.current, tracking_number: 'PRELOADED-SHIPMENT')
+    create(:equipment_item, application: applications[7], shipped_at: Date.current, delivered_on: Date.current, tracking_number: 'PRELOADED-DELIVERY')
     loaded = Application.where(id: applications).order(:id).to_a
 
     Application.preload_equipment_fulfillment(loaded, include_display_details: false)

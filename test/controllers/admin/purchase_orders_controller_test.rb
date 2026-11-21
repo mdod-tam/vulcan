@@ -54,7 +54,7 @@ module Admin
         assert_select 'th', text: /Disability setup|Shipment/, count: 0
         assert_select '[role="region"][tabindex="0"][aria-labelledby="supplier-list-heading"] table'
         assert_select 'td', text: /#{Regexp.escape(@need.application.shipping_address_1)}/
-        assert_select '#supplier-list-text[readonly]', text: /PO PO-0042/
+        assert_select '#supplier-list-text[readonly]', text: /Purchase order PO-0042/
       end
       assert_select '#purchase-order-device-records' do
         assert_select 'h2', text: 'Device tracking and records'
@@ -72,7 +72,7 @@ module Admin
       assert_select '#purchase-order-history[open]' do
         assert_select 'p', text: /PO recorded — #{Regexp.escape(@admin.full_name)}/
         assert_select 'time[datetime]'
-        assert_select 'p', text: /Awarded Supplier/
+        assert_select 'dd', text: 'Awarded Supplier'
       end
       patch send_order_admin_purchase_order_path(order), params: { sent_at: Date.current.iso8601, expected_version: order.lock_version }
       assert_redirected_to admin_purchase_order_path(order)
@@ -158,6 +158,10 @@ module Admin
         assert_response :unprocessable_content
         assert_select '[role=alert]', text: /Enter a valid price per device/
         assert_select 'input[name="costs[rows][][unit_cost]"][type=text][inputmode=decimal][value=?]', invalid
+        units.each do |unit|
+          assert_select "input#unit-cost-#{unit.id}[aria-labelledby=?]", "cost-label-#{unit.id} cost-device-#{unit.id}"
+          assert_select "label#cost-label-#{unit.id}[for=unit-cost-#{unit.id}]", text: 'Price paid (USD)'
+        end
         assert_equal 'Awarded Supplier', order.reload.vendor_name
         assert_equal [BigDecimal('1234.50')], order.equipment_items.distinct.pluck(:unit_cost)
       end

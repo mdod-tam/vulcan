@@ -90,9 +90,12 @@ module Admin
       assert_select '[data-equipment-selection-target=source]'
       assert_select 'form#equipment-selection-form, input[name="item_ids[]"], [data-equipment-selection-target=summary], [data-equipment-selection-target=groupCheckbox]', count: 0
       assert_select 'button', text: 'Select matching', count: 0
-      assert_select 'a[href=?]', edit_admin_icanconnect_financial_record_path("EquipmentItem:#{shipped.id}"), text: 'Costs and receipt dates'
-      assert_select 'span', text: 'Funding: MAT'
-      assert_select 'span', text: "Date received: #{ApplicationController.helpers.accessible_date_value(shipped.delivered_on)}"
+      assert_select 'a[href=?]', edit_admin_icanconnect_financial_record_path("EquipmentItem:#{shipped.id}"), text: 'Edit costs and receipt dates'
+      assert_select 'dt', text: 'Funding'
+      assert_select 'dd', text: 'MAT'
+      assert_select 'dt', text: 'Date received'
+      assert_select 'dd', text: ApplicationController.helpers.accessible_date_value(shipped.delivered_on)
+      assert_select 'dl a[href=?]', admin_purchase_order_path(shipped.purchase_order), text: shipped.purchase_order.number
     end
 
     test 'packing a released reservation returns to the current shipping queue' do
@@ -442,7 +445,7 @@ module Admin
       assert_select '#bid-history[open]' do
         assert_select 'p', text: /Bid created — #{Regexp.escape(@admin.full_name)}/
         assert_select 'time[datetime]'
-        assert_select 'p', text: /#{Regexp.escape(@product.catalog_label)}/
+        assert_select 'dd', text: /#{Regexp.escape(@product.catalog_label)}/
       end
     end
 

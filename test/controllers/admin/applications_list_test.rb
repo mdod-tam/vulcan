@@ -202,7 +202,7 @@ module Admin
       reporting = approved_application(approved_at: 9.days.ago)
       reporting.update!(report_wait_started_at: 8.days.ago)
       evaluator = create(:evaluator, first_name: 'Morgan', last_name: 'Evaluator')
-      evaluation = create(:evaluation, application: reporting, evaluator:)
+      evaluation = create(:evaluation, application: reporting, evaluator:, evaluation_date: nil)
       bidding = approved_application(approved_at: 4.days.ago)
       bid_need = create(:equipment_need, application: bidding, product: product)
       bid = Equipment::Bidding.new(actor: @admin).create!(
@@ -212,6 +212,8 @@ module Admin
       award_path = new_admin_purchase_order_path(bid_group_id: bid.id, return_context: award_context)
       shipped = approved_application(approved_at: 5.days.ago)
       create(:equipment_item, application: shipped, shipped_at: 1.day.ago.to_date, tracking_number: 'PIPELINE-SHIPPED')
+      delivered = approved_application(approved_at: 5.days.ago)
+      create(:equipment_item, application: delivered, shipped_at: 1.day.ago.to_date, delivered_on: Date.current, tracking_number: 'PIPELINE-DELIVERED')
 
       get admin_applications_path(view: 'pipeline', q: 'PipelineListCohort', group: 'equipment')
 
@@ -223,7 +225,8 @@ module Admin
         awaiting_bid_award: [bidding, award_path],
         ready_to_send_po: [unsent, admin_purchase_order_path(order)],
         awaiting_shipment: [shipping, admin_equipment_index_path(application_id: shipping.id, tab: 'ordered', source: 'vendor')],
-        shipment_recorded: [shipped, admin_equipment_index_path(tab: 'shipped', application_id: shipped.id)]
+        awaiting_delivery: [shipped, admin_equipment_index_path(tab: 'shipped', application_id: shipped.id, delivery: 'awaiting')],
+        shipment_recorded: [delivered, admin_equipment_index_path(tab: 'shipped', application_id: delivered.id)]
       }
       destinations.each do |stage, (application, destination)|
         stage_link = css_select("a[data-pipeline-stage='#{stage}']").sole
@@ -236,6 +239,7 @@ module Admin
       end
       report_card = css_select("a[data-pipeline-stage='awaiting_report']").sole.parent
       assert_select report_card, 'p', text: 'Evaluator: Morgan Evaluator'
+      assert_select report_card, 'p', text: 'Next: Schedule evaluation'
       assert_select "tr#application_#{bidding.id} a[href=?][data-turbo-frame='_top']", award_path, text: 'Enter PO details'
 
       get award_path

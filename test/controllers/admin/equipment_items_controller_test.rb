@@ -19,9 +19,59 @@ module Admin
         }
       end
       assert_response :success
-      assert_select '.bg-warning-50 dt', count: 1, text: 'Tracking number:'
+      assert_select '.bg-warning-50 th[scope=row]', count: 1, text: 'Tracking number'
       assert_nil @item.reload.shipping_care_of
       assert_nil @item.shipping_address_2
+    end
+
+    test 'shipment history filters and records a delivery with an audited receipt date' do
+      @item.update!(shipped_at: Date.current, tracking_number: 'SHIPPED')
+      delivered = create(:equipment_item, shipped_at: Date.current, tracking_number: 'DELIVERED', delivered_on: Date.current)
+      context = { tab: 'shipped', delivery: 'awaiting' }
+      get admin_equipment_index_path(context)
+      assert_select 'nav[aria-label="Shipment history filters"] a[aria-current=page]', text: 'Awaiting delivery'
+      assert_select "#equipment-item-#{@item.id} summary", text: 'Record delivery'
+      assert_select "#equipment-item-#{delivered.id}", count: 0
+
+      params = { expected_version: @item.lock_version, return_context: context }
+      patch record_delivery_admin_equipment_item_path(@item), params: params.merge(delivered_on: Date.yesterday.iso8601)
+      assert_redirected_to admin_equipment_index_path(context.merge(anchor: "equipment-item-#{@item.id}"))
+      follow_redirect!
+      assert_select "#equipment-item-#{@item.id} details[open] input[name=delivered_on][value=?]", Date.yesterday.iso8601
+      assert_nil @item.reload.delivered_on
+
+      patch record_delivery_admin_equipment_item_path(@item), params: params.merge(delivered_on: Date.current.iso8601)
+      assert_redirected_to admin_equipment_index_path(context)
+      assert_equal Date.current, @item.reload.delivered_on
+      event = @item.events.find_by!(action: 'icc_financial_evidence_updated')
+      assert_equal @admin, event.user
+      assert_nil event.metadata.dig('before', 'delivered_on')
+      assert_equal Date.current.iso8601, event.metadata.dig('after', 'delivered_on')
+      follow_redirect!
+      assert_select "#equipment-item-#{@item.id}", count: 0
+      get admin_equipment_index_path(tab: 'shipped')
+      assert_select "#equipment-item-#{@item.id}", text: /Date received/
+    end
+
+    test 'a carrier-only correction can email the new tracking link' do
+      date = Date.current.iso8601
+      assert_emails 1 do
+        rows = [{ id: @item.id, lock_version: @item.lock_version }]
+        attributes = { shipped_at: date, carrier: 'ups', tracking_number: 'SAME-PACKAGE' }
+        Equipment::Shipment.new(actor: @admin).call(rows:, attributes:)
+      end
+      submitted = { equipment_item: { carrier: 'fedex' }, expected_version: @item.reload.lock_version, reason: 'Correct the carrier' }
+      patch admin_equipment_item_path(@item), params: submitted.merge(review: '1')
+      assert_response :success
+      assert_select 'label[for=notify_tracking]', text: 'Email updated tracking'
+      token = css_select('input[name=impact_token]').sole['value']
+
+      mail = capture_emails do
+        patch admin_equipment_item_path(@item), params: submitted.merge(impact_token: token, confirmed_impact: '1', notify_tracking: '1')
+        assert_response :see_other
+      end.sole
+      assert_includes mail.text_part.body.decoded, 'Tracking number — SAME-PACKAGE (FedEx)'
+      assert_equal 'fedex', @item.reload.carrier
     end
 
     test 'item forms and writes require an administrator' do
@@ -34,6 +84,8 @@ module Admin
       end
       assert_redirected_to root_path
       assert_nil @item.reload.tracking_number
+      patch record_delivery_admin_equipment_item_path(@item), params: { delivered_on: Date.current, expected_version: @item.lock_version }
+      assert_redirected_to root_path
     end
 
     test 'device editor shows linked shared history without another device unrelated events' do
@@ -82,14 +134,15 @@ module Admin
       assert_equal Mime[:html].to_s, response.media_type
       assert_select '#equipment-correction form input[name=impact_token]'
       assert_select '#equipment-correction form[data-turbo=false]', count: 0
-      assert_select 'dd', text: /#{Regexp.escape(original_label)}\s*→\s*#{Regexp.escape(replacement_label)}/
-      assert_select '#equipment-correction-impact-heading', text: 'Changes:'
-      assert_select 'dt', text: 'Product:'
-      assert_select 'dt', text: 'Date shipped:'
-      assert_select 'dt', text: 'IMEI (15 digits):'
-      assert_select 'dd', text: "Not recorded → #{Date.current.strftime('%m/%d/%Y')}"
-      assert_select 'dd', text: 'Not recorded → USPS'
-      assert_select 'dt', count: 4
+      assert_select '#equipment-correction-impact-heading', text: 'Changes'
+      assert_select '.bg-warning-50 th[scope=col]', text: 'Before'
+      assert_select '.bg-warning-50 th[scope=col]', text: 'After'
+      rows = css_select('.bg-warning-50 tbody tr').map { |row| row.css('th, td').map(&:text) }
+      assert_includes rows, ['Product', original_label, replacement_label]
+      assert_includes rows, ['Date shipped', 'No value', Date.current.strftime('%m/%d/%Y')]
+      assert_includes rows, ['Carrier', 'No value', 'USPS']
+      assert_includes rows, ['IMEI (15 digits)', 'No value', '123456789012345']
+      assert_equal 4, rows.size
     end
 
     test 'identity conflict links are available only in the authorized correction form' do

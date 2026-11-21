@@ -14,7 +14,8 @@ module Admin
       end
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
       flash[:vendor_shipping_input] = attributes.slice(:recipient_email).transform_values { |email| email.to_s.truncate(254) } if attributes
-      redirect_to_order(alert: e.is_a?(ActiveRecord::RecordInvalid) ? e.record.errors.full_messages.to_sentence : e.message)
+      anchor = @order.devices_missing_shipping_details.any? ? 'order-shipping-details' : 'vendor-shipping'
+      redirect_to_order(anchor:, alert: e.is_a?(ActiveRecord::RecordInvalid) ? e.record.errors.full_messages.to_sentence : e.message)
     end
 
     def destroy
@@ -34,8 +35,8 @@ module Admin
       Equipment::VendorOrder.new(actor: current_user)
     end
 
-    def redirect_to_order(**flash)
-      redirect_to admin_purchase_order_path(@order, anchor: 'vendor-shipping'), status: :see_other, **flash
+    def redirect_to_order(anchor: 'vendor-shipping', **flash)
+      redirect_to admin_purchase_order_path(@order, anchor:), status: :see_other, **flash
     end
   end
 end

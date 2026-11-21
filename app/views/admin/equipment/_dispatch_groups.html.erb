@@ -32,7 +32,7 @@
             <p>Setup ordered for stock: <%= equipment_ordered_stock_setup(item) %></p>
             <p>Serial: <%= item.serial_number.presence || 'Identifier not recorded' %> · IMEI: <%= item.imei.presence || 'Not recorded' %></p>
           <% end %>
-          <% unless item.shipping_ready? && item.disability_setup_group.present? %>
+          <% unless item.destination_and_setup_ready? %>
             <p class="font-medium text-warning-900">Confirm the shipping address and device setup before shipping.</p>
           <% end %>
           <%= link_to 'Review device and shipping address', edit_admin_equipment_item_path(item, return_context:), class: 'text-primary-700 underline' %>

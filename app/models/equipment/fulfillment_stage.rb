@@ -9,24 +9,27 @@ module Equipment
 
     DEFINITIONS = [
       Definition.new(:needs_evaluator, 'Assign evaluator', 'Assign evaluator'),
-      Definition.new(:awaiting_report, 'Enter evaluation report', 'Enter evaluation report'),
+      Definition.new(:awaiting_report, 'Evaluation in progress', 'View evaluation'),
       Definition.new(:needs_fulfillment, 'Needs bid number', 'Enter bid number'),
       Definition.new(:awaiting_bid_award, 'Enter PO details', 'Enter PO details'),
       Definition.new(:ready_to_send_po, 'Record PO sent date', 'Record PO sent date'),
       Definition.new(:awaiting_shipment, 'Enter shipping info', 'Enter shipping info'),
+      Definition.new(:awaiting_delivery, 'Awaiting delivery', 'Record delivery'),
       Definition.new(:shipment_recorded, 'View shipment history', 'View shipment history')
     ].freeze
 
-    def initialize(application)
+    def initialize(application, now: Time.current)
       @application = application
+      @now = now
     end
 
     def result
       obligations = outstanding
       primary = obligations.first
       stage = primary&.stage || completed_stage
+      next_action, status = stage == :awaiting_report ? evaluation_step : [action(stage), progress(stage)]
       Result.new(stage:, entered_at: primary&.entered_at || completed_at(stage),
-                 progress: progress(stage), action: action(stage), secondary: obligations.drop(1), action_context: action_context(stage))
+                 progress: status, action: next_action, secondary: obligations.drop(1), action_context: action_context(stage))
     end
 
     def needs_evaluation?
@@ -66,18 +69,18 @@ module Equipment
       end
     end
 
-    def open_evaluations
-      application.open_equipment_evaluations
+    def open_evaluation
+      application.open_equipment_evaluations.last
     end
 
     def outstanding
-      [evaluation_work, fulfillment_work, bid_work, unsent_work, shipment_work].compact
+      [evaluation_work, fulfillment_work, bid_work, unsent_work, shipment_work, delivery_work].compact
     end
 
     def evaluation_work
       return unless needs_evaluation?
 
-      stage = open_evaluations.any? ? :awaiting_report : :needs_evaluator
+      stage = open_evaluation ? :awaiting_report : :needs_evaluator
       entered_at = stage == :awaiting_report ? application.report_wait_started_at : application.needs_evaluator_since
       Outstanding.new(stage:, quantity: nil, entered_at:)
     end
@@ -125,6 +128,13 @@ module Equipment
       Outstanding.new(stage: :awaiting_shipment, quantity: awaiting.size, entered_at: oldest(dates))
     end
 
+    def delivery_work
+      awaiting = items.select(&:awaiting_delivery?)
+      return if awaiting.empty?
+
+      Outstanding.new(stage: :awaiting_delivery, quantity: awaiting.size, entered_at: oldest(awaiting.map(&:shipped_at)))
+    end
+
     def oldest(dates)
       dates.map(&:to_time).min if dates.any? && dates.none?(&:nil?)
     end
@@ -138,7 +148,7 @@ module Equipment
 
     def completed_at(stage)
       case stage
-      when :shipment_recorded then items.filter_map(&:shipped_at).max&.to_time
+      when :shipment_recorded then items.filter_map(&:delivered_on).max&.to_time
       when :no_equipment then application.equipment_needs_decided_at
       when :needs_fulfillment then application.equipment_source_report&.report_submitted_at
       end
@@ -150,6 +160,16 @@ module Equipment
       return 'View application' if stage == :no_equipment
 
       DEFINITIONS.find { |definition| definition.key == stage }.action
+    end
+
+    def evaluation_step
+      evaluation = open_evaluation
+      return ['Schedule evaluation', 'Evaluator assigned'] if evaluation.status_requested?
+      return ['Follow up after no-show', 'No-show'] if evaluation.status_no_show?
+      return ['Reschedule evaluation', 'Needs rescheduling'] if evaluation.status_rescheduled?
+      return ['View upcoming appointment', 'Scheduled'] if evaluation.evaluation_date && evaluation.evaluation_date > @now
+
+      ['Enter evaluation report', 'Report due']
     end
 
     def requests_need_review?
@@ -179,12 +199,13 @@ module Equipment
 
     def progress(stage)
       return 'Ready for evaluator assignment' if stage == :needs_evaluator
-      return 'Evaluator assigned · report not submitted' if stage == :awaiting_report
       return 'Review equipment' if stage == :needs_fulfillment && application.equipment_catalog_product_pending?
       return 'No equipment needed' if stage == :no_equipment
 
       total = items.size + needs.sum(&:remaining_quantity)
       return 'Review equipment' if stage == :needs_fulfillment && total.zero?
+
+      return "#{items.count(&:delivered_on?)} of #{total} #{'unit'.pluralize(total)} delivered" if %i[awaiting_delivery shipment_recorded].include?(stage)
 
       "#{items.count(&:shipped_at?)} of #{total} #{'unit'.pluralize(total)} shipped"
     end

@@ -176,13 +176,13 @@ module Admin
       get admin_application_path(@application)
       assert_response :success
       assert_select '#audit-logs' do
-        assert_select 'td', text: /Purchasing needs: #{Regexp.escape(phone.catalog_label)} — 1 device/
+        assert_select 'dd', text: /#{Regexp.escape(phone.catalog_label)} — 1 device/
         assert_select 'td', text: /#{Regexp.escape(tablet.catalog_label)} — 1 device/
         assert_named_equipment_history(phone:, replacement:)
-        assert_select 'td', text: /PO number: AUDIT-42 → UPDATED-42/
-        assert_select 'td', text: %r{Date PO sent: 09/10/2026 → 09/09/2026}
+        assert_select 'tr', text: /PO number\s+AUDIT-42\s+UPDATED-42/
+        assert_select 'tr', text: %r{Date PO sent\s+09/10/2026\s+09/09/2026}
       end
-      assert_select "#equipment-item-#{item.id} details", text: /Serial number: AUDIT-SERIAL/
+      assert_select "#equipment-item-#{item.id} details td", text: 'AUDIT-SERIAL'
       assert_no_internal_history_fields(css_select('#audit-logs').first.text)
 
       get admin_purchase_order_path(order)
@@ -196,10 +196,10 @@ module Admin
     private
 
     def assert_named_equipment_history(phone:, replacement:)
-      assert_select 'p, td', text: /Product: #{Regexp.escape(phone.catalog_label)} → #{Regexp.escape(replacement.catalog_label)}/
-      assert_select 'p, td', text: /Carrier: FedEx/
-      assert_select 'p, td', text: %r{Date shipped: 09/12/2026}
-      assert_select 'p, td', text: /Serial number: AUDIT-SERIAL/
+      assert_select 'tr', text: /Product\s+#{Regexp.escape(phone.catalog_label)}\s+#{Regexp.escape(replacement.catalog_label)}/
+      assert_select 'td', text: 'FedEx'
+      assert_select 'td', text: '09/12/2026'
+      assert_select 'td', text: 'AUDIT-SERIAL'
     end
 
     def assert_no_internal_history_fields(text)

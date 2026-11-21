@@ -6,16 +6,16 @@
 <%= render(
       'admin/equipment/correction_impact',
       record: item, previous_values: previous_values, fields: Equipment::Correction::EDITABLE_ITEM_FIELDS, impact_token: impact_token,
-      title: 'Changes:', confirmation: nil, products: products, purchase_orders: purchase_orders
+      title: 'Changes', confirmation: nil, products: products, purchase_orders: purchase_orders
     ) %>
 <div>
   <p class="font-medium">Correction reason</p>
   <p class="whitespace-pre-wrap"><%= reason %></p>
 </div>
-<% if item.shipped_at? && item.will_save_change_to_tracking_number? && item.tracking_number.present? && item.application&.status_approved? %>
+<% if item.shipped_at? && item.changed.intersect?(EquipmentItem::TRACKING_FIELDS) && item.tracking_number.present? && item.application&.status_approved? %>
   <p>
     <%= check_box_tag :notify_tracking, '1' %>
-    <%= label_tag :notify_tracking, 'Email the updated tracking number' %>
+    <%= label_tag :notify_tracking, 'Email updated tracking' %>
   </p>
 <% end %>
 <div class="flex flex-wrap items-center gap-2">

@@ -5,6 +5,16 @@
   <%= render 'admin/shared/index_header',
              title: { 'needs_ordering' => 'Needs bid number', 'ordered' => 'Enter shipping info' }.fetch(@context[:tab], 'View shipment history') %>
   <%= render 'admin/equipment/navigation' %>
+  <% if @context[:tab] == 'shipped' %>
+    <nav class="flex flex-wrap gap-2" aria-label="Shipment history filters">
+      <%= link_to 'All shipments', admin_equipment_index_path(@context.except(:delivery)),
+                  class: (@context[:delivery] ? 'btn btn-outline' : 'btn btn-secondary'),
+                  aria: { current: ('page' unless @context[:delivery]) } %>
+      <%= link_to 'Awaiting delivery', admin_equipment_index_path(@context.merge(delivery: 'awaiting')),
+                  class: (@context[:delivery] ? 'btn btn-secondary' : 'btn btn-outline'),
+                  aria: { current: ('page' if @context[:delivery]) } %>
+    </nav>
+  <% end %>
   <%= form_with url: admin_equipment_index_path, method: :get, id: 'equipment-filters',
                 data: { action: 'submit->equipment-selection#applyFilters' }, class: 'card border border-gray-200 p-4 space-y-4' do |form| %>
     <% @context.except(:search, :product_id, :manufacturer, :category, :program_group, :source).each do |key, value| %><%= hidden_field_tag "return_context[#{key}]",

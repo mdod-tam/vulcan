@@ -65,7 +65,7 @@ module Equipment
       unit.update!(shipped_at: Date.current, tracking_number: 'ACTUAL-SHIPMENT')
       assert_equal 'shipped', unit.queue_status
       assert_equal :needs_fulfillment, application.reload.equipment_fulfillment_stage.stage
-      assert_equal 1, application.equipment_fulfillment_stage.secondary.sole.quantity
+      assert_equal({ awaiting_shipment: 1, awaiting_delivery: 1 }, application.equipment_fulfillment_stage.secondary.to_h { |work| [work.stage, work.quantity] })
     end
 
     test 'releasing unquoted lines before award leaves the remainder unreserved and preserves bid history' do

@@ -224,7 +224,9 @@ Rails.application.routes.draw do
     resources :stock_allocations, only: %i[new create update]
     resources :equipment_shipments, only: %i[new create]
     resources :equipment, only: [:index]
-    resources :equipment_items, only: %i[edit update]
+    resources :equipment_items, only: %i[edit update] do
+      patch :record_delivery, on: :member
+    end
     resources :purchase_orders, only: %i[index show new create] do
       patch :send_order, on: :member
       resource :shipping_request, only: %i[create destroy], controller: 'purchase_order_shipping_requests'

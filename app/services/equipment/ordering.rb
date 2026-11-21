@@ -56,6 +56,7 @@ module Equipment
         Mutation.version!(order, expected_version)
         raise Conflict, 'This PO is already sent; use a reviewed correction.' if order.sent_at
 
+        self.class.verify_shipping_details!(order)
         order.update!(sent_at: sent_at)
         raise Conflict, 'Enter the actual PO sent date.' unless order.sent_at
 
@@ -64,6 +65,14 @@ module Equipment
                                application_ids: order.equipment_items.distinct.pluck(:application_id).compact)
       end
       order
+    end
+
+    def self.verify_shipping_details!(order)
+      raise Conflict, 'Confirm the shipping address and setup for the devices listed on this PO.' if order.devices_missing_shipping_details.any?
+
+      return unless order.program_stock? && !order.shipping_ready?
+
+      raise Conflict, 'Confirm the program receiving address before sending this PO.'
     end
 
     private

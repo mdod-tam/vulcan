@@ -103,7 +103,7 @@ module Equipment
       return unless item.shipped_at? && item.application&.status_approved?
 
       corrected = previous['shipped_at'].present?
-      return if corrected && (!notify_tracking || previous['tracking_number'] == item.tracking_number)
+      return if corrected && (!notify_tracking || !item.saved_changes.keys.intersect?(EquipmentItem::TRACKING_FIELDS))
 
       ShipmentNotice.record!([item], actor: @actor, corrected:)
     end

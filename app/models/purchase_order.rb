@@ -49,6 +49,12 @@ class PurchaseOrder < ApplicationRecord
     completion_label(cancelled: active.size < items.size)
   end
 
+  def devices_missing_shipping_details
+    return [] if program_stock?
+
+    equipment_items.active.where(shipped_at: nil).reject(&:destination_and_setup_ready?)
+  end
+
   def stock_receipt_counts(items = equipment_items.to_a)
     received = items.count(&:stock_received_on?)
     cancelled = items.count { |item| item.withdrawn_at? && !item.stock_received_on? }

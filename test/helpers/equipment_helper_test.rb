@@ -73,11 +73,11 @@ class EquipmentHelperTest < ActionView::TestCase
     item = EquipmentItem.new(carrier: 'ups', purchase_order_id: 7)
     fields = %w[carrier purchase_order_id shipped_at]
     previous = item.attributes.slice(*fields)
-    assert_empty equipment_impact_fields(item, previous, fields: fields)
+    assert_empty equipment_correction_changes(item, previous, fields: fields)
 
     item.carrier = 'fedex'
     item.shipped_at = '13/45/2026'
-    assert_equal %w[carrier shipped_at], equipment_impact_fields(item, previous, fields: fields)
+    assert_equal %w[carrier shipped_at], equipment_correction_changes(item, previous, fields: fields).map(&:first)
     assert_equal 'FedEx', equipment_impact_value('carrier', item.carrier)
     assert_equal '13/45/2026', equipment_impact_value('shipped_at', typed_date_input_value(item, :shipped_at))
     assert_equal '09/09/2026', equipment_impact_value('sent_at', '2026-09-09')
@@ -148,9 +148,12 @@ class EquipmentHelperTest < ActionView::TestCase
     assert_select '#bid-history', text: /Bid updated — Morgan Editor/
     assert_select 'time[datetime=?]', recorded_at.iso8601
     assert_select '#bid-history', text: /#{Regexp.escape(product.catalog_label)} — 2 devices · Deaf · Reserved · \$49.95 per device/
-    assert_select '#bid-history', text: /Bids: Bid HISTORY-BID/
-    assert_select '#bid-history', text: /Bid number: HISTORY-BID/
-    assert_select '#bid-history', text: /Price per device: \$49.95/
+    assert_select '#bid-history dt', text: 'Bids'
+    assert_select '#bid-history dd', text: 'Bid HISTORY-BID'
+    assert_select '#bid-history dt', text: 'Bid number'
+    assert_select '#bid-history dd', text: 'HISTORY-BID'
+    assert_select '#bid-history dt', text: 'Price per device'
+    assert_select '#bid-history dd', text: '$49.95'
     assert_not_includes rendered, 'Not recorded →'
     assert_not_includes rendered, 'No products reserved →'
     assert_not_includes rendered, 'No bids →'
@@ -182,9 +185,11 @@ class EquipmentHelperTest < ActionView::TestCase
     details = equipment_audit_details(event, records: {})
 
     assert_equal 'Filed costs corrected', equipment_audit_action_label(event)
-    assert_includes details, 'Price per device: $100.00 → $125.50'
-    assert_includes details, 'Date received: 11/14/2026'
-    assert_not_includes details, 'Not recorded →'
+    comparison = Nokogiri::HTML5.fragment(details)
+    assert_equal %w[Field Before After], comparison.css('thead th').map(&:text)
+    changes = comparison.css('tbody tr').map { |row| row.css('th, td').map(&:text) }
+    assert_includes changes, ['Price per device', '$100.00', '$125.50']
+    assert_includes changes, ['Date received', 'No value', '11/14/2026']
     assert_includes details, '11/14/2026'
     assert_includes details, 'Supporting document updated'
     assert_includes details, 'Corrected vendor invoice &lt;script&gt;'
@@ -194,8 +199,9 @@ class EquipmentHelperTest < ActionView::TestCase
     event.metadata = { before: { unit_cost: '0', vendor_name: 'Previous vendor' },
                        after: { unit_cost: '25', vendor_name: nil } }.deep_stringify_keys
     details = equipment_audit_changes(event, records: {})
-    assert_includes details, 'Price per device: $0.00 → $25.00'
-    assert_includes details, 'Vendor name: Previous vendor → Not recorded'
+    changes = Nokogiri::HTML5.fragment(details).css('tbody tr').map { |row| row.css('th, td').map(&:text) }
+    assert_includes changes, ['Price per device', '$0.00', '$25.00']
+    assert_includes changes, ['Supplier name', 'Previous vendor', 'Cleared']
   end
 
   test 'missing historical records have truthful names rather than numeric identifiers' do

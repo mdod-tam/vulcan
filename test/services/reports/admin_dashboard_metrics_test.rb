@@ -64,7 +64,7 @@ module Reports
 
       items.each { |item| item.update!(shipped_at: Date.current, tracking_number: 'DASHBOARD-SHIPMENT') }
       shipped = AdminDashboardMetrics.call
-      assert_equal baseline[:approved_stage_counts][:shipment_recorded] + 1, shipped[:approved_stage_counts][:shipment_recorded]
+      assert_equal baseline[:approved_stage_counts][:awaiting_delivery] + 1, shipped[:approved_stage_counts][:awaiting_delivery]
       assert_equal application.reload.equipment_fulfillment_stage.stage,
                    Applications::ApprovedPipeline.new([application]).rows.sole.stage
     end

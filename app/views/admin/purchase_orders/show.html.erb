@@ -1,7 +1,7 @@
 <div class="max-w-7xl mx-auto px-4 py-6 space-y-4">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="min-w-0 space-y-2 break-words">
-      <h1 class="text-2xl font-bold">PO <%= @purchase_order.number %></h1>
+      <h1 class="text-2xl font-bold">Purchase order <%= @purchase_order.number %></h1>
       <p>
         <strong><%= @purchase_order.vendor_name.presence || 'Vendor name needed' %></strong>
         · <%= @purchase_order.purpose.humanize %> · <%= equipment_funding_label(@purchase_order) %>
@@ -20,6 +20,22 @@
     </nav>
   </header>
   <%= render 'admin/purchase_orders/supplier_list', purchase_order: @purchase_order %>
+  <% missing_shipping_details = @purchase_order.devices_missing_shipping_details # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <% if missing_shipping_details.any? %>
+    <div id="order-shipping-details" class="rounded border border-warning-300 bg-warning-50 p-4">
+      <p>Confirm the shipping address and setup before sending this PO.</p>
+      <ul class="mt-2 list-disc pl-5">
+        <% missing_shipping_details.each do |item| %>
+          <li><%= link_to "Review shipping details for device ##{item.id}", edit_admin_equipment_item_path(item), class: 'text-primary-700 underline' %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% elsif @purchase_order.program_stock? && !@purchase_order.shipping_ready? %>
+    <p class="rounded border border-warning-300 bg-warning-50 p-4">
+      <%= link_to 'Confirm the program receiving address', edit_admin_purchase_order_correction_path(@purchase_order), class: 'text-primary-700 underline' %>
+      before sending this PO.
+    </p>
+  <% end %>
   <% if @vendor_shipping_form || @vendor_shipping_request %>
     <%= render 'admin/purchase_orders/vendor_shipping', order: @purchase_order, shipping_request: @vendor_shipping_request, draft: @vendor_shipping_form %>
   <% end %>

@@ -8,8 +8,7 @@
           <p><span class="font-semibold"><%= equipment_audit_action_label(event) %></span> — <%= event.user&.full_name.presence || 'System' %></p>
           <time datetime="<%= event.created_at.iso8601 %>" class="block text-gray-600"><%= audit_log_timestamp(event) %></time>
         </div>
-        <% details = equipment_audit_details(event, records: audit_records) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
-        <% if details.present? %><p class="mt-1 text-gray-700"><%= details %></p><% end %>
+        <div class="mt-2 text-gray-700"><%= equipment_audit_details(event, records: audit_records) %></div>
       </li>
     <% end %>
     <% if events.empty? %><li class="py-2 text-sm text-gray-600">No activity has been recorded yet.</li><% end %>

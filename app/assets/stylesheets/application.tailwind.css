@@ -224,6 +224,23 @@
     @apply px-3 py-1.5;
   }
 
+  .admin-record-table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+
+  .admin-record-table :is(th, td) {
+    @apply border-b border-gray-200 px-2.5 py-2 align-top sm:px-3;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-record-table thead {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  .admin-record-table tbody th {
+    @apply font-medium text-gray-900;
+  }
+
   /* Form controls. Focus styling comes from the base layer. */
   .form-label {
     @apply block text-sm font-medium text-gray-700;

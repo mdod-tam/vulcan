@@ -85,6 +85,33 @@ module VendorPortal
       assert_nil @first.reload.shipped_at
     end
 
+    test 'sending a PO refuses incomplete shipping details and links staff to the device' do
+      sign_in_as(@admin, bypass_mfa_enrollment: true)
+      patch admin_equipment_item_path(@first), params: {
+        equipment_item: { shipping_zip_code: '' }, expected_version: @first.lock_version, reason: 'Confirm ZIP with recipient'
+      }
+      assert_response :see_other
+      assert_not @first.reload.shipping_ready?
+      assert_no_emails { post admin_purchase_order_shipping_request_path(@order), params: send_parameters }
+      assert_redirected_to admin_purchase_order_path(@order, anchor: 'order-shipping-details')
+      assert_nil @order.reload.sent_at
+      assert_empty @order.shipping_requests
+      follow_redirect!
+      assert_select '#order-shipping-details a[href=?]', edit_admin_equipment_item_path(@first)
+
+      patch send_order_admin_purchase_order_path(@order), params: { sent_at: Date.current, expected_version: @order.lock_version }
+      assert_nil @order.reload.sent_at
+      assert_match(/Confirm the shipping address and setup/, flash[:alert])
+
+      @first.update!(shipping_zip_code: '21201')
+      send_order_link
+      patch admin_equipment_item_path(@first), params: {
+        equipment_item: { shipping_address_1: '400 Corrected Test Ave' }, expected_version: @first.lock_version, reason: 'Confirm new address'
+      }
+      assert_response :see_other
+      assert_match(/Contact the vendor to confirm the new shipping address/, flash[:notice])
+    end
+
     test 'a failed first email leaves the PO unsent and allows another attempt' do
       sign_in_as(@admin, bypass_mfa_enrollment: true)
       EmailDelivery.stubs(:deliver_now!).raises(Timeout::Error)

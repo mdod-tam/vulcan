@@ -1,0 +1,23 @@
+<%# locals: (item:, return_context:, retry_values:) -%>
+<%= tag.details open: retry_values.present?, class: 'w-full' do %>
+  <summary class="cursor-pointer text-primary-700 underline" aria-label="Record delivery for device #<%= item.id %>">Record delivery</summary>
+  <%= form_with url: record_delivery_admin_equipment_item_path(item), method: :patch, class: 'mt-2 space-y-2' do |form| %>
+    <%= hidden_field_tag :expected_version, item.lock_version, id: nil %>
+    <% return_context.each do |key, value| %>
+      <%= hidden_field_tag "return_context[#{key}]", value, id: nil %>
+    <% end %>
+    <div class="flex flex-wrap items-end gap-3">
+      <div>
+        <%= form.label :delivered_on, 'Date received', for: "delivered-on-#{item.id}", class: 'form-label' %>
+        <%= form.text_field :delivered_on, typed_date_field_options(id: "delivered-on-#{item.id}",
+                                                                    value: retry_values&.[](:date), autocomplete: 'off', required: true, class: 'form-input',
+                                                                    'aria-invalid': retry_values.present?,
+                                                                    'aria-describedby': ("delivery-error-#{item.id}" if retry_values)) %>
+      </div>
+      <%= form.submit 'Save delivery', class: 'btn btn-primary', data: { turbo_submits_with: 'Saving…' } %>
+    </div>
+    <% if retry_values %>
+      <p id="delivery-error-<%= item.id %>" role="alert" class="text-sm text-danger-700"><%= retry_values[:error] %></p>
+    <% end %>
+  <% end %>
+<% end %>

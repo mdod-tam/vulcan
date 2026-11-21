@@ -10,6 +10,24 @@ module Admin
       load_form
     end
 
+    def record_delivery
+      return redirect_to_delivery(alert: 'This device is no longer awaiting delivery.') unless @item.awaiting_delivery?
+
+      input = params.expect(:delivered_on)
+      date = DateInputNormalizer.normalize(input)
+      raise Equipment::Conflict, 'Enter a valid date received.' unless date
+
+      ::Icanconnect::FilingWriter.new(actor: current_user).update_evidence!(
+        record: @item, attributes: { delivered_on: date }, lock_version: params.expect(:expected_version)
+      )
+      redirect_to_delivery(notice: 'Delivery recorded.')
+    rescue ActiveRecord::StaleObjectError
+      redirect_to_delivery(alert: 'This device changed. Review the latest shipment details and try again.')
+    rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
+      flash[:delivery_retry] = { item_id: @item.id, date: input.to_s.first(32), error: equipment_form_errors(e).to_sentence }
+      redirect_to_delivery(anchor: "equipment-item-#{@item.id}")
+    end
+
     def update
       @disposition_submission = !params.key?(:equipment_item) && params.key?(:operation) && params.expect(:operation).in?(%w[detach withdraw])
       @draft_attributes = item_params.to_h
@@ -20,7 +38,11 @@ module Admin
         operation: params[:operation].presence || 'update', confirmed_impact: params[:confirmed_impact] == '1',
         impact_token: params[:impact_token], notify_tracking: params[:notify_tracking] == '1'
       )
-      redirect_to success_path, notice: 'Equipment item updated.', status: :see_other
+      notice = 'Equipment item updated.'
+      if @item.direct_vendor? && @item.purchase_order&.sent_at? && @item.saved_changes.keys.intersect?(EquipmentShipping::FIELDS)
+        notice += ' Contact the vendor to confirm the new shipping address.'
+      end
+      redirect_to success_path, notice: notice, status: :see_other
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
       @form_errors = equipment_form_errors(e)
       restore_equipment_correction(@item, attributes: @draft_attributes, fields: Equipment::Correction::ITEM_FIELDS, exception: e)
@@ -30,6 +52,10 @@ module Admin
     end
 
     private
+
+    def redirect_to_delivery(anchor: nil, **messages)
+      redirect_to admin_equipment_index_path(@return_context.merge(tab: 'shipped', anchor:)), status: :see_other, **messages
+    end
 
     def render_correction_step
       Equipment::Mutation.version!(@item, params[:expected_version])

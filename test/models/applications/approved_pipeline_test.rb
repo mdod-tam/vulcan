@@ -38,7 +38,7 @@ module Applications
     test 'report waiting uses the current assignment cycle and transfer keeps its clock' do
       unassigned = equipment_application(needs_evaluator_since: 9.days.ago)
       assigned = equipment_application(report_wait_started_at: 12.days.ago)
-      evaluation = create(:evaluation, application: assigned)
+      evaluation = create(:evaluation, application: assigned, evaluation_date: nil)
 
       rows = projection(unassigned, assigned).rows.index_by { |row| row.application.id }
 
@@ -47,7 +47,18 @@ module Applications
       assert_equal :awaiting_report, rows.fetch(assigned.id).stage
       assert_equal evaluation, rows.fetch(assigned.id).evaluation
       assert_equal 12, rows.fetch(assigned.id).days
-      assert_equal 'Enter evaluation report', rows.fetch(assigned.id).action_label
+      assert_equal 'Schedule evaluation', rows.fetch(assigned.id).action_label
+      assert_equal 'Evaluator assigned', rows.fetch(assigned.id).progress
+
+      evaluation.update!(evaluation_date: 2.days.from_now, status: :scheduled)
+      assert_equal 'View upcoming appointment', projection(assigned.reload).rows.sole.action_label
+      assert_equal 'Scheduled', projection(assigned).rows.sole.progress
+      evaluation.update!(evaluation_date: 1.day.ago)
+      assert_equal 'Enter evaluation report', projection(assigned.reload).rows.sole.action_label
+      assert_equal 'Report due', projection(assigned).rows.sole.progress
+      evaluation.update!(status: :no_show)
+      assert_equal 'Follow up after no-show', projection(assigned.reload).rows.sole.action_label
+      assert_equal 'No-show', projection(assigned).rows.sole.progress
     end
 
     test 'report card preloads the assigned evaluator only for its displayed oldest record' do
@@ -99,8 +110,14 @@ module Applications
 
       item.update!(shipped_at: Date.current, tracking_number: 'ACTUAL-SHIPMENT')
       row = projection(application).rows.sole
-      assert_equal :shipment_recorded, row.stage
+      assert_equal :awaiting_delivery, row.stage
+      assert_equal 'Record delivery', row.action_label
       assert_equal Date.current.to_time, row.entered_at
+
+      item.update!(delivered_on: Date.current)
+      row = projection(application).rows.sole
+      assert_equal :shipment_recorded, row.stage
+      assert_equal '1 of 1 unit delivered', row.progress
     end
 
     test 'bid reservations count once and use the current line reservation date' do
@@ -200,7 +217,7 @@ module Applications
       assert_equal 0, pipeline.rows.find { |row| row.application.id == recent.id }.days
       assert_equal 10, summary.average_days
       assert_equal 1, summary.unknown_dates
-      assert_equal 7, pipeline.summaries(:equipment).length
+      assert_equal 8, pipeline.summaries(:equipment).length
       assert_no_queries do
         pipeline.rows
         pipeline.groups
@@ -214,8 +231,8 @@ module Applications
       create(:equipment_need, application: pending, unfulfilled_since: 2.days.ago)
       older = equipment_application
       newer = equipment_application
-      create(:equipment_item, application: older, shipped_at: 6.days.ago.to_date, tracking_number: 'OLD', purchase_order: create(:purchase_order, sent_at: 8.days.ago.to_date))
-      create(:equipment_item, application: newer, shipped_at: 1.day.ago.to_date, tracking_number: 'NEW')
+      create(:equipment_item, application: older, shipped_at: 6.days.ago.to_date, delivered_on: 5.days.ago.to_date, tracking_number: 'OLD', purchase_order: create(:purchase_order, sent_at: 8.days.ago.to_date))
+      create(:equipment_item, application: newer, shipped_at: 1.day.ago.to_date, delivered_on: Date.current, tracking_number: 'NEW')
       rows = ApprovedPipeline.sort_rows(projection(older, newer, pending).rows)
       assert_equal([pending.id, newer.id, older.id], rows.map { |row| row.application.id })
     end

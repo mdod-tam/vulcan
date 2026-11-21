@@ -72,8 +72,8 @@ module Applications
       equipment_source_evaluation
     end
 
-    def equipment_fulfillment_stage
-      Equipment::FulfillmentStage.new(self).result
+    def equipment_fulfillment_stage(now: Time.current)
+      Equipment::FulfillmentStage.new(self, now:).result
     end
 
     def admin_fulfillment_responsibility_state

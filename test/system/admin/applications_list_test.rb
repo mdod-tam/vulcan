@@ -206,14 +206,15 @@ module Admin
       assert_selector "#application_#{recent.id}"
       assert_selector '[data-pipeline-stage="needs_evaluator"]', text: '2'
       assert_selector '[data-pipeline-stage="awaiting_shipment"]', text: 'Enter shipping info'
+      assert_selector '[data-pipeline-stage="awaiting_delivery"]', text: 'Awaiting delivery'
       assert_selector '[data-pipeline-stage="shipment_recorded"]', text: 'View shipment history'
       assert_selector "#application_#{tracking_only.id}", text: '0 of 1 unit shipped'
       assert_no_selector '[data-pipeline-stage="voucher_expired"]'
-      assert_selector '[data-pipeline-stage]', count: 7
+      assert_selector '[data-pipeline-stage]', count: 8
       take_screenshot('approved-pipeline-equipment', html: true, full: true)
       page.current_window.resize_to(390, 844)
       assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=, 390
-      take_screenshot('approved-pipeline-seven-stages-narrow', html: true, full: true)
+      take_screenshot('approved-pipeline-stages-narrow', html: true, full: true)
       page.current_window.resize_to(1200, 800)
 
       select 'Last 30 days', from: 'date_range'

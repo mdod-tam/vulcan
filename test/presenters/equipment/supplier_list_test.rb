@@ -32,7 +32,7 @@ module Equipment
       assert_equal [1, 2], list.rows.map(&:quantity).sort
       assert_equal 3, list.rows.sum(&:quantity)
       assert_equal ['Product model', 'Quantity', 'Recipient', 'Shipping address'], list.headings
-      assert_includes list.plain_text, 'PO SUPPLIER-PO'
+      assert_equal 'Purchase order SUPPLIER-PO', list.plain_text.lines.first.chomp
       assert_not_includes list.plain_text, 'Disability setup'
       assert_not_includes list.plain_text, 'Deaf'
       assert_includes list.plain_text, '101 Main Street'

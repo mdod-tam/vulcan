@@ -76,8 +76,8 @@ module Admin
         get edit_admin_icanconnect_financial_record_path("PurchaseOrder:#{@order.id}")
         assert_response :success
         assert_select '#financial-constituents', text: "Constituent: #{@application.constituent_full_name}"
-        assert_select '#financial-history', text: /Shipping cost:.*\$10\.00.*\$12\.00/m
-        assert_select '#financial-history', text: /Tax cost:.*\$2\.00.*\$3\.00/m
+        assert_select '#financial-history tbody tr', text: /Shipping cost\s+\$10\.00\s+\$12\.00/
+        assert_select '#financial-history tbody tr', text: /Tax cost\s+\$2\.00\s+\$3\.00/
         assert_select '#financial-history', text: /UNRELATED-ORDER-INVOICE/, count: 0
         assert_history(@order.equipment_history.to_a)
       end
@@ -94,8 +94,8 @@ module Admin
           get edit_admin_icanconnect_financial_record_path("#{record.class.name}:#{record.id}")
           assert_response :success
           assert_select '#financial-constituents', text: "Constituent: #{@application.constituent_full_name}"
-          assert_select '#financial-history', text: /Hourly rate:.*\$45\.00.*\$50\.00/m
-          assert_select '#financial-history', text: /Billable hours:.*2.*3/m
+          assert_select '#financial-history tbody tr', text: /Hourly rate\s+\$45\.00\s+\$50\.00/
+          assert_select '#financial-history tbody tr', text: /Billable hours\s+2.*\s+3/
           events = Event.where(auditable: record).to_a
           assert_history(events)
           logs = Applications::AuditLogBuilder.new(@application).build_deduplicated_audit_logs
@@ -127,8 +127,8 @@ module Admin
         assert_response :success
         assert_select '#financial-constituents', text: "Constituent: #{unit.application.constituent_full_name}"
         assert_select '#financial-history', text: /Service bill recorded/
-        assert_select '#financial-history', text: /Amount:.*\$25\.00.*\$30\.00/m
-        assert_select '#financial-history', text: /Service date:/
+        assert_select '#financial-history tbody tr', text: /Amount\s+\$25\.00\s+\$30\.00/
+        assert_select '#financial-history dt', text: 'Service date'
         assert_select '#financial-history', text: /ORIGINAL-BILL.*REVISED-BILL|REVISED-BILL.*ORIGINAL-BILL/m
         assert_select '#financial-history', text: /HISTORY-PO/, count: 0
         assert_history(Event.where(auditable: expense).to_a)

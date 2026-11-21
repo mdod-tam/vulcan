@@ -43,6 +43,7 @@
                 <p class="text-xs text-gray-600"><%= approved_pipeline_next_step(summary.oldest) %></p>
               <% elsif summary.stage == :awaiting_report %>
                 <p class="text-xs text-gray-600">Evaluator: <%= summary.oldest.evaluation.evaluator&.full_name || 'Not recorded' %></p>
+                <p class="text-xs text-gray-600"><%= approved_pipeline_next_step(summary.oldest) %></p>
               <% end %>
             <% else %>
               <p>Longest wait: Not recorded</p>

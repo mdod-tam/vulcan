@@ -45,6 +45,7 @@ module Equipment
       if order.sent_at?
         order.lock!
         Mutation.version!(order, expected_version)
+        Ordering.verify_shipping_details!(order)
         order.update!(updated_at: Time.current)
       else
         Ordering.new(actor: @actor).mark_sent!(order: order, sent_at: Date.current, expected_version: expected_version)

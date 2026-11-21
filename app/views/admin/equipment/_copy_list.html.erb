@@ -5,15 +5,36 @@
   <div class="space-y-3">
     <p><%= supplier_list.summary %></p>
     <div class="relative overflow-x-auto" role="region" tabindex="0" aria-labelledby="<%= id_prefix %>-heading">
-      <table class="min-w-full border-collapse text-left text-sm">
-        <thead><tr><% supplier_list.headings.each do |heading| %><th scope="col" class="border border-gray-300 p-2"><%= heading %></th><% end %></tr></thead>
+      <table class="admin-record-table" aria-labelledby="<%= id_prefix %>-heading">
+        <thead>
+          <tr>
+            <th scope="col">Product model</th>
+            <th scope="col" class="w-14 whitespace-nowrap text-right sm:w-24">
+              <span class="hidden sm:inline">Quantity</span><span class="sm:hidden" aria-hidden="true">Qty</span><span class="sr-only sm:hidden">Quantity</span>
+            </th>
+            <th scope="col">Ship to</th>
+            <% unless supplier_list.purchase_order %>
+              <th scope="col">Disability setup</th>
+              <th scope="col">Shipment</th>
+            <% end %>
+          </tr>
+        </thead>
         <tbody>
           <% supplier_list.rows.each do |row| %>
             <tr>
-              <% supplier_list.table_values(row).each do |value| %><td class="border border-gray-300 p-2"><%= value %></td><% end %>
+              <th scope="row"><%= row.model %></th>
+              <td class="text-right tabular-nums"><%= row.quantity %></td>
+              <td>
+                <span class="block font-medium"><%= row.recipient %></span>
+                <%= safe_join(row.address, tag.br) %>
+              </td>
+              <% unless supplier_list.purchase_order %>
+                <td><%= row.setup %></td>
+                <td><%= row.completed ? 'Already shipped' : 'Pending' %></td>
+              <% end %>
             </tr>
           <% end %>
-          <% if supplier_list.rows.empty? %><tr><td colspan="<%= supplier_list.headings.size %>" class="border border-gray-300 p-2">No products to list.</td></tr><% end %>
+          <% if supplier_list.rows.empty? %><tr><td colspan="<%= supplier_list.headings.size - 1 %>">No products to list.</td></tr><% end %>
         </tbody>
       </table>
     </div>

@@ -26,7 +26,7 @@ module Equipment
     def package_key(item)
       number = item.tracking_number.to_s.gsub(/[[:space:]]+/, '').upcase
       secret = Rails.application.key_generator.generate_key('equipment-shipment-package')
-      OpenSSL::HMAC.hexdigest('SHA256', secret, [item.application.user_id, item.shipped_at, number].to_json)
+      OpenSSL::HMAC.hexdigest('SHA256', secret, [item.application.user_id, item.shipped_at, item.carrier, number].to_json)
     end
 
     def contact_key(contact)

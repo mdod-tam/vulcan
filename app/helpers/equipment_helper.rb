@@ -235,6 +235,7 @@ module EquipmentHelper
 
   def equipment_field_label(field)
     labels = { 'bid_lines' => 'Reserved products', 'bid_group_ids' => 'Bids', 'equipment_needs' => 'Purchasing needs', 'unit_cost' => 'Price per device',
+               'vendor_name' => 'Supplier name',
                'mileage' => 'Mileage (miles)', 'mileage_rate' => 'Cost per mile', 'po_assigned_at' => 'Date assigned to PO' }
     return labels[field] if labels.key?(field)
 
@@ -248,38 +249,40 @@ module EquipmentHelper
     model.human_attribute_name(field)
   end
 
-  def equipment_impact_fields(record, previous_values, fields:)
-    fields.select do |field|
-      previous_values[field] != record.public_send(field) ||
-        record.try(:"rejected_#{field}_input").present?
-    end
-  end
-
   def equipment_audit_changes(event, records:)
-    changes = equipment_history_change_pairs(event).filter_map do |field, (before, after)|
+    changes = equipment_history_change_pairs(event).filter_map do |field, values|
       next unless EQUIPMENT_AUDIT_FIELDS.include?(field)
 
-      label = field == 'number' && event.auditable_type == 'BidGroup' ? 'Bid number' : equipment_field_label(field)
-      values = [equipment_impact_value(field, after, **records)]
-      values.unshift(equipment_impact_value(field, before, **records), ' → ') if before.present?
-      safe_join(["#{label}: ", *values])
+      [field, field == 'number' && event.auditable_type == 'BidGroup' ? 'Bid number' : equipment_field_label(field), *values]
     end
-    safe_join(changes, tag.br)
+    render('admin/equipment/audit_changes', changes:, records:, initial: event.action == 'equipment_bid_created') if changes.any?
   end
 
   def equipment_audit_details(event, records:)
-    details = [equipment_audit_changes(event, records: records), event.metadata['reason'], event.metadata['correction_reason']]
+    notes = [event.metadata['reason'], event.metadata['correction_reason']]
     reference = event.metadata['external_filing_reference']
-    details << "External correction reference: #{reference}" if event.action == 'icc_filed_cost_corrected' && reference.present?
+    notes << "External correction reference: #{reference}" if event.action == 'icc_filed_cost_corrected' && reference.present?
     if event.action == 'icc_cost_marked_claimed'
-      details << "Filing period: #{event.metadata['period']} · Reference: #{event.metadata['external_filing_reference']} " \
-                 "· Amount: #{number_to_currency(event.metadata['amount'])}"
+      notes << "Filing period: #{event.metadata['period']} · Reference: #{event.metadata['external_filing_reference']} " \
+               "· Amount: #{number_to_currency(event.metadata['amount'])}"
     elsif event.action.start_with?('icc_') && event.metadata.dig('before', 'financial_document_blob_id') != event.metadata.dig('after', 'financial_document_blob_id')
-      details << 'Supporting document updated'
+      notes << 'Supporting document updated'
     end
     acknowledgment = event.field_change_pairs.fetch('serial_duplicate_reason', []).last
-    details << "Serial warning acknowledgment: #{acknowledgment}" if acknowledgment.present?
-    safe_join(details.compact_blank, tag.br)
+    notes << "Serial warning acknowledgment: #{acknowledgment}" if acknowledgment.present?
+    details = [equipment_audit_changes(event, records:), *notes.compact_blank.map { |note| tag.p(note) }].compact
+    tag.div(safe_join(details), class: 'space-y-2') if details.any?
+  end
+
+  def equipment_correction_changes(record, previous_values, fields:)
+    fields.filter_map do |field|
+      before = previous_values[field]
+      value = record.public_send(field)
+      next if before == value && record.try(:"rejected_#{field}_input").blank?
+
+      after = field.in?(%w[shipped_at sent_at]) ? typed_date_input_value(record, field) : value
+      [field, equipment_field_label(field), before, after]
+    end
   end
 
   private

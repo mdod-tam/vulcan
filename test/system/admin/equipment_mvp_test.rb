@@ -203,16 +203,16 @@ module Admin
       fill_in 'Vendor name', with: 'First Vendor'
       fill_in "line-unit-cost-#{bid.active_lines.sole.id}", with: '100'
       click_button 'Save PO details'
-      assert_text 'PO HISTORY-PO'
+      assert_text 'Purchase order HISTORY-PO'
       within('#purchase-order-history') { assert_text "PO recorded — #{editor.full_name}" }
       fill_in 'Supplier name', with: 'Corrected Vendor'
-      fill_in 'Enter price we paid in this PO.', with: '125.50'
-      click_button 'Save actual device costs'
+      fill_in 'Price paid (USD)', with: '125.50'
+      click_button 'Save device costs'
       assert_text 'Actual device purchase costs saved.'
       within('#purchase-order-history') do
         assert_text "Vendor updated — #{editor.full_name}"
-        assert_text 'First Vendor → Corrected Vendor'
-        assert_text 'Price per device: $100.00 → $125.50'
+        assert_selector 'tbody tr', text: /Supplier name\s+First Vendor\s+Corrected Vendor/
+        assert_selector 'tbody tr', text: /Price per device\s+\$100.00\s+\$125.50/
         assert_selector 'time[datetime]'
       end
       take_screenshot('purchase-order-created-and-edited-history', html: true, full: true)
@@ -225,14 +225,37 @@ module Admin
       within('#audit-logs') do
         assert_text 'Confirmed two devices are needed'
         assert_text 'The revised quote covers one device'
-        assert_text 'First Vendor → Corrected Vendor'
-        assert_text 'Price per device: $100.00 → $125.50'
+        assert_selector 'tbody tr', text: /Supplier name\s+First Vendor\s+Corrected Vendor/
+        assert_selector 'tbody tr', text: /Price per device\s+\$100.00\s+\$125.50/
         assert_text @admin.full_name
         assert_text editor.full_name
       end
       take_screenshot('application-purchasing-activity-history', html: true, full: true)
     ensure
       page.current_window.resize_to(1200, 800)
+    end
+
+    test 'staff record delivery from shipment history and can retry an invalid date' do
+      item = create(:equipment_item, product: @product, shipped_at: Date.current, tracking_number: 'PENDING-DELIVERY')
+      system_test_sign_in(@admin, bypass_mfa_enrollment: true)
+      visit admin_equipment_index_path(tab: 'shipped', application_id: item.application_id)
+      click_link 'Awaiting delivery'
+      within("#equipment-item-#{item.id}") do
+        find('summary', text: 'Record delivery').click
+        fill_in 'Date received', with: Date.yesterday.strftime('%m/%d/%Y')
+        click_button 'Save delivery'
+        assert_selector 'p[role=alert]', text: /cannot precede shipment/
+        assert_field 'Date received', with: Date.yesterday.strftime('%m/%d/%Y')
+        take_screenshot('awaiting-delivery-retry', html: true, full: true)
+        fill_in 'Date received', with: Date.current.strftime('%m/%d/%Y')
+        click_button 'Save delivery'
+      end
+      assert_text 'Delivery recorded.'
+      assert_no_selector "#equipment-item-#{item.id}"
+      click_link 'All shipments'
+      assert_selector "#equipment-item-#{item.id} dt", exact_text: 'Date received'
+      assert_equal Date.current, item.reload.delivered_on
+      take_screenshot('shipment-history-delivered', html: true, full: true)
     end
 
     test 'equipment index pages return to applications and the dashboard' do
@@ -363,9 +386,9 @@ module Admin
       assert_equal admin_equipment_index_path, URI.parse(current_url).path
       assert_no_selector '#equipment-selection-form, [data-equipment-selection-target="rowCheckbox"], [data-equipment-selection-target="summary"]'
       assert_no_button 'Select matching'
-      assert_text 'Funding: MAT'
-      assert_text "Date received: #{ApplicationController.helpers.accessible_date_value(item.delivered_on)}"
-      assert_link 'Costs and receipt dates', href: edit_admin_icanconnect_financial_record_path("EquipmentItem:#{item.id}")
+      assert_selector 'dl dd', exact_text: 'MAT'
+      assert_selector 'dl dd', exact_text: ApplicationController.helpers.accessible_date_value(item.delivered_on)
+      assert_link 'Edit costs and receipt dates', href: edit_admin_icanconnect_financial_record_path("EquipmentItem:#{item.id}")
       take_screenshot('shipment-history-read-only-receipt-dates', html: true, full: true)
     end
 
@@ -382,11 +405,12 @@ module Admin
       assert_text '101 Confirmed Street'
       assert_text 'Apartment 7'
       assert_text 'Care of Confirmed Guardian'
-      assert_text 'MSRP: $199.95'
-      assert_text 'MSRP = catalog price. Actual unit cost = price we paid for it in this PO. Don’t enter guesses.'
-      assert_field 'Enter price we paid in this PO.', with: ''
-      fill_in 'Enter price we paid in this PO.', with: '149.50'
-      click_button 'Save actual device costs'
+      assert_text 'MSRP $199.95'
+      assert_field 'Price paid (USD)', with: ''
+      unit = order.equipment_items.sole
+      assert_selector "input#unit-cost-#{unit.id}[aria-describedby=cost-msrp-#{unit.id}]"
+      fill_in 'Price paid (USD)', with: '149.50'
+      click_button 'Save device costs'
       assert_text 'Actual device purchase costs saved.'
       assert_equal BigDecimal('149.50'), order.equipment_items.sole.unit_cost
       take_screenshot('po-msrp-and-actual-unit-cost', html: true, full: true)
@@ -409,9 +433,11 @@ module Admin
       assert_link 'Edit PO invoice and charges', href: edit_admin_icanconnect_financial_record_path("PurchaseOrder:#{order.id}")
       assert_no_selector '#supplier-list-text', visible: true
       find('summary', text: 'Copy plain text list of all products in this PO').click
-      assert_field 'Supplier order list', with: /PO VISIBLE-PO.*101 Confirmed Street.*Apartment 7/m
+      assert_field 'Supplier order list', with: /Purchase order VISIBLE-PO.*101 Confirmed Street.*Apartment 7/m
       assert_selector '#supplier-list-text[readonly]'
       assert_no_selector 'th', text: 'Disability setup'
+      assert_selector 'table[aria-labelledby="supplier-list-heading"] th[scope=col]', text: 'Ship to'
+      assert_selector 'table[aria-labelledby="supplier-list-heading"] td br'
       assert_no_match(/Deaf|Disability setup/, find_field('Supplier order list').value)
       take_screenshot('unsent-po-full-address-and-plain-text', html: true, full: true)
       page.current_window.resize_to(390, 844)
@@ -420,12 +446,12 @@ module Admin
       plain_text = find_field('Supplier order list')
       plain_text.execute_script("this.scrollIntoView({block: 'center'})")
       plain_text.click
-      assert_field 'Supplier order list', with: /PO VISIBLE-PO.*101 Confirmed Street.*Apartment 7/m
+      assert_field 'Supplier order list', with: /Purchase order VISIBLE-PO.*101 Confirmed Street.*Apartment 7/m
       region = find('[role="region"][aria-labelledby="supplier-list-heading"]')
-      assert region.evaluate_script('this.scrollWidth > this.clientWidth')
-      region.execute_script('this.focus()')
-      page.driver.browser.keyboard.type(*Array.new(20, :Right))
-      assert region.evaluate_script('this.scrollLeft > 0')
+      assert region.evaluate_script('this.scrollWidth <= this.clientWidth')
+      find('summary', text: 'Copy plain text list of all products in this PO').execute_script('this.focus()')
+      page.driver.browser.keyboard.type(:tab)
+      assert_selector '#supplier-list-text:focus'
       page.current_window.resize_to(1200, 800)
       click_link 'Edit PO invoice and charges'
       assert_field 'Invoice total'

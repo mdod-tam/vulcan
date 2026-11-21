@@ -10,7 +10,7 @@ module Equipment
       @all_needs = EquipmentNeed.remaining.joins(:application).merge(Application.equipment_procurement_eligible)
       @all_items = case tab
                    when 'ordered' then EquipmentItem.ordered
-                   when 'shipped' then EquipmentItem.shipped
+                   when 'shipped' then shipped_items(filters[:delivery])
                    else EquipmentItem.needs_ordering.joins(:application).merge(Application.equipment_procurement_eligible)
                    end
       @all_needs = @all_needs.none unless tab == 'needs_ordering'
@@ -51,6 +51,11 @@ module Equipment
     end
 
     private
+
+    def shipped_items(delivery)
+      items = EquipmentItem.shipped
+      delivery == 'awaiting' ? items.where(delivered_on: nil) : items
+    end
 
     def loaded_needs
       @loaded_needs ||= needs.includes(:product, { application: :user }, bid_group_lines: :bid_group).to_a

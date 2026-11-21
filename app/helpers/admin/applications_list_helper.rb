@@ -106,6 +106,7 @@ module Admin
         ids = work.action_context[:purchase_order_ids]
         ids.one? ? admin_purchase_order_path(ids.sole) : admin_purchase_orders_path(application_id: application.id, state: 'unsent')
       when :awaiting_shipment then admin_equipment_index_path(tab: 'ordered', application_id: application.id, source: work.action_context[:source])
+      when :awaiting_delivery then admin_equipment_index_path(tab: 'shipped', application_id: application.id, delivery: 'awaiting')
       when :shipment_recorded then admin_equipment_index_path(tab: 'shipped', application_id: application.id)
       end
     end
@@ -119,7 +120,7 @@ module Admin
     end
 
     def approved_pipeline_time(row)
-      return 'Date unavailable' unless row.entered_at
+      return unless row.entered_at
       return "Completed #{row.entered_at.to_date.to_fs(:long)}" if Applications::ApprovedPipeline.terminal_stage?(row.stage)
 
       "#{pluralize(row.days, 'day')} waiting"
@@ -128,7 +129,7 @@ module Admin
     def approved_pipeline_secondary(outstanding)
       definition = Equipment::FulfillmentStage::DEFINITIONS.find { |entry| entry.key == outstanding.stage }
       text = "#{pluralize(outstanding.quantity, 'device')} · #{definition.label}"
-      return "#{text} · Date unavailable" unless outstanding.entered_at
+      return text unless outstanding.entered_at
 
       days = Equipment::WaitTime.days_since(outstanding.entered_at)
       "#{text} · #{pluralize(days, 'day')}"

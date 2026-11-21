@@ -10,6 +10,7 @@ class EquipmentItem < ApplicationRecord
     OR (equipment_items.fulfillment_source != 'direct_vendor' AND equipment_items.stock_received_on IS NOT NULL)
   SQL
 
+  TRACKING_FIELDS = %w[carrier tracking_number].freeze
   CARRIERS = { 'ups' => 'UPS', 'fedex' => 'FedEx', 'usps' => 'USPS', 'dhl' => 'DHL', 'other' => 'Other / Not recorded' }.freeze
 
   belongs_to :application, optional: true
@@ -93,6 +94,14 @@ class EquipmentItem < ApplicationRecord
 
   def awaiting_shipment?
     !withdrawn_at? && application_id? && !shipped_at? && (direct_vendor? ? purchase_order&.sent_at.present? : stock_received_on.present?)
+  end
+
+  def awaiting_delivery?
+    !withdrawn_at? && shipped_at? && !delivered_on?
+  end
+
+  def destination_and_setup_ready?
+    shipping_ready? && disability_setup_group.present?
   end
 
   def shipment_wait_started_at
@@ -195,7 +204,7 @@ class EquipmentItem < ApplicationRecord
     errors.add(:shipped_at, 'cannot be in the future') if shipped_at > Date.current
     direct_vendor? ? direct_shipment_is_consistent : stock_dispatch_is_consistent
     errors.add(:tracking_number, 'is required when recording shipment') if tracking_number.blank?
-    errors.add(:base, 'Confirm destination and setup before shipment') unless shipping_ready? && disability_setup_group.present?
+    errors.add(:base, 'Confirm destination and setup before shipment') unless destination_and_setup_ready?
     errors.add(:withdrawn_at, 'cannot withdraw shipped equipment') if withdrawn_at?
   end
 

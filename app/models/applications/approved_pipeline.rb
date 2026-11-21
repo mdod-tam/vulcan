@@ -93,7 +93,7 @@ module Applications
     def build_row(application)
       return voucher_row(application) if application.voucher_fulfillment?
 
-      fulfillment = application.equipment_fulfillment_stage
+      fulfillment = application.equipment_fulfillment_stage(now: @now)
       stage = fulfillment.stage
       group = stage == :no_equipment ? :none : :equipment
       entered_at = fulfillment.entered_at
@@ -118,8 +118,8 @@ module Applications
     def pending_icanconnect_work(application)
       return unless application.equipment_needs_initialized_at?
 
-      work = application.equipment_fulfillment_stage
-      work if work.stage.in?(%i[needs_fulfillment awaiting_bid_award ready_to_send_po awaiting_shipment])
+      work = application.equipment_fulfillment_stage(now: @now)
+      work if work.stage.in?(%i[needs_fulfillment awaiting_bid_award ready_to_send_po awaiting_shipment awaiting_delivery])
     end
 
     def voucher_selection(vouchers)

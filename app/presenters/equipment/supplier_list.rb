@@ -45,7 +45,7 @@ module Equipment
     end
 
     def plain_text
-      return (["PO #{purchase_order.number}", SHIP_TO_HEADINGS.join("\t")] + supplier_values.map { |values| values.join("\t") }).join("\n") if purchase_order
+      return (["Purchase order #{purchase_order.number}", SHIP_TO_HEADINGS.join("\t")] + supplier_values.map { |values| values.join("\t") }).join("\n") if purchase_order
 
       ([summary, headings.join("\t")] + rows.map { |row| table_values(row).join("\t") }).join("\n")
     end
@@ -54,12 +54,12 @@ module Equipment
 
     def supplier_values
       rows.group_by { |row| [row.model, row.recipient, row.address] }.map do |(model, recipient, address), lines|
-        [model, lines.sum(&:quantity), recipient, address]
+        [model, lines.sum(&:quantity), recipient, address.join(' · ')]
       end
     end
 
     def ship_to_values(row)
-      [row.model, row.quantity, row.recipient, row.address]
+      [row.model, row.quantity, row.recipient, row.address.join(' · ')]
     end
 
     def build_rows
@@ -99,7 +99,7 @@ module Equipment
       lines = [record.shipping_care_of.presence && "Care of #{record.shipping_care_of}",
                record.shipping_address_1, record.shipping_address_2,
                [record.shipping_city, record.shipping_state, record.shipping_zip_code].compact_blank.join(', ')]
-      lines.compact_blank.join(' · ').presence || 'Shipping address needed'
+      lines.compact_blank.presence || ['Shipping address needed']
     end
   end
 end

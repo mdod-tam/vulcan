@@ -1,50 +1,57 @@
 <%# locals: (summaries:, group_labels:) -%>
 <% stage_labels = summaries.to_h { |summary| [summary.stage, summary.label] } # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% show_stage = @pipeline_stage == 'all' || Applications::ApprovedPipeline::STAGE_FILTERS.key?(@pipeline_stage.to_sym) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% show_approved = @pipeline_stage == 'all' && @pipeline_rows.any? { |row| row.application.current_status_entered_at } # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <div class="border-b border-gray-200 px-4 py-3">
-  <h2 class="text-lg font-semibold text-gray-900">
+  <h2 id="pipeline-results-heading" class="text-lg font-semibold text-gray-900">
     <%= @pipeline_stage == 'all' ? group_labels.fetch(@pipeline_group) : approved_pipeline_stage_label(@pipeline_stage, stage_labels) %> (<%= @pipeline_matching_count %> matching)
   </h2>
 </div>
 <% if @pipeline_rows.any? %>
-  <div class="relative overflow-x-auto" role="region" aria-label="Approved pipeline applications" tabindex="0">
-    <table class="min-w-full divide-y divide-gray-200" aria-label="Approved pipeline applications">
-      <thead class="bg-gray-50 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+  <div class="relative overflow-x-auto" role="region" aria-labelledby="pipeline-results-heading" tabindex="0">
+    <table class="admin-record-table" aria-label="Approved pipeline applications">
+      <thead>
         <tr>
-          <th scope="col" class="px-4 py-3">Applicant</th>
-          <th scope="col" class="px-4 py-3">Approved</th>
-          <th scope="col" class="px-4 py-3">Stage</th>
-          <th scope="col" class="px-4 py-3">Progress</th>
-          <th scope="col" class="px-4 py-3">Next action</th>
+          <th scope="col">Applicant</th>
+          <% if show_approved %><th scope="col">Approved</th><% end %>
+          <% if show_stage %><th scope="col">Stage</th><% end %>
+          <th scope="col"><%= @pipeline_stage == 'awaiting_report' ? 'Evaluation status' : 'Progress' %></th>
+          <th scope="col">Next action</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-200 text-sm">
+      <tbody>
         <% @pipeline_rows.each do |row| %>
           <tr id="application_<%= row.application.id %>">
-            <td class="px-4 py-3 align-top">
+            <th scope="row">
               <%= link_to row.application.user.full_name, admin_application_path(row.application),
                           class: 'font-medium text-primary-700 underline', data: { turbo_frame: '_top' } %>
-              <p class="mt-1 text-xs text-gray-600">Application #<%= row.application.id %></p>
+              <span class="mt-1 block text-xs font-normal text-gray-600"><span class="sr-only sm:not-sr-only">Application </span>#<%= row.application.id %></span>
               <% if row.application.managing_guardian %>
                 <p class="mt-1 text-xs text-gray-600">Guardian: <%= row.application.managing_guardian.full_name %></p>
               <% end %>
-            </td>
-            <td class="px-4 py-3 align-top">
-              <%= row.application.current_status_entered_at ? row.application.current_status_entered_at.to_date.to_fs(:long) : 'Date unavailable' %>
-            </td>
-            <td class="px-4 py-3 align-top">
-              <%= stage_labels.fetch(row.stage) %>
-              <p class="mt-1 text-xs text-gray-600"><%= approved_pipeline_time(row) %></p>
-            </td>
-            <td class="px-4 py-3 align-top">
+            </th>
+            <% if show_approved %>
+              <td><%= time_tag(row.application.current_status_entered_at.to_date, format: :long) if row.application.current_status_entered_at %></td>
+            <% end %>
+            <% if show_stage %><td><%= stage_labels.fetch(row.stage) %></td><% end %>
+            <td>
               <%= row.progress %>
+              <% if row.evaluation&.evaluation_date %>
+                <p class="mt-1 text-xs text-gray-600"><%= time_tag row.evaluation.evaluation_date, format: '%b %-d, %Y at %-I:%M %p' %></p>
+              <% elsif (wait = approved_pipeline_time(row)) %>
+                <p class="mt-1 text-xs text-gray-600"><%= wait %></p>
+              <% end %>
               <% row.secondary.each do |outstanding| %><p class="mt-1 text-xs text-gray-600">Also: <%= approved_pipeline_secondary(outstanding) %></p><% end %>
             </td>
-            <td class="px-4 py-3 align-top">
-              <%= link_to row.action_label, approved_pipeline_action_path(row), class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
+            <td>
+              <%= link_to row.action_label, approved_pipeline_action_path(row),
+                          class: 'text-primary-700 underline', data: { turbo_frame: '_top' },
+                          aria: { label: "#{row.action_label} for #{row.application.user.full_name}" } %>
               <% if (work = row.icanconnect_work) %>
                 <p class="mt-1">
                   <%= link_to "iCanConnect · #{work.action}", approved_pipeline_equipment_path(row.application, work),
-                              class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
+                              class: 'text-primary-700 underline', data: { turbo_frame: '_top' },
+                              aria: { label: "iCanConnect · #{work.action} for #{row.application.user.full_name}" } %>
                 </p>
               <% end %>
             </td>
