@@ -27,19 +27,25 @@ module VendorPortal
       assert_not_includes response.body, @first.application.user.email
 
       first_package = shipment(@first)
-      assert_no_emails do
+      mail = capture_emails do
         assert_difference('Event.where(action: "equipment_shipment_recorded").count', 1) { patch path, params: first_package }
         assert_redirected_to path
-        assert_no_difference('Event.count') { patch path, params: first_package }
+        assert_no_difference(['Event.count', 'Notification.count']) { patch path, params: first_package }
         assert_redirected_to path
-      end
+      end.sole
+      assert_equal [@first.application.user.email], mail.to
+      assert_equal 'Your MAT equipment is on its way', mail.subject
+      assert_includes mail.text_part.body.decoded, 'Tracking number — FIRST-PACKAGE (UPS)'
+      link = Nokogiri::HTML(mail.html_part.body.decoded).at_css('a')
+      assert_equal 'FIRST-PACKAGE', link.text
+      assert_equal 'https://www.ups.com/track?loc=en_US&tracknum=FIRST-PACKAGE', link['href']
       assert_equal 'FIRST-PACKAGE', @first.reload.tracking_number
       assert_nil @second.reload.shipped_at
       event = @first.events.find_by!(action: 'equipment_shipment_recorded')
       assert_equal @system, event.user
       assert_equal @order.shipping_requests.sole.id, event.metadata.fetch('purchase_order_shipping_request_id')
 
-      assert_no_emails { patch path, params: shipment(@second, tracking: 'SECOND-PACKAGE') }
+      assert_emails(1) { patch path, params: shipment(@second, tracking: 'SECOND-PACKAGE') }
       assert_redirected_to path
       follow_redirect!
       assert_select 'h3', 'Recorded shipments'
@@ -51,11 +57,11 @@ module VendorPortal
       path = send_order_link
       sign_out
 
-      patch path, params: shipment(@other)
+      assert_no_enqueued_emails { patch path, params: shipment(@other) }
       assert_response :unprocessable_content
       assert_nil @other.reload.shipped_at
 
-      patch path, params: shipment(@first, date: '02/30/2026')
+      assert_no_enqueued_emails { patch path, params: shipment(@first, date: '02/30/2026') }
       assert_response :unprocessable_content
       assert_select 'input[name="shipment[tracking_number]"][value="FIRST-PACKAGE"]'
       assert_select 'input[name="shipment[item_ids][]"][checked]'

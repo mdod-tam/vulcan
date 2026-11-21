@@ -73,6 +73,8 @@ module Applications
         [event.recipient_id, metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
       when 'cert_upload_requested'
         metadata['secure_request_form_id'].to_s
+      when 'equipment_shipment_notice'
+        event.id.to_s
       end
     end
 

@@ -1,0 +1,26 @@
+<%# locals: (item:, draft:, reason:, previous_values:, impact_token:, products:, purchase_orders:) -%>
+<% draft.each do |field, value| %>
+  <%= hidden_field_tag "equipment_item[#{field}]", value, id: nil %>
+<% end %>
+<%= hidden_field_tag :reason, reason, id: nil %>
+<%= render(
+      'admin/equipment/correction_impact',
+      record: item, previous_values: previous_values, fields: Equipment::Correction::EDITABLE_ITEM_FIELDS, impact_token: impact_token,
+      title: 'Changes:', confirmation: nil, products: products, purchase_orders: purchase_orders
+    ) %>
+<div>
+  <p class="font-medium">Correction reason</p>
+  <p class="whitespace-pre-wrap"><%= reason %></p>
+</div>
+<% if item.shipped_at? && item.will_save_change_to_tracking_number? && item.tracking_number.present? && item.application&.status_approved? %>
+  <p>
+    <%= check_box_tag :notify_tracking, '1' %>
+    <%= label_tag :notify_tracking, 'Email the updated tracking number' %>
+  </p>
+<% end %>
+<div class="flex flex-wrap items-center gap-2">
+  <%= button_tag 'Save correction', name: :confirmed_impact, value: '1',
+                                    data: { turbo_submits_with: 'Saving...' }, class: 'btn btn-primary' %>
+  <%= button_tag 'Back to edit', name: :back_to_edit, value: '1', formnovalidate: true,
+                                 data: { turbo_submits_with: 'Returning...' }, class: 'btn btn-outline' %>
+</div>

@@ -1,0 +1,15 @@
+es:
+  equipment_shipping:
+    subject: Su equipo de MAT está en camino
+    corrected_subject: Seguimiento actualizado de su equipo de MAT
+    greeting: "Hola, %{name}:"
+    intro: El Programa de Telecomunicaciones Accesibles de Maryland (MAT) envió un paquete con su equipo el %{date}.
+    guardian_intro: El %{date} se envió un paquete con equipo de MAT para %{name}.
+    corrected_intro: Este es el número de seguimiento actualizado del paquete con equipo de MAT que se envió el %{date}.
+    corrected_guardian_intro: Este es el número de seguimiento actualizado del paquete con equipo de MAT para %{name} que se envió el %{date}.
+    tracking_label: Número de seguimiento
+    help: Si tiene preguntas sobre su envío, escriba a %{email}.
+    signature: Programa de Telecomunicaciones Accesibles de Maryland
+  notifications:
+    actions:
+      equipment_shipment_notice: Aviso de envío de equipo

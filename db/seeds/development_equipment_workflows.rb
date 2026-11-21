@@ -132,7 +132,8 @@ module Seeds
       @orders.each do |order|
         item = order.equipment_items.sole
         Equipment::Shipment.new(actor: @admin).call(rows: [{ id: item.id, lock_version: item.lock_version, serial_number: "DEMO-UNIT-#{item.id}" }],
-                                                    attributes: { shipped_at: Time.current.to_date, tracking_number: "DEMO-TRACKING-#{item.id}", carrier: 'usps' })
+                                                    attributes: { shipped_at: Time.current.to_date, tracking_number: "DEMO-TRACKING-#{item.id}", carrier: 'usps' },
+                                                    notify_recipient: false)
       end
     end
 

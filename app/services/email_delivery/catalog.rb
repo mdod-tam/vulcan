@@ -56,6 +56,7 @@ module EmailDelivery
                                                                           'application_notifications_security_key_recovery_approved'],
       'ApplicationNotificationsMailer#training_requested' => [:training, :preference, 'application_notifications_training_requested'],
       'EvaluatorMailer#evaluation_submission_confirmation' => [:evaluation, :preference, 'evaluator_mailer_evaluation_submission_confirmation'],
+      'EquipmentShipmentMailer#shipped' => [:application, :email_only, nil, 'Equipment::ShipmentNotice'],
       'EvaluatorMailer#new_evaluation_assigned' => [:evaluation, :email_only, 'evaluator_mailer_new_evaluation_assigned'],
       'CertifyingProfessionalMailer#approved' => [:certification, :email_only, 'certifying_professional_certification_approved'],
       'CertifyingProfessionalMailer#certification_approved' => [:certification, :email_only, 'certifying_professional_certification_approved'],
@@ -112,6 +113,7 @@ module EmailDelivery
     # [mail_action, adapter, routing, owner]
     NOTIFICATION_ACTIONS = {
       'account_created' => ['ApplicationNotificationsMailer#account_created', :recipient, :preference],
+      'equipment_shipment_notice' => ['EquipmentShipmentMailer#shipped', :notifiable_and_notification, :email_only, 'Equipment::ShipmentNotice'],
       'id_proof_attached' => PROOF_ATTACHED,
       'income_proof_attached' => PROOF_ATTACHED,
       'residency_proof_attached' => PROOF_ATTACHED,

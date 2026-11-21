@@ -61,13 +61,11 @@ class EquipmentItemTest < ActiveSupport::TestCase
     end
   end
 
-  test 'potential serial matches on another model need an acknowledgment and confirmed duplicates remain blocked' do
+  test 'serial numbers can match across models of the same manufacturer' do
     first = create(:equipment_item, serial_number: 'MODEL-SERIAL')
     other_model = create(:product, manufacturer: first.product.manufacturer, model_number: 'Different model')
     candidate = build(:equipment_item, product: other_model, serial_number: 'model-serial')
-    assert_not candidate.valid?
-    candidate.serial_duplicate_reason = 'Manufacturer confirmed this serial is reused across its model range.'
-    assert candidate.valid?
+    assert candidate.save
     candidate.product = first.product
     assert_not candidate.valid?
   end

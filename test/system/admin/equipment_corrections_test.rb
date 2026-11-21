@@ -20,7 +20,7 @@ module Admin
       click_button 'Save equipment correction'
       assert_text 'Date shipped is invalid'
       assert_selector '#equipment-item-errors:focus'
-      assert_selector '#equipment_item_shipped_at[aria-invalid=true][aria-describedby="equipment-ship-date-help equipment-ship-date-error"]'
+      assert_selector '#equipment_item_shipped_at[aria-invalid=true][aria-describedby="equipment-ship-date-error"]'
       assert_field 'Date shipped', with: '13/45/2026'
       assert_field 'Tracking number', with: 'OriginalPackage'
       assert_field 'Serial number', with: 'ShipmentSerial'
@@ -74,7 +74,10 @@ module Admin
       assert_text 'Partially shipped'
       original_window = page.current_window
       original_url = page.current_url
-      tracking_link = within("#equipment-item-#{item.id}") { find_link('Track package') }
+      tracking_link = within("#equipment-item-#{item.id}") do
+        find('summary', text: 'View tracking and actions').click
+        find_link('Track package')
+      end
       tracking_url = tracking_link[:href]
       assert_equal 'https://www.ups.com/track?loc=en_US&tracknum=OriginalPackage', tracking_url
       assert_equal '_blank', tracking_link[:target]
@@ -140,39 +143,47 @@ module Admin
         assert_text 'OriginalPackage → CorrectedPackage'
       end
       assert_correction_submission(0, review: true)
-      assert_selector '#equipment-correction-impact-heading:focus', text: 'Correction impact: 1 device across 1 application'
+      assert_selector '#equipment-correction-impact-heading:focus', text: 'Changes:'
       assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_equal 'OriginalPackage', item.reload.tracking_number
       assert_selector '.bg-warning-50 dt', text: 'Tracking number:', count: 1
       assert_selector '.bg-warning-50 dt', count: 1
       reviewed_token = find('input[name=impact_token]', visible: false).value
-      fill_in 'Tracking number', with: 'ReviewedAgainPackage'
-      check 'I confirm this correction and its impact on shipment history.'
-      click_button 'Save equipment correction'
-      assert_text 'Review the current correction values and confirm their impact before saving.'
-      assert_correction_submission(1, review: false, confirmed: true)
-      assert_selector '#equipment-item-errors:focus'
-      assert_field 'Tracking number', with: 'ReviewedAgainPackage'
+      assert_no_field 'Tracking number'
+      assert_no_link 'Reload latest record'
+      assert_unchecked_field 'Email the updated tracking number'
+      check 'Email the updated tracking number'
+      assert_no_difference 'Event.count' do
+        click_button 'Back to edit'
+        assert_field 'Tracking number', with: 'CorrectedPackage'
+      end
+      assert_correction_submission(1, review: false, back_to_edit: true)
+      assert_selector '#equipment-correction-title:focus'
       assert_field 'Correction reason', with: 'Correct the individual parcel reference'
-      assert_equal reviewed_token, find('input[name=impact_token]', visible: false).value
-      assert_unchecked_field 'I confirm this correction and its impact on shipment history.'
-      assert_button 'Save equipment correction', disabled: false
-      take_screenshot('equipment-correction-token-invalid-retry', html: true, full: true)
+      assert_no_selector 'input[name=impact_token]', visible: :all
+      take_screenshot('equipment-correction-back-to-edit', html: true, full: true)
+      fill_in 'Tracking number', with: 'ReviewedAgainPackage'
       select replacement.catalog_label, from: 'Device model'
       select 'FedEx', from: 'Carrier'
       fill_in 'IMEI (15 digits)', with: '123456789012345'
-      find_button('Review changed values').double_click
+      find_button('Review correction').double_click
       assert_selector '.bg-warning-50 dd', text: 'USPS → FedEx'
       assert_correction_submission(2, review: true)
       assert_selector '#equipment-correction-impact-heading:focus'
-      assert_equal 2, page.evaluate_script('window.equipmentCorrectionEvents.streams')
+      assert_equal 3, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_not_equal reviewed_token, find('input[name=impact_token]', visible: false).value
       assert_selector '.bg-warning-50 dt', text: 'IMEI (15 digits):'
       assert_selector '.bg-warning-50 dt', count: 4
-      check 'I confirm this correction and its impact on shipment history.'
+      assert_no_selector '#equipment-disposition, select[name=operation]'
+      assert_no_text 'Shipped devices affected'
+      assert_unchecked_field 'Email the updated tracking number'
+      assert_button 'Save correction'
       take_screenshot('equipment-shipped-correction-review', html: true, full: true)
-      find_button('Save equipment correction').double_click
-      assert_text 'Equipment item updated.'
+      check 'Email the updated tracking number'
+      assert_difference -> { Notification.where(action: 'equipment_shipment_notice').count }, 1 do
+        find_button('Save correction').double_click
+        assert_text 'Equipment item updated.'
+      end
       assert_correction_submission(3, review: false, confirmed: true)
       assert_current_path admin_equipment_index_path(return_context)
       assert_no_selector '#equipment-correction'
@@ -188,8 +199,8 @@ module Admin
       click_button 'Review correction'
       assert_selector '.bg-warning-50 dt', text: 'Date shipped:'
       assert_selector '.bg-warning-50 dd', text: "#{Date.current.strftime('%m/%d/%Y')} → Not recorded"
-      check 'I confirm this correction and its impact on shipment history.'
-      click_button 'Save equipment correction'
+      assert_no_field 'Email the updated tracking number'
+      click_button 'Save correction'
       assert_text 'Equipment item updated.'
       assert_nil item.reload.shipped_at
       assert_equal 'awaiting_shipment', item.queue_status
@@ -203,17 +214,21 @@ module Admin
       system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       install_stimulus_error_reporting
       visit edit_admin_equipment_item_path(item)
-      select 'Remove unshipped device from PO for reorder', from: 'Correction action'
       fill_in 'Tracking number', with: 'CorrectedPackage'
-      fill_in 'Correction reason', with: 'Detach after correcting the package reference'
-      assert_rejected_device_action(item, field: 'Tracking number', draft: 'CorrectedPackage')
-      select 'Save device details', from: 'Correction action'
+      fill_in 'Correction reason', with: 'Correct the package reference'
       click_button 'Save equipment correction'
       assert_text 'Equipment item updated.'
       visit edit_admin_equipment_item_path(item)
-      select 'Remove unshipped device from PO for reorder', from: 'Correction action'
-      fill_in 'Correction reason', with: 'Previous order no longer applies'
-      click_button 'Save equipment correction'
+      within '#equipment-disposition' do
+        find('summary', text: 'Remove from PO for reorder').click
+        fill_in 'Reason for this action', with: 'Previous order no longer applies'
+      end
+      take_screenshot('equipment-reorder-action', html: true, full: true)
+      dismiss_confirm('Remove from PO for reorder?') { click_button 'Remove from PO for reorder' }
+      assert_field 'Reason for this action', with: 'Previous order no longer applies'
+      assert item.reload.purchase_order_id?
+      accept_confirm('Remove from PO for reorder?') { click_button 'Remove from PO for reorder' }
+      assert_text 'Equipment item updated.'
       assert_nil item.reload.purchase_order_id
       assert_equal 'CorrectedPackage', item.tracking_number
       visit new_admin_bid_group_path(item_ids: [item.id])
@@ -230,23 +245,22 @@ module Admin
       take_screenshot('equipment-detached-device-rebid-awarded', html: true, full: true)
     end
 
-    test 'staff review potential serial duplication without changing physical order provenance' do
+    test 'staff can fix a duplicate serial number on the same model' do
       item = create(:equipment_item)
-      another_model = create(:product, manufacturer: item.product.manufacturer, model_number: 'Other physical model')
-      create(:equipment_item, product: another_model, serial_number: 'SHARED-SERIAL')
+      create(:equipment_item, product: item.product, serial_number: 'SHARED-SERIAL')
       system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
       visit edit_admin_equipment_item_path(item)
+      assert_no_field 'Reason for accepting a possible duplicate serial number'
       fill_in 'Serial number', with: 'SHARED-SERIAL'
       fill_in 'Correction reason', with: 'Record the verified physical serial'
       click_button 'Save equipment correction'
-      assert_text 'matches another model from this manufacturer'
+      assert_text 'is already assigned to active equipment item'
       assert_field 'Serial number', with: 'SHARED-SERIAL'
       assert_nil item.reload.serial_number
-      fill_in 'Reason for accepting a possible duplicate serial number', with: 'Verified the labels on two separate models.'
+      fill_in 'Serial number', with: 'VERIFIED-SERIAL'
       click_button 'Save equipment correction'
       assert_text 'Equipment item updated.'
-      assert_equal 'SHARED-SERIAL', item.reload.serial_number
-      take_screenshot('equipment-serial-acknowledgment-retained', html: true, full: true)
+      assert_equal 'VERIFIED-SERIAL', item.reload.serial_number
     end
 
     test 'shared header invalid date and membership changes preserve the draft until explicit refresh' do
@@ -299,13 +313,15 @@ module Admin
           assert_text 'Equipment changed. Refresh and review your selection.'
         end
         assert_field 'Tracking number', with: 'Stale browser draft'
-        assert_equal '0', find('input[name=expected_version]', visible: false).value
+        assert_equal '0', find_by_id('expected_version', visible: false).value
       end
       assert_equal 'Other administrator package', item.reload.tracking_number
       take_screenshot('equipment-stale-item-unchanged-retry', html: true, full: true)
-      click_link 'Refresh device and discard this draft'
+      assert_text 'Reloading clears your draft.'
+      click_link 'Reload latest record'
       assert_field 'Tracking number', with: 'Other administrator package'
-      assert_equal '1', find('input[name=expected_version]', visible: false).value
+      assert_equal '1', find_by_id('expected_version', visible: false).value
+      assert_no_link 'Reload latest record'
     end
 
     test 'expired correction reviews retain drafts and recover through a fresh review' do
@@ -315,7 +331,7 @@ module Admin
       scenarios = [
         { kind: 'item', record: item, path: edit_admin_equipment_item_path(item, return_context: context),
           field: 'Tracking number', attribute: :tracking_number, value: 'RecoveredPackage',
-          confirmation: 'I confirm this correction and its impact on shipment history.', save: 'Save equipment correction', notice: 'Equipment item updated.' },
+          save: 'Save correction', notice: 'Equipment item updated.' },
         { kind: 'header', record: item.purchase_order, path: edit_admin_purchase_order_correction_path(item.purchase_order, return_context: context),
           field: 'PO number', attribute: :number, value: 'RECOVERED-PO',
           confirmation: 'I reviewed these changes for every device and application in this PO.', save: 'Save purchase order correction', notice: 'Purchase order corrected.' }
@@ -334,7 +350,7 @@ module Admin
         recorded = scenario[:record].reload.attributes
 
         travel 31.minutes do
-          check scenario[:confirmation]
+          check scenario[:confirmation] if scenario[:confirmation]
           assert_no_difference 'Event.count' do
             click_button scenario[:save]
             assert_text 'This correction review is no longer valid. Review the current values again before saving.'
@@ -355,12 +371,16 @@ module Admin
           assert_selector '#equipment-correction-impact-heading:focus'
           assert_not_equal token, find('input[name=impact_token]', visible: false).value
           assert_equal fences, correction_form_versions
-          assert_unchecked_field scenario[:confirmation]
-          check scenario[:confirmation]
+          if scenario[:confirmation]
+            assert_unchecked_field scenario[:confirmation]
+            check scenario[:confirmation]
+          end
           take_screenshot("equipment-#{scenario[:kind]}-review-renewed", html: true, full: true)
-          assert_difference 'Event.count', 1 do
-            click_button scenario[:save]
-            assert_text scenario[:notice]
+          assert_no_difference -> { Notification.where(action: 'equipment_shipment_notice').count } do
+            assert_difference 'Event.count', 1 do
+              click_button scenario[:save]
+              assert_text scenario[:notice]
+            end
           end
           assert_equal scenario[:value], scenario[:record].reload.public_send(scenario[:attribute])
           take_screenshot("equipment-#{scenario[:kind]}-review-recovered", html: true, full: true)
@@ -390,6 +410,7 @@ module Admin
             disabled: submitter.disabled,
             label: submitter.matches('input') ? submitter.value : submitter.textContent.trim(),
             review: submission.body.get('review'),
+            backToEdit: submission.body.get('back_to_edit') === '1',
             confirmed: submission.body.get('confirmed_impact') === '1'
           });
         }, options);
@@ -401,23 +422,12 @@ module Admin
       JS
     end
 
-    def assert_correction_submission(index, review:, confirmed: false)
+    def assert_correction_submission(index, review:, confirmed: false, back_to_edit: false)
       submissions = page.evaluate_script('window.equipmentCorrectionEvents.submissions')
       assert_equal index + 1, submissions.size
-      assert_equal({ 'disabled' => true, 'label' => review ? 'Reviewing...' : 'Saving...',
+      label = { [true, false] => 'Reviewing...', [false, true] => 'Returning...' }.fetch([review, back_to_edit], 'Saving...')
+      assert_equal({ 'disabled' => true, 'label' => label, 'backToEdit' => back_to_edit,
                      'review' => review ? '1' : nil, 'confirmed' => confirmed }, submissions.fetch(index))
-    end
-
-    def assert_rejected_device_action(item, field:, draft:)
-      recorded = item.reload.attributes
-      2.times do
-        assert_no_difference('Event.count') do
-          click_button 'Save equipment correction'
-          assert_selector '#equipment-item-errors:focus', text: 'Detach and withdraw do not change device details. Save device details separately.'
-        end
-        assert_field field, with: draft
-        assert_equal recorded, item.reload.attributes
-      end
     end
   end
 end

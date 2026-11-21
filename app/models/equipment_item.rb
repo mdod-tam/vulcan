@@ -10,7 +10,7 @@ class EquipmentItem < ApplicationRecord
     OR (equipment_items.fulfillment_source != 'direct_vendor' AND equipment_items.stock_received_on IS NOT NULL)
   SQL
 
-  CARRIERS = { 'ups' => 'UPS', 'fedex' => 'FedEx', 'usps' => 'USPS', 'other' => 'Other / Not recorded' }.freeze
+  CARRIERS = { 'ups' => 'UPS', 'fedex' => 'FedEx', 'usps' => 'USPS', 'dhl' => 'DHL', 'other' => 'Other / Not recorded' }.freeze
 
   belongs_to :application, optional: true
   belongs_to :acquisition_bid_group_line, class_name: 'BidGroupLine', optional: true
@@ -29,7 +29,6 @@ class EquipmentItem < ApplicationRecord
   typed_date_input :stock_received_on
   attr_accessor :allocation_mutation
 
-  attr_accessor :serial_duplicate_reason
   attr_reader :identity_conflicts
 
   normalizes :tracking_number, :serial_number, :imei, :carrier, with: ->(value) { value.to_s.strip.presence }
@@ -127,14 +126,6 @@ class EquipmentItem < ApplicationRecord
     return 'ready_to_send_po' if purchase_order_id?
 
     'needs_ordering'
-  end
-
-  def potential_serial_duplicates
-    return self.class.none if normalized_serial_number.blank? || withdrawn_at?
-
-    self.class.active.where(normalized_manufacturer: normalized_manufacturer,
-                            normalized_serial_number: normalized_serial_number)
-        .where.not(id: id).where.not(manufacturer_model_identity: manufacturer_model_identity)
   end
 
   private
@@ -235,10 +226,6 @@ class EquipmentItem < ApplicationRecord
 
     duplicate = others.find_by(manufacturer_model_identity: manufacturer_model_identity, normalized_serial_number: normalized_serial_number)
     add_identity_conflict(:serial_number, duplicate) if duplicate
-    return unless identity_assignment_changed? && potential_serial_duplicates.exists? && serial_duplicate_reason.blank?
-
-    errors.add(:serial_number, 'matches another model from this manufacturer; provide an acknowledgment reason after reviewing the potential duplicate')
-    @identity_conflicts.concat(potential_serial_duplicates.to_a)
   end
 
   def lock_identity_assignment

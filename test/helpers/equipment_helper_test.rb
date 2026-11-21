@@ -44,7 +44,10 @@ class EquipmentHelperTest < ActionView::TestCase
   end
 
   test 'tracking destinations are fixed official HTTPS hosts and encode only the tracking number' do
-    { 'ups' => ['www.ups.com', 'tracknum'], 'fedex' => ['www.fedex.com', 'tracknumbers'], 'usps' => ['tools.usps.com', 'tLabels'] }.each do |carrier, (host, parameter)|
+    {
+      'ups' => ['www.ups.com', 'tracknum'], 'fedex' => ['www.fedex.com', 'tracknumbers'],
+      'usps' => ['tools.usps.com', 'tLabels'], 'dhl' => ['www.dhl.com', 'tracking-id']
+    }.each do |carrier, (host, parameter)|
       item = EquipmentItem.new(carrier: carrier, tracking_number: 'A B&?/#')
       uri = URI(equipment_tracking_url(item))
       assert_equal 'https', uri.scheme

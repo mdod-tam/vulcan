@@ -90,19 +90,17 @@ module Equipment
       assert @item.withdrawn_at?
     end
 
-    test 'serial acknowledgment text is encrypted with the device change audit' do
+    test 'a serial reused across models is encrypted in the device change audit' do
       other_model = create(:product, manufacturer: @item.product.manufacturer, model_number: 'Another model')
       create(:equipment_item, product: other_model, serial_number: 'PRIVATE-SERIAL')
-      acknowledgment = 'Reviewed PRIVATE-SERIAL and IMEI 123456789012345; separate manufacturer models.'
       @service.update_item!(item: @item, attributes: { serial_number: 'PRIVATE-SERIAL' }, expected_version: 0,
-                            reason: 'Identity reviewed', serial_duplicate_reason: acknowledgment)
+                            reason: 'Identity reviewed')
 
       event = @item.events.sole
-      assert_nil event.metadata['serial_duplicate_reason']
-      assert_equal({}, event.metadata.dig('changes', 'serial_duplicate_reason'))
-      assert_equal [nil, acknowledgment], event.field_changes['serial_duplicate_reason']
+      assert_equal({}, event.metadata.dig('changes', 'serial_number'))
+      assert_equal [nil, 'PRIVATE-SERIAL'], event.field_change_pairs['serial_number']
       raw = Event.connection.select_one("SELECT metadata, change_values FROM events WHERE id = #{event.id}")
-      assert(raw.values.none? { |value| value.to_s.include?(acknowledgment) || value.to_s.include?('PRIVATE-SERIAL') || value.to_s.include?('123456789012345') })
+      assert(raw.values.none? { |value| value.to_s.include?('PRIVATE-SERIAL') })
     end
 
     test 'withdrawal keeps the detached device and history but cannot withdraw an ordered device' do

@@ -276,16 +276,64 @@ module Admin
       item = create(:equipment_item, product: @product)
       context = { tab: 'ordered', application_id: item.application_id.to_s, source: 'vendor' }
       shipment = { shipped_at: '02/30/2026', tracking_number: 'DATE-RETRY', rows: [{ id: item.id, lock_version: item.lock_version }] }
-      post admin_equipment_shipments_path, params: { shipment: shipment, return_context: context }
+      assert_no_enqueued_emails { post admin_equipment_shipments_path, params: { shipment: shipment, return_context: context } }
       assert_response :unprocessable_content
       assert_nil item.reload.shipped_at
       assert_select 'input[type=text][name="shipment[shipped_at]"][value="02/30/2026"]'
       assert_select 'a[href=?]', admin_equipment_index_path(context), text: 'Back to equipment queue'
 
       shipment[:shipped_at] = Date.current.strftime('%m/%d/%Y')
-      post admin_equipment_shipments_path, params: { shipment: shipment, return_context: context }
+      mail = capture_emails { post admin_equipment_shipments_path, params: { shipment: shipment, return_context: context } }.sole
       assert_redirected_to admin_equipment_index_path(context.merge(tab: 'shipped'))
       assert_equal Date.current, item.reload.shipped_at
+      assert_equal [item.application.user.email], mail.to
+      assert_includes mail.text_part.body.decoded.lines.map(&:strip), 'Tracking number — DATE-RETRY'
+      assert_nil Nokogiri::HTML(mail.html_part.body.decoded).at_css('a')
+    end
+
+    test 'a package recorded in separate saves sends one notice in the managing guardian’s language' do
+      ensure_system_audit_actor!
+      item = create(:equipment_item)
+      application = item.application
+      guardian = create(:constituent, locale: 'es')
+      create(:guardian_relationship, guardian_user: create(:constituent), dependent_user: application.user)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: application.user)
+      application.user.update!(email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local", dependent_email: guardian.email)
+      application.update!(managing_guardian: guardian)
+      sibling = create(:equipment_item, application: application)
+      shipment = { shipped_at: Date.current.iso8601, tracking_number: 'GUARDIAN-PACKAGE', carrier: 'dhl' }
+      notices = Notification.where(action: 'equipment_shipment_notice', notifiable: application)
+
+      mail = capture_emails do
+        [item, sibling].each do |unit|
+          post admin_equipment_shipments_path, params: { shipment: shipment.merge(rows: [{ id: unit.id, lock_version: unit.lock_version }]) }
+          assert_response :redirect
+          assert_equal Date.current, unit.reload.shipped_at
+        end
+      end.sole
+
+      assert_equal [guardian.email], mail.to
+      assert_equal 'Su equipo de MAT está en camino', mail.subject
+      assert_includes mail.text_part.body.decoded, "para #{application.user.first_name}"
+      assert_includes mail.text_part.body.decoded.lines.map(&:strip), 'Número de seguimiento — GUARDIAN-PACKAGE (DHL)'
+      assert_equal guardian.id, notices.sole.recipient_id
+    end
+
+    test 'a shipment without an email address is saved and the application history explains why no notice went out' do
+      ensure_system_audit_actor!
+      item = create(:equipment_item)
+      application = item.application
+      application.user.update!(email: "no-email-#{SecureRandom.uuid}@system.matvulcan.local", communication_preference: :letter)
+      shipment = { shipped_at: Date.current.iso8601, tracking_number: 'NO-EMAIL', rows: [{ id: item.id, lock_version: item.lock_version }] }
+
+      assert_no_enqueued_emails { post admin_equipment_shipments_path, params: { shipment: shipment } }
+      assert_response :redirect
+      assert_equal Date.current, item.reload.shipped_at
+
+      get admin_application_path(application)
+      assert_response :success
+      assert_includes response.body, 'Not sent — no email address'
+      assert_includes response.body, 'No usable email address is recorded.'
     end
 
     test 'existing stock keeps a rejected date and accepts a corrected typed date' do

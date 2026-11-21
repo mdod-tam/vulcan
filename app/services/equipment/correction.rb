@@ -34,9 +34,9 @@ module Equipment
       Mutation.authorize!(actor)
     end
 
-    # Keep form versions, identity acknowledgment, and reviewed impact explicit at this write boundary.
+    # Keep form versions and reviewed changes explicit at this write boundary.
     def update_item!(item:, attributes:, expected_version:, reason:, operation: 'update', confirmed_impact: false, # rubocop:disable Metrics/ParameterLists
-                     serial_duplicate_reason: nil, impact_token: nil)
+                     impact_token: nil, notify_tracking: false)
       require_reason!(reason)
       raise Conflict, 'Assign purchase orders through bid award.' if attributes.to_h.key?('purchase_order_id') || attributes.to_h.key?(:purchase_order_id)
 
@@ -55,12 +55,12 @@ module Equipment
                                 operation: operation)
         end
         validate_product_correction!(item)
-        item.serial_duplicate_reason = serial_duplicate_reason.to_s.strip.presence
         item.save!
         if previous['purchase_order_id'] && previous['purchase_order_id'] != item.purchase_order_id
           PurchaseOrder.find(previous['purchase_order_id']).update!(updated_at: Time.current)
         end
         audit_item!(item, previous, reason, operation)
+        record_shipment_notice(item, previous, notify_tracking)
       end
       item
     rescue ActiveRecord::RecordNotUnique
@@ -98,6 +98,15 @@ module Equipment
     end
 
     private
+
+    def record_shipment_notice(item, previous, notify_tracking)
+      return unless item.shipped_at? && item.application&.status_approved?
+
+      corrected = previous['shipped_at'].present?
+      return if corrected && (!notify_tracking || previous['tracking_number'] == item.tracking_number)
+
+      ShipmentNotice.record!([item], actor: @actor, corrected:)
+    end
 
     def confirm_po_change!(purchase_order, items, attributes, versions, token, confirmed)
       if items.size > 1 || items.any?(&:shipped_at?) || (purchase_order.sent_at && attributes['sent_at'].blank?)
@@ -139,7 +148,6 @@ module Equipment
       changes = changed_values(previous, item.attributes.slice(*ITEM_FIELDS))
       return if changes.empty?
 
-      changes['serial_duplicate_reason'] = [nil, item.serial_duplicate_reason] if item.serial_duplicate_reason.present?
       Mutation.audit!(item, actor: @actor, action: 'equipment_item_corrected', changes: changes,
                             reason: reason, application_ids: [item.application_id], application_id: item.application_id,
                             purchase_order_ids: [previous['purchase_order_id'], item.purchase_order_id].compact.uniq,

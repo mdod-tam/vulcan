@@ -48,7 +48,7 @@ module Applications
         notification.action.in?(%w[provider_info_requested proof_resubmission_requested])
       end
       ActiveRecord::Associations::Preloader.new(records: recipient_notifications, associations: :recipient).call
-      EmailDelivery::Visibility.preload(notifications.select { |notification| notification.action == 'max_rejections_reached' })
+      EmailDelivery::Visibility.preload(notifications.select { |notification| notification.action.in?(%w[max_rejections_reached equipment_shipment_notice]) })
       preload_delivery_owners(events)
     end
 
@@ -133,6 +133,7 @@ module Applications
                  review_requested
                  documents_requested
                  max_rejections_reached
+                 equipment_shipment_notice
                ])
         .order(created_at: :desc)
         .to_a

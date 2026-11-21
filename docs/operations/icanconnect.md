@@ -16,6 +16,8 @@ To enter shared PO charges, open the purchase order and choose **Edit PO invoice
 
 For orders shipping directly to constituents, confirm the vendor's shipping email and choose **Send PO to vendor**. The vendor can use the same secure link to view that order and record each package as it ships. The link expires after 30 days and staff can replace or revoke it from the PO. Staff can also record tracking from **Awaiting shipment**.
 
+Recording tracking queues one email per package for each authorized contact. Check the application's **Activity History** for delivery status, including when there is no email address. To email a corrected tracking number, check **Email the updated tracking number** when reviewing the correction, then choose **Save correction**.
+
 ## Filing workflow
 
 Open **iCanConnect filing preparation** from the Admin Dashboard and choose the date range and category. Filing preparation is a global workspace; each device on an application shows its own MAT or ICC funding label. **Unclaimed expenses** shows costs that have not been marked filed, including rows with missing information. **Period activity, including filed costs** includes previously filed costs. Equipment uses constituent receipt dates, services use performed dates, and shared PO charges use the last device receipt date. The worksheet keeps request, invoice, performed, receipt and installation dates separate. Unknown amounts stay blank.

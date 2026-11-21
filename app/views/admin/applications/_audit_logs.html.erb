@@ -209,6 +209,8 @@
                     when 'max_rejections_reached'
                       safe_join(['The application was archived at the rejection limit. ',
                                  delivery_visibility(log, locale: :en)])
+                    when 'equipment_shipment_notice'
+                      delivery_visibility(log, locale: :en)
                     when "proof_approved"
                       proof_type = log.metadata.try(:[], 'proof_type') || 'Unknown'
                       "Constituent notified: #{ProofNotificationCopy.approved_text(proof_type)}"

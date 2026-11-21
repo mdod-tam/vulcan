@@ -84,7 +84,8 @@ module EquipmentHelper
   TRACKING_DESTINATIONS = {
     'ups' => ['https://www.ups.com/track', 'tracknum', { 'loc' => 'en_US' }],
     'fedex' => ['https://www.fedex.com/apps/fedextrack/', 'tracknumbers', {}],
-    'usps' => ['https://tools.usps.com/go/TrackConfirmAction', 'tLabels', {}]
+    'usps' => ['https://tools.usps.com/go/TrackConfirmAction', 'tLabels', {}],
+    'dhl' => ['https://www.dhl.com/us-en/home/tracking.html', 'tracking-id', { 'submit' => '1' }]
   }.freeze
   EQUIPMENT_AUDIT_FIELDS = (Equipment::Correction::EDITABLE_ITEM_FIELDS + Equipment::Correction::PO_FIELDS +
     %w[equipment_needs bid_lines bid_group_ids remaining_quantity withdrawn_at purchase_order_id vendor_name unit_cost purpose funding_source
@@ -200,15 +201,15 @@ module EquipmentHelper
     end
   end
 
-  def equipment_correction_actions(item)
-    actions = [['Save device details', 'update']]
+  def equipment_disposition_action(item)
+    return if item.shipped_at_in_database || item.withdrawn_at? || (item.stock? && item.application_id?)
+    return if item.icc_financial_evidence_locked? || item.bid_group_lines.reserved.exists?
+
     if item.direct_vendor?
-      actions << ['Remove unshipped device from PO for reorder', 'detach']
-      actions << ['Cancel an unshipped device already removed from its PO', 'withdraw']
-    elsif item.application_id.nil? && item.shipped_at.nil?
-      actions << ['Cancel incoming stock or remove unusable stock', 'withdraw']
+      item.purchase_order_id? ? ['detach', 'Remove from PO for reorder'] : ['withdraw', 'Cancel device request']
+    else
+      ['withdraw', item.stock_received_on_in_database ? 'Remove from stock' : 'Cancel incoming stock']
     end
-    actions
   end
 
   def equipment_impact_value(field, value, products: [], purchase_orders: [], bid_groups: [])

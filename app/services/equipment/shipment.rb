@@ -10,7 +10,7 @@ module Equipment
       Mutation.authorize!(actor) unless vendor_request
     end
 
-    def call(rows:, attributes:, confirm_setup: false)
+    def call(rows:, attributes:, confirm_setup: false, notify_recipient: true)
       rows = rows.map { |row| row.to_h.with_indifferent_access }
       ids = rows.map { |row| row[:id].to_s }
       raise Conflict, 'Select the devices in this package.' if ids.empty?
@@ -30,7 +30,7 @@ module Equipment
         items.each do |item|
           prepare_unit!(item, rows_by_id.fetch(item.id.to_s), attributes, confirm_setup)
         end
-        save_shipments!(items)
+        save_shipments!(items, notify_recipient:)
       end
     end
 
@@ -49,7 +49,7 @@ module Equipment
       items
     end
 
-    def save_shipments!(items)
+    def save_shipments!(items, notify_recipient:)
       actor = @vendor_request ? PublicAuditActor.system_audit_actor! : @actor
       EquipmentItem.lock_identity_assignments!(items)
       items.each do |item|
@@ -58,6 +58,8 @@ module Equipment
                               application_ids: [item.application_id], purchase_order_ids: [item.purchase_order_id].compact,
                               **(@vendor_request&.audit_identity || {}))
       end
+      ShipmentNotice.record!(items, actor:) if notify_recipient
+      items
     end
 
     def shipment_attributes(attributes)

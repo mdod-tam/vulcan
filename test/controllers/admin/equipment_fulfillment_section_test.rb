@@ -157,12 +157,11 @@ module Admin
       )
       Equipment::Ordering.new(actor: @admin).mark_sent!(order: order, sent_at: '09/10/2026', expected_version: order.lock_version)
       item = order.equipment_items.sole
-      acknowledgment = 'Manufacturer confirmed serial reuse.'
       create(:equipment_item, product: create(:product, manufacturer: 'Audit Maker', model_number: 'PHONE-3'), serial_number: 'AUDIT-SERIAL')
       Equipment::Correction.new(actor: @admin).update_item!(
         item: item, attributes: { product_id: replacement.id, carrier: 'fedex', shipped_at: '09/12/2026', tracking_number: 'AUDIT-PACKAGE',
                                   serial_number: 'AUDIT-SERIAL', imei: '123456789012345' },
-        expected_version: item.lock_version, reason: 'Correct actual delivered model', serial_duplicate_reason: acknowledgment
+        expected_version: item.lock_version, reason: 'Correct actual delivered model'
       )
       header_attributes = { number: 'UPDATED-42', sent_at: '09/09/2026' }
       item_versions = { item.id.to_s => item.lock_version.to_s }
@@ -179,28 +178,28 @@ module Admin
       assert_select '#audit-logs' do
         assert_select 'td', text: /Purchasing needs: #{Regexp.escape(phone.catalog_label)} — 1 device/
         assert_select 'td', text: /#{Regexp.escape(tablet.catalog_label)} — 1 device/
-        assert_named_equipment_history(acknowledgment, phone:, replacement:)
+        assert_named_equipment_history(phone:, replacement:)
         assert_select 'td', text: /PO number: AUDIT-42 → UPDATED-42/
         assert_select 'td', text: %r{Date PO sent: 09/10/2026 → 09/09/2026}
       end
-      assert_select "#equipment-item-#{item.id} details", text: /#{Regexp.escape(acknowledgment)}/
+      assert_select "#equipment-item-#{item.id} details", text: /Serial number: AUDIT-SERIAL/
       assert_no_internal_history_fields(css_select('#audit-logs').first.text)
 
       get admin_purchase_order_path(order)
       assert_response :success
       assert_select 'details', text: /Order, receipt and device history/ do
-        assert_named_equipment_history(acknowledgment, phone:, replacement:)
+        assert_named_equipment_history(phone:, replacement:)
       end
       assert_no_internal_history_fields(css_select('details').map(&:text).join)
     end
 
     private
 
-    def assert_named_equipment_history(acknowledgment, phone:, replacement:)
-      assert_select 'p, td', text: /Actual catalog product: #{Regexp.escape(phone.catalog_label)} → #{Regexp.escape(replacement.catalog_label)}/
+    def assert_named_equipment_history(phone:, replacement:)
+      assert_select 'p, td', text: /Product: #{Regexp.escape(phone.catalog_label)} → #{Regexp.escape(replacement.catalog_label)}/
       assert_select 'p, td', text: /Carrier: FedEx/
       assert_select 'p, td', text: %r{Date shipped: 09/12/2026}
-      assert_select 'p, td', text: /Serial warning acknowledgment: #{Regexp.escape(acknowledgment)}/
+      assert_select 'p, td', text: /Serial number: AUDIT-SERIAL/
     end
 
     def assert_no_internal_history_fields(text)

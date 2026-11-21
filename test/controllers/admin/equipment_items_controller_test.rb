@@ -63,7 +63,7 @@ module Admin
       assert_select '#equipment-item-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
       assert_select '#equipment-item-errors li', text: /Date shipped is invalid/
       assert_select 'input[name="equipment_item[shipped_at]"][value="13/45/2026"]'
-      assert_select '#equipment_item_shipped_at[aria-invalid=true][aria-describedby="equipment-ship-date-help equipment-ship-date-error"]'
+      assert_select '#equipment_item_shipped_at[aria-invalid=true][aria-describedby="equipment-ship-date-error"]'
       assert_select '#equipment-ship-date-error', text: /Date shipped is invalid/
       assert_select 'input[name="equipment_item[tracking_number]"][value="RetryPackage"]'
       assert_select 'input[name="equipment_item[serial_number]"][value="RetrySerial"]'
@@ -83,7 +83,8 @@ module Admin
       assert_select '#equipment-correction form input[name=impact_token]'
       assert_select '#equipment-correction form[data-turbo=false]', count: 0
       assert_select 'dd', text: /#{Regexp.escape(original_label)}\s*→\s*#{Regexp.escape(replacement_label)}/
-      assert_select 'dt', text: 'Actual catalog product:'
+      assert_select '#equipment-correction-impact-heading', text: 'Changes:'
+      assert_select 'dt', text: 'Product:'
       assert_select 'dt', text: 'Date shipped:'
       assert_select 'dt', text: 'IMEI (15 digits):'
       assert_select 'dd', text: "Not recorded → #{Date.current.strftime('%m/%d/%Y')}"
@@ -101,15 +102,44 @@ module Admin
       assert_nil @item.reload.imei
     end
 
-    test 'a linked device can be detached only through the explicit correction action' do
+    test 'reorder and cancellation use their own form for eligible unshipped devices' do
       get edit_admin_equipment_item_path(@item)
       assert_select '#equipment_item_purchase_order_id', count: 0
-      assert_select '#operation option[value=detach]', text: 'Remove unshipped device from PO for reorder'
+      assert_select 'select[name=operation]', count: 0
+      assert_select '#equipment-disposition form' do
+        assert_select 'input[name=operation][value=detach]'
+        assert_select '[name^=equipment_item]', count: 0
+        assert_select 'input[type=submit][data-turbo-confirm][value="Remove from PO for reorder"]'
+      end
 
-      Equipment::Correction.new(actor: @admin).update_item!(item: @item, attributes: {}, expected_version: 0, reason: 'Await a replacement order', operation: 'detach')
+      submitted = { operation: 'detach', expected_version: @item.lock_version, return_context: { tab: 'ordered' } }
+      assert_no_difference 'Event.count' do
+        patch admin_equipment_item_path(@item), params: submitted.merge(reason: '')
+      end
+      assert_response :unprocessable_entity
+      assert_select '#equipment-item-errors', text: /Provide a brief reason/
+      assert_select '#equipment-disposition[open] input[name=expected_version][value=?]', @item.lock_version.to_s
+      assert_select '#equipment-disposition input[name="return_context[tab]"][value=ordered]'
+
+      assert_no_difference 'Event.count' do
+        patch admin_equipment_item_path(@item), params: submitted.merge(reason: 'Await a replacement order', expected_version: '-1')
+      end
+      assert_response :unprocessable_entity
+      assert_select '#equipment-disposition[open] textarea', text: 'Await a replacement order'
+      assert_select '#equipment-disposition input[name=expected_version][value="-1"]'
+      assert_select '#reason', text: ''
+
+      patch admin_equipment_item_path(@item), params: submitted.merge(reason: 'Await a replacement order')
+      assert_redirected_to admin_equipment_index_path(tab: 'ordered')
+      assert_nil @item.reload.purchase_order_id
       get edit_admin_equipment_item_path(@item)
       assert_select '#equipment_item_purchase_order_id', count: 0
+      assert_select '#equipment-disposition input[name=operation][value=withdraw]'
       assert_includes response.body, 'Assign purchase orders through a bid award.'
+
+      patch admin_equipment_item_path(@item), params: { operation: 'withdraw', expected_version: @item.lock_version, reason: 'Request cancelled' }
+      assert_redirected_to admin_application_path(@item.application, anchor: "equipment-item-#{@item.id}")
+      assert_predicate @item.reload, :withdrawn_at?
     end
 
     test 'expired shipment review retains its draft and filters until a fresh review is confirmed' do
@@ -128,14 +158,31 @@ module Admin
         assert_select 'template #equipment-correction form[action=?]', admin_equipment_item_path(@item)
         assert_select 'input[name=expected_version][value=?]', submitted[:expected_version].to_s
         assert_select 'input[name=reviewing][value="1"]'
-        assert_select 'input[name=confirmed_impact][required]:not([checked])'
         assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
-        assert_select 'button[name=review][value="1"][data-turbo-submits-with]', text: 'Review changed values'
-        assert_select 'input[type=submit][data-turbo-submits-with][value="Save equipment correction"]'
+        assert_select '#equipment-disposition, select[name=operation]', count: 0
+        assert_select '.bg-warning-50 p', text: /Shipped devices affected/, count: 0
+        assert_select 'button[name=back_to_edit][value="1"][formnovalidate]', text: 'Back to edit'
+        assert_select 'button[name=confirmed_impact][value="1"][data-turbo-submits-with]', text: 'Save correction'
+        assert_select 'input[type=checkbox]', count: 1
+        assert_select 'input[type=checkbox][name=notify_tracking][value="1"]:not([checked])'
+        assert_select 'input[type=hidden][name="equipment_item[tracking_number]"][value=Package]'
+        assert_select 'input[type=text], textarea, select', count: 0
+        assert_select 'a', text: 'Reload latest record', count: 0
         assert_select 'form[data-turbo=false]', count: 0
       end
       token = css_select('input[name=impact_token]').sole['value']
       assert token.present?
+
+      assert_no_difference 'Event.count' do
+        patch admin_equipment_item_path(@item), headers: headers,
+                                                params: submitted.merge(equipment_item: { tracking_number: 'ChangedAfterReview' },
+                                                                        reviewing: '1', confirmed_impact: '1', impact_token: token)
+      end
+      assert_response :unprocessable_entity
+      assert_select '#equipment-item-errors', text: /Review the current correction values/
+      assert_select '#equipment_item_tracking_number[value=ChangedAfterReview]'
+      assert_select 'input[name=impact_token]', count: 0
+      assert_equal original, @item.reload.attributes
 
       travel 31.minutes do
         sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
@@ -155,7 +202,7 @@ module Admin
         assert_select 'input[name=impact_token], input[name=reviewing], input[name=confirmed_impact]', count: 0
         assert_select '#equipment-correction-impact-heading', count: 0
         assert_select 'button[name=review][value="1"]', text: 'Review correction'
-        assert_select 'input[type=submit][value="Save equipment correction"]', count: 0
+        assert_select 'button[name=confirmed_impact]', count: 0
         assert_equal original, @item.reload.attributes
 
         assert_no_difference 'Event.count' do
@@ -164,14 +211,18 @@ module Admin
         assert_response :success
         assert_equal Mime[:turbo_stream].to_s, response.media_type
         assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
-        assert_select 'input[name=confirmed_impact][required]:not([checked])'
+        assert_select 'button[name=confirmed_impact][value="1"]', text: 'Save correction'
         fresh_token = css_select('input[name=impact_token]').sole['value']
         assert fresh_token.present?
         assert_not_equal token, fresh_token
-        assert_difference 'Event.count', 1 do
-          patch admin_equipment_item_path(@item), headers: headers,
-                                                  params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: fresh_token)
-        end
+        mail = capture_emails do
+          assert_difference 'Event.count', 1 do
+            patch admin_equipment_item_path(@item), headers: headers,
+                                                    params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: fresh_token, notify_tracking: '1')
+          end
+        end.sole
+        assert_equal 'Updated tracking for your MAT equipment', mail.subject
+        assert_includes mail.text_part.body.decoded.lines.map(&:strip), 'Tracking number — Package'
         assert_response :see_other
         assert_redirected_to admin_equipment_index_path(context)
       end
@@ -194,7 +245,7 @@ module Admin
         assert_response :unprocessable_entity
         assert_select '#equipment-item-errors[role=alert][tabindex="-1"][data-controller=error-summary]', text: /Save device details separately/
         assert_select '#equipment_item_serial_number[value=CorrectedSerial]'
-        assert_select '#operation option[value=detach][selected]'
+        assert_select 'select[name=operation]', count: 0
         assert_select '#reason', text: 'Correct identity before reorder'
         assert_select '#expected_version[value="0"]'
         assert_select 'input[name="return_context[tab]"][value=ordered]'
@@ -228,8 +279,9 @@ module Admin
         assert_equal Mime[:html].to_s, response.media_type
         assert_select '#equipment-correction form[data-turbo=false]', count: 0
         assert_select 'input[name=expected_version][value=?]', submitted_version
-        assert_select 'input[name=impact_token][value=?]', token
-        assert_select 'input[name=confirmed_impact]:not([checked])'
+        assert_select 'input[name=impact_token], input[name=confirmed_impact]', count: 0
+        assert_select 'a[href=?]', edit_admin_equipment_item_path(@item), text: 'Reload latest record'
+        assert_select 'p', text: /Reloading clears your draft/
         assert_select '#equipment-correction-impact-heading[autofocus]', count: 0
         assert_select 'input[name="equipment_item[tracking_number]"][value=StaleDraft]'
         assert_equal 'OtherAdministratorPackage', @item.reload.tracking_number
@@ -243,7 +295,8 @@ module Admin
       assert_response :success
       assert_select '#equipment_item_purchase_order_id, #new_purchase_order_vendor_id, #create_purchase_order', count: 0
       assert_select 'a', text: 'Program stock'
-      assert_select '#operation option[value=withdraw]', text: 'Cancel incoming stock or remove unusable stock'
+      assert_select '#equipment-disposition summary', text: 'Remove from stock'
+      assert_select '#equipment-disposition input[name=operation][value=withdraw]'
       patch admin_equipment_item_path(stock), params: { equipment_item: { serial_number: 'STOCK-RECORDED' }, expected_version: stock.lock_version, reason: 'Physical identity verified' }
       assert_redirected_to admin_stock_index_path
       assert_equal 'STOCK-RECORDED', stock.reload.serial_number

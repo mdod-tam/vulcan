@@ -10,8 +10,7 @@ module Equipment
     setup do
       @admin = create(:admin)
       @first = create(:equipment_item)
-      other_model = create(:product, manufacturer: " #{@first.product.manufacturer.upcase} ", model_number: "Different model #{SecureRandom.hex(5)}")
-      @second = create(:equipment_item, product: other_model)
+      @second = create(:equipment_item, product: @first.product)
     end
 
     teardown do
@@ -35,26 +34,18 @@ module Equipment
       assert_equal 1, Event.where(action: 'equipment_item_corrected', user: @admin).count
     end
 
-    test 'competing cross-model serial assignments require acknowledgment after the first commits' do
+    test 'competing serial assignments for the same model cannot both become active' do
       race_corrections!({ serial_number: 'MODEL-SERIAL' }, { serial_number: ' model-serial ' })
 
       assert_kind_of ActiveRecord::RecordInvalid, @contender_error
-      assert_includes @contender_error.record.errors[:serial_number].join, 'provide an acknowledgment reason'
+      assert_includes @contender_error.record.errors[:serial_number].join, 'is already assigned'
       assert_equal [@first.id], @contender_error.record.identity_conflicts.map(&:id)
       assert_nil @second.reload.serial_number
       assert_equal 0, @second.lock_version
       assert_equal 1, Event.where(action: 'equipment_item_corrected', user: @admin).count
-
-      acknowledgment = 'Manufacturer confirmed this serial is reused across these models.'
-      Correction.new(actor: @admin).update_item!(item: @second, attributes: { serial_number: ' model-serial ' }, expected_version: 0,
-                                                 reason: 'Serial reviewed', serial_duplicate_reason: acknowledgment)
-      assert_equal 2, EquipmentItem.active.where(normalized_manufacturer: @first.normalized_manufacturer,
-                                                 normalized_serial_number: 'MODEL-SERIAL').count
-      assert_equal acknowledgment, @second.events.last.field_changes['serial_duplicate_reason'].last
-      assert_equal 2, Event.where(action: 'equipment_item_corrected', user: @admin).count
     end
 
-    test 'direct saves also serialize the cross-model serial acknowledgment check' do
+    test 'direct saves also serialize same-model serial assignments' do
       attributes = { serial_number: 'MODEL-SERIAL' }
       race_corrections!(attributes, attributes) { |item| item.update!(attributes) }
 
