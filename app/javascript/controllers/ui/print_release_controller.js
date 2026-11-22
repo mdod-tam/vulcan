@@ -3,6 +3,7 @@ import { Turbo } from "@hotwired/turbo-rails"
 
 export default class extends Controller {
   static targets = ["all", "letter", "submit", "status"]
+  static values = { batch: { type: Boolean, default: true } }
 
   connect() {
     this.selectionChanged()
@@ -19,7 +20,7 @@ export default class extends Controller {
       this.allTarget.checked = selected > 0 && selected === this.letterTargets.length
       this.allTarget.indeterminate = selected > 0 && selected < this.letterTargets.length
     }
-    this.submitTargets.forEach(button => { button.disabled = selected === 0 })
+    this.submitTargets.forEach(button => { button.disabled = this.batchValue && selected === 0 })
   }
 
   async download(event) {
@@ -60,7 +61,7 @@ export default class extends Controller {
       setTimeout(() => URL.revokeObjectURL(url), 1000)
       if (this.element.isConnected) Turbo.visit(window.location.href, { action: "replace" })
     } catch (_error) {
-      this.statusTarget.textContent = "The download could not be confirmed. Refresh the queue to check release status, then try downloading again."
+      this.statusTarget.textContent = "The download could not be confirmed. Refresh this page to check release status, then try downloading again."
     } finally {
       this.busy = false
       controls.forEach(([control, disabled]) => { control.disabled = disabled })

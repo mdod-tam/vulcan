@@ -14,6 +14,12 @@ module EmailDelivery
       def effective_enabled? = saved_enabled && suppressed_by.nil?
       def primary_row = rows.find { |row| row.locale == 'en' } || rows.first
       def locales = rows.map { |row| row.locale.upcase }.sort
+
+      def saved_state
+        return :mixed if mixed
+
+        saved_enabled ? :on : :off
+      end
     end
 
     UNASSIGNED = 'unassigned'
@@ -94,12 +100,15 @@ module EmailDelivery
     # Why an email is not going out, in words an admin can act on.
     def self.reason_text(reason, category: nil)
       case reason.to_s
-      when 'all_disabled' then 'all outgoing communications are turned off'
+      when 'all_disabled' then 'outgoing correspondence is turned off'
       when 'letters_disabled' then 'printed letters are turned off'
       when 'sms_disabled' then 'SMS text messages are turned off'
       when 'delivery_identity_changed', 'artifact_changed' then 'the recipient or document changed; issue a new letter'
-      when 'request_no_longer_active' then 'the linked request is no longer active; review it before issuing a new letter'
+      when 'letter_recipient_ineligible' then 'Recipient no longer eligible. Review the application.'
+      when 'request_no_longer_active' then 'This request no longer needs a letter.'
       when 'operator_canceled' then 'this letter was canceled'
+      when 'incomplete_mailing_address' then 'Complete the mailing address and try again.'
+      when 'unsupported_letter_text' then 'This letter could not be generated. Use the approved manual process.'
       when 'global_disabled' then I18n.t('admin.email_delivery.reasons.global_disabled', locale: :en)
       when 'category_disabled'
         I18n.t('admin.email_delivery.reasons.category_disabled', category: category_label(category).downcase, locale: :en)

@@ -13,9 +13,16 @@ beforeEach(() => {
   controller = new PrintReleaseController()
   Object.defineProperties(controller, {
     element: { value: form }, allTarget: { value: all }, hasAllTarget: { value: true },
-    letterTargets: { value: letters }, submitTargets: { value: [submit] }, statusTarget: { value: status }
+    letterTargets: { value: letters }, submitTargets: { value: [submit] }, statusTarget: { value: status },
+    batchValue: { value: true, configurable: true }
   })
   jest.clearAllMocks()
+})
+
+test('single letter forms enable download without batch checkboxes', () => {
+  Object.defineProperty(controller, 'batchValue', { value: false })
+  controller.connect()
+  expect(submit.disabled).toBe(false)
 })
 
 test('restored selection is retained, partial selection is announced, and select all can clear it', () => {
@@ -60,7 +67,7 @@ test('lost response explains uncertainty and allows retry without clearing selec
   letters[0].checked = true
   global.fetch = jest.fn().mockRejectedValue(new Error('connection lost'))
   await controller.download({ preventDefault: jest.fn(), submitter: submit })
-  expect(status.textContent).toContain('Refresh the queue to check release status')
+  expect(status.textContent).toContain('Refresh this page to check release status')
   expect(letters[0].checked).toBe(true)
   expect(submit.disabled).toBe(false)
   expect(Turbo.visit).not.toHaveBeenCalled()

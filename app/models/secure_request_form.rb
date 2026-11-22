@@ -67,7 +67,9 @@ class SecureRequestForm < ApplicationRecord
   scope :id_proof, -> { where(kind: kinds[:id_proof_resubmission]) }
   scope :residency_proof, -> { where(kind: kinds[:residency_proof_resubmission]) }
   scope :income_proof, -> { where(kind: kinds[:income_proof_resubmission]) }
-  scope :active, -> { status_sent.where(submitted_at: nil, revoked_at: nil).where(arel_table[:expires_at].gt(Time.current)) }
+  scope :open_requests, -> { status_sent.where(submitted_at: nil, revoked_at: nil) }
+  scope :active, -> { open_requests.where(arel_table[:expires_at].gt(Time.current)) }
+  scope :operator_revocable, -> { open_requests.where(arel_table[:expires_at].gt(Time.current).or(arel_table[:recipient_channel].eq(recipient_channels[:letter]))) }
   scope :with_incomplete_delivery_provenance, lambda {
     for_user_recipients.where(delivery_owner_id: nil).or(for_user_recipients.where(delivery_source: nil))
   }
@@ -96,6 +98,48 @@ class SecureRequestForm < ApplicationRecord
 
   def delivery_provenance?
     delivery_owner_id.present? && delivery_source.present?
+  end
+
+  def postal_request_open?
+    recipient_channel_letter? && status_sent? && !submitted? && !revoked?
+  end
+
+  def postal_request_needed?(application: self.application)
+    return false if application.status_archived?
+    return application.missing_required_provider_info? if kind_provider_info_request?
+
+    proof_type = PROOF_TYPES_BY_KIND[kind]
+    proof_type.present? && application.proof_requestable_via_secure_form?(proof_type)
+  end
+
+  def postal_delivery_eligible?(application: self.application)
+    postal_request_open? && postal_request_needed?(application: application)
+  end
+
+  def postal_recipient_authorized?(application:, address_owner_id:)
+    return false unless recipient_channel_letter? && application&.id == application_id && delivery_owner_id == address_owner_id
+
+    candidate = Applications::SecureRequestRecipientResolver.new(
+      application: application, recipient_ids: [recipient_id], channel_overrides: { recipient_id => :letter }, permitted_channels: [:letter]
+    ).resolve.first
+    candidate&.address_owner&.id == address_owner_id && candidate.deliverable_channels.include?(:letter) && candidate.delivery_participants_eligible?
+  end
+
+  def operator_revocable?
+    active? || postal_request_open?
+  end
+
+  def postal_notice_outstanding?
+    return false unless postal_delivery_eligible?
+
+    item = print_queue_items.max_by(&:id)
+    return false unless item.present? && !item.canceled?
+
+    if item.released_at?
+      postal_recipient_authorized?(application: application, address_owner_id: item.constituent_id)
+    else
+      item.delivery_decision.allowed?
+    end
   end
 
   PROOF_TYPES_BY_KIND = {

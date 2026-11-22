@@ -55,7 +55,7 @@ module Letters
 
       rendered_subject, rendered_content = rendered_template
 
-      pdf = Prawn::Document.new do |doc|
+      pdf = PdfDocument.new do |doc|
         setup_document(doc)
         # The template's own header/footer variables render them in the body; skipping avoids printing both.
         add_header(doc, rendered_subject) unless template_requires_shared_partials?
@@ -71,7 +71,7 @@ module Letters
       create_tempfile(pdf)
     end
 
-    def queue_for_printing
+    def queue_for_printing(finalize_request: nil)
       action = EmailDelivery::Catalog.letter_action_for(template_name)
       context = @delivery_context || if EmailDelivery::Current.queued
                                        EmailDelivery::Current.context
@@ -81,7 +81,8 @@ module Letters
       raise EmailDelivery::ConfigurationError.new(reason: 'template_identity_changed') unless context.nil? || context['template_name'] == template_name
 
       Delivery.queue!(recipient: recipient, application: @application, letter_type: determine_letter_type,
-                      context: context, secure_request_form: @secure_request_form, request_key: @request_key) { generate_pdf }
+                      context: context, secure_request_form: @secure_request_form, request_key: @request_key,
+                      finalize_request: finalize_request) { generate_pdf }
     end
 
     private

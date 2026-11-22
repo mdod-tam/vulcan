@@ -83,8 +83,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
         load Rails.root.join("db/seeds/email_templates/application_notifications_#{action}#{suffix}.rb")
       end
     end
-    recipient = create(:constituent, locale: 'en')
+    recipient = @application.user
     owner = create(:constituent, locale: 'es', physical_address_1: '9 Guardian Way')
+    create(:guardian_relationship, guardian_user: owner, dependent_user: recipient)
+    @application.update!(managing_guardian: owner)
     %w[en es].each do |locale|
       owner.update!(locale: locale)
       %i[provider_info_requested proof_requested proof_rejected].each do |action|
@@ -1414,7 +1416,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
              variables: { 'required' => %w[provider_info_instructions], 'optional' => [] })
     end
     guardian = create(:constituent, locale: 'es')
-    dependent = create(:constituent, locale: 'en', communication_preference: 'letter')
+    dependent = @application.user
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+    @application.update!(managing_guardian: guardian)
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,
@@ -1458,7 +1462,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
              variables: { 'required' => %w[provider_info_instructions], 'optional' => [] })
     end
     guardian = create(:constituent, locale: 'es', physical_address_1: '9 Guardian Way')
-    dependent = create(:constituent, locale: 'en', communication_preference: 'letter')
+    dependent = @application.user
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+    @application.update!(managing_guardian: guardian)
     form = create(:secure_request_form,
                   application: @application,
                   recipient: dependent,

@@ -31,8 +31,9 @@ module SecureRequestFormsHelper
   end
 
   def secure_request_status_label(secure_request_form)
-    if secure_request_form.recipient_channel == 'letter' && secure_request_form.active?
+    if secure_request_form.recipient_channel_letter?
       item = secure_request_form.print_queue_items.max_by(&:id)
+      return 'Resolve downloaded copy' if item&.downloaded_copy_to_resolve?
       return t("outbound_delivery.letter_#{item.display_delivery_state}") if item
     end
     t("admin.applications.secure_request_forms.statuses.#{secure_request_form.display_status}")
@@ -160,6 +161,8 @@ module SecureRequestFormsHelper
 
   def secure_request_summary_expiration_text(summary)
     case summary[:summary_status]&.to_sym
+    when :paper
+      'Paper request open'
     when :active
       return if summary[:nearest_expiration_at].blank?
 
@@ -190,13 +193,16 @@ module SecureRequestFormsHelper
     metadata = notification.metadata.is_a?(Hash) ? notification.metadata.stringify_keys : {}
 
     case notification.action
-    when 'provider_info_requested'
-      secure_provider_info_notification_detail(notification, metadata, delivery_owners_by_id:)
-    when 'proof_resubmission_requested'
-      secure_proof_resubmission_notification_detail(notification, metadata, delivery_owners_by_id:)
+    when 'provider_info_requested', 'proof_resubmission_requested'
+      secure_user_request_notification_detail(notification, metadata, delivery_owners_by_id:)
     when 'cert_upload_requested'
       secure_cert_upload_notification_detail(metadata, application)
     end
+  end
+
+  def secure_request_notification_for_postal_mail?(notification)
+    metadata = notification.metadata
+    metadata.is_a?(Hash) && secure_request_notification_channel(metadata) == 'letter'
   end
 
   def secure_request_lifecycle_event_detail(event, application:)
@@ -208,16 +214,17 @@ module SecureRequestFormsHelper
       recipient_name = metadata['recipient_name'].presence || 'the recipient'
       channel = secure_request_channel_label_for(metadata['recipient_channel'])
       "Secure provider information request revoked for #{recipient_name} via #{channel}#{reason_text}"
-    when 'proof_resubmission_request_revoked'
+    when 'proof_resubmission_request_revoked', 'proof_resubmission_request_expired'
       recipient_name = metadata['recipient_name'].presence || 'the recipient'
+      proof_name = metadata['proof_type'].to_s.humanize.downcase.presence || 'proof'
+      change = event.action.end_with?('_revoked') ? 'revoked' : 'expired'
+      if metadata['recipient_channel'] == 'letter'
+        subject = change == 'expired' ? "Internal token for the paper #{proof_name} request" : "Paper #{proof_name} request"
+        return "#{subject} #{change} for #{recipient_name}#{reason_text}"
+      end
+
       channel = secure_request_channel_label_for(metadata['recipient_channel'])
-      proof_name = metadata['proof_type'].to_s.humanize.presence || 'proof'
-      "Secure #{proof_name.downcase} upload link revoked for #{recipient_name} via #{channel}#{reason_text}"
-    when 'proof_resubmission_request_expired'
-      recipient_name = metadata['recipient_name'].presence || 'the recipient'
-      channel = secure_request_channel_label_for(metadata['recipient_channel'])
-      proof_name = metadata['proof_type'].to_s.humanize.presence || 'proof'
-      "Secure #{proof_name.downcase} upload link expired for #{recipient_name} via #{channel}"
+      "Secure #{proof_name} upload link #{change} for #{recipient_name} via #{channel}#{reason_text}"
     when 'cert_upload_request_revoked'
       "Secure certification upload link revoked for #{secure_request_cert_upload_target(metadata, application)}#{reason_text}"
     when 'cert_upload_request_expired'
@@ -247,24 +254,17 @@ module SecureRequestFormsHelper
     ''
   end
 
-  def secure_provider_info_notification_detail(notification, metadata, delivery_owners_by_id:)
+  def secure_user_request_notification_detail(notification, metadata, delivery_owners_by_id:)
     recipient_name = notification.recipient&.full_name || 'Unknown recipient'
-    channel = secure_request_recipient_channel_label(metadata)
-    expires_text = secure_request_notification_expires_text(metadata)
+    channel = secure_request_notification_channel(metadata)
     owner_text = secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
+    proof_context = secure_proof_resubmission_request_context(notification, metadata, metadata['proof_type']) if notification.action == 'proof_resubmission_requested'
 
-    "Secure provider information request sent to #{recipient_name} via #{channel}#{owner_text}#{expires_text}"
-  end
+    return ["Paper response requested from #{recipient_name}#{owner_text}.", proof_context].compact.join(' ') if channel == 'letter'
 
-  def secure_proof_resubmission_notification_detail(notification, metadata, delivery_owners_by_id:)
-    recipient_name = notification.recipient&.full_name || 'Unknown recipient'
-    channel = secure_request_recipient_channel_label(metadata)
-    proof_type = metadata['proof_type']
     expires_text = secure_request_notification_expires_text(metadata)
-    owner_text = secure_request_delivery_owner_text(notification, metadata, delivery_owners_by_id:)
-    request_context = secure_proof_resubmission_request_context(notification, metadata, proof_type)
-
-    "#{request_context}; secure upload link sent to #{recipient_name} via #{channel}#{owner_text}#{expires_text}"
+    message = proof_context ? "#{proof_context}; secure upload link" : 'Secure provider information request'
+    "#{message} sent to #{recipient_name} via #{secure_request_channel_label_for(channel)}#{owner_text}#{expires_text}"
   end
 
   # Name the actual owner so the audit does not imply use of the logical recipient's contact.
@@ -275,7 +275,8 @@ module SecureRequestFormsHelper
     owner = delivery_owners_by_id.to_h[owner_id.to_i]
     return '' if owner.nil?
 
-    " (delivered to #{secure_request_delivery_owner_label(owner, delivery_source: metadata['delivery_source'])})"
+    owner_verb = secure_request_notification_channel(metadata) == 'letter' ? 'addressed to' : 'delivered to'
+    " (#{owner_verb} #{secure_request_delivery_owner_label(owner, delivery_source: metadata['delivery_source'])})"
   end
 
   def secure_proof_resubmission_request_context(notification, metadata, proof_type)
@@ -309,10 +310,8 @@ module SecureRequestFormsHelper
     "Secure certification upload link sent to #{target} via #{channel}#{expires_text}"
   end
 
-  def secure_request_recipient_channel_label(metadata)
-    secure_request_channel_label_for(
-      metadata['requested_recipient_channel'] || metadata['recipient_channel'] || metadata['channel']
-    )
+  def secure_request_notification_channel(metadata)
+    metadata['requested_recipient_channel'] || metadata['recipient_channel'] || metadata['channel']
   end
 
   def secure_request_cert_upload_target(metadata, application)
@@ -333,8 +332,10 @@ module SecureRequestFormsHelper
 
   def secure_request_revocation_reason_text(metadata)
     case metadata['reason'].to_s
+    when 'fulfilled_by_staff'
+      ' after staff recorded the response'
     when 'replacement_request'
-      ' before sending a replacement link'
+      metadata['recipient_channel'] == 'letter' ? ' before issuing a replacement letter' : ' before sending a replacement link'
     when 'document_signing_request_sent'
       ' because a DocuSeal request was sent'
     else

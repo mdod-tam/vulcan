@@ -61,6 +61,23 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
     end
   end
 
+  test 'a posted proof request has no public link expiration event' do
+    application = create(:application)
+    create(:secure_request_form,
+           application: application,
+           recipient: application.user,
+           requested_by: @admin,
+           kind: :id_proof_resubmission,
+           recipient_channel: :letter,
+           expires_at: 7.days.ago)
+
+    assert_no_difference("Event.where(action: 'proof_resubmission_request_expired').count") do
+      result = SecureFormExpirationRecorder.new.call
+      assert_predicate result, :success?
+      assert_equal 0, result.data.fetch(:proof)
+    end
+  end
+
   test 'records expiration events with system actor when requester is missing' do
     ensure_system_audit_actor!
     application = create(:application)

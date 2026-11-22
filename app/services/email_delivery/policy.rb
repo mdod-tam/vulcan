@@ -97,8 +97,8 @@ module EmailDelivery
 
     # Print release locks the same controls as the writer before locking print items.
     # Storage, rendering and network I/O must stay outside this transaction.
-    def self.with_locked_controls(contexts, channel:)
-      FeatureFlag.transaction do
+    def self.with_locked_controls(contexts, channel:, requires_new: false)
+      FeatureFlag.transaction(requires_new: requires_new) do
         scopes = contexts.flat_map { |context| Array(context&.dig('scopes')) + [context&.dig('channels', channel.to_s)] }.compact
         FeatureFlag.where(id: scopes.pluck('id')).order(:id).lock.load
         templates = contexts.flat_map { |context| Array(context&.dig('templates')) }

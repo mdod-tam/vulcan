@@ -22,11 +22,14 @@ module Reports
       assert_equal first[:open_applications_count] + 1, AdminDashboardMetrics.call[:open_applications_count]
     end
 
-    test 'the print queue and reassignment counts are read on every call' do
-      AdminDashboardMetrics.call
-      PrintQueueItem.stubs(:unreleased).returns(stub(count: 7))
+    test 'the print queue counts both pending stages with a warm reporting cache' do
+      baseline = AdminDashboardMetrics.call[:print_queue_pending_count]
+      create(:print_queue_item, :pending)
+      create(:print_queue_item, :pending, released_at: Time.current)
+      create(:print_queue_item, :canceled, released_at: Time.current)
+      create(:print_queue_item)
 
-      assert_equal 7, AdminDashboardMetrics.call[:print_queue_pending_count]
+      assert_equal baseline + 2, AdminDashboardMetrics.call[:print_queue_pending_count]
     end
 
     test 'waiting for documents is separate from documents already available for staff review' do

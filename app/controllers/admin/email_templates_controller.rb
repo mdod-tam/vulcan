@@ -395,10 +395,11 @@ module Admin
     end
 
     def update_all_templates(enabled:)
-      count = EmailDelivery::ControlWriter.set_all_template_pairs(
-        enabled: enabled, actor: current_user, operation_id: params[:operation_id].presence || SecureRandom.uuid
+      result = EmailDelivery::ControlWriter.set_all_template_pairs(
+        enabled: enabled, actor: current_user, operation_id: params[:operation_id].presence || SecureRandom.uuid,
+        expected_version: params[:expected_version]
       )
-      redirect_to admin_email_templates_path, notice: t('admin.email_delivery.bulk_result', count: count, locale: :en)
+      redirect_to admin_email_templates_path, **helpers.email_bulk_template_flash(result, enabled: enabled)
     rescue ActiveRecord::ActiveRecordError => e
       Rails.logger.error("Template bulk change failed: #{e.class}")
       redirect_to admin_email_templates_path, alert: t('admin.email_delivery.bulk_failed', locale: :en)

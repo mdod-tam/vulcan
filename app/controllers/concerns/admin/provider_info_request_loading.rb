@@ -44,10 +44,14 @@ module Admin
       end
 
       @secure_request_forms = @delivery_secure_request_forms.select(&:kind_provider_info_request?)
+      @provider_info_served_ids = @secure_request_forms.select(&:postal_notice_outstanding?).map(&:recipient_id)
+      @provider_info_recipient_options = @secure_request_recipient_options.reject do |option|
+        @provider_info_served_ids.include?(option.fetch(:recipient).id)
+      end
       @active_secure_request_form_batch_counts = application
                                                  .secure_request_forms
                                                  .provider_info
-                                                 .active
+                                                 .operator_revocable
                                                  .group(:request_batch_id)
                                                  .count
     end
@@ -111,6 +115,7 @@ module Admin
       SecureRequestForm
         .provider_info
         .where(application_id: application_ids)
+        .includes(:application, :print_queue_items)
         .order(sent_at: :desc)
         .to_a
         .group_by(&:application_id)
@@ -121,7 +126,7 @@ module Admin
     end
 
     def provider_info_batch_summary(batch_forms)
-      active_expirations = batch_forms.select(&:active?).filter_map(&:expires_at)
+      active_expirations = batch_forms.reject(&:recipient_channel_letter?).select(&:active?).filter_map(&:expires_at)
       summary_status = provider_info_summary_status(batch_forms, active_expirations)
       return nil if summary_status.blank?
 
@@ -135,6 +140,7 @@ module Admin
 
     def provider_info_summary_status(batch_forms, active_expirations)
       return :active if active_expirations.any?
+      return :paper if batch_forms.any?(&:postal_notice_outstanding?)
 
       cutoff = provider_info_secure_link_recent_cutoff
       return :expired if batch_forms.any? { |form| provider_info_recently_expired?(form, cutoff) }
@@ -143,7 +149,7 @@ module Admin
     end
 
     def provider_info_recently_expired?(form, cutoff)
-      form.display_status == :expired && form.expires_at.present? && form.expires_at >= cutoff
+      !form.recipient_channel_letter? && form.display_status == :expired && form.expires_at.present? && form.expires_at >= cutoff
     end
 
     def provider_info_recently_revoked?(form, cutoff)

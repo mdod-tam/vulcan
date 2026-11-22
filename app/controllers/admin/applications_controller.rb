@@ -39,7 +39,7 @@ module Admin
     def edit; end
 
     def update
-      if @application.update(application_params)
+      if update_application_and_close_paper_requests
         if @application.saved_changes.except('updated_at').any?
           AuditEventService.log(
             action: 'application_updated',
@@ -147,6 +147,17 @@ module Admin
     end
 
     private
+
+    def update_application_and_close_paper_requests
+      @application.with_lock do
+        awaiting_provider_info = @application.missing_required_provider_info?
+        updated = @application.update(application_params)
+        if updated && awaiting_provider_info && !@application.missing_required_provider_info?
+          Applications::PostalRequestClosure.fulfill!(application: @application, kind: :provider_info_request, actor: current_user)
+        end
+        updated
+      end
+    end
 
     def applications_view
       return params[:view] if %w[review pipeline all].include?(params[:view])

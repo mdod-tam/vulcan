@@ -42,7 +42,7 @@ en:
     recipient_statuses:
       suppressed: Not sent
       letter_blocked: Not sent
-      letter_canceled: Not sent
+      letter_canceled: Letter canceled
       bounced: Delivery failed
       docuseal: Signing invitation requested
     statuses:
@@ -57,7 +57,7 @@ en:
       unknown: Delivery unknown
       letter_printed: Letter marked printed
       letter_released: Letter released for printing
-      letter_canceled: Letter canceled before release
+      letter_canceled: Letter canceled
       sms_submitted: Text message submitted
       docuseal: DocuSeal invitation requested
       letter_blocked: Letter blocked — awaiting cancellation
@@ -81,7 +81,7 @@ en:
       letter_printed: Staff marked the letter printed; receipt by the recipient is
         not confirmed.
       letter_released: The letter was released to the print process.
-      letter_canceled: The letter was canceled before release.
+      letter_canceled: The print queue item was canceled.
       sms_submitted: The text message was submitted to its provider; receipt is not
         confirmed here.
       docuseal: DocuSeal owns this invitation. Postmark feedback does not establish

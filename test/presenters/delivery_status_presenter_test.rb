@@ -99,7 +99,10 @@ class DeliveryStatusPresenterTest < ActiveSupport::TestCase
 
   test 'pending letter history uses a batch snapshot without per-row render queries' do
     context = EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form')
-    forms = create_list(:secure_request_form, 3, recipient_channel: :letter)
+    forms = Array.new(3) do
+      application = create(:application, status: :awaiting_proof, certifying_professional_name: nil)
+      create(:secure_request_form, application: application, recipient_channel: :letter, expires_at: 1.day.ago)
+    end
     forms.each do |form|
       identity = PrintQueueItem.identity_for(recipient: form.recipient, application: form.application, secure_request_form: form)
       create(:print_queue_item, :pending, constituent: form.recipient, application: form.application, secure_request_form: form,

@@ -36,6 +36,12 @@ module Applications
         @context = context
         raise Refused, :recipient_no_longer_eligible unless context.actor.admin? && context.actor.public_login_active?
 
+        if context.resend_of&.recipient_channel_letter? &&
+           (context.resend_of.application_id != context.application.id || context.resend_of.kind != @kind.to_s ||
+             !context.resend_of.postal_delivery_eligible?(application: context.application))
+          raise Refused, :request_conflict
+        end
+
         yield context
       end
     end
@@ -55,10 +61,28 @@ module Applications
       candidates
     end
 
+    def preview_replacement(candidate)
+      IssuedRequest.new(secure_request_form: SecureRequestForm.new(request_attributes(candidate)), raw_token: nil, notification_id: nil)
+    end
+
+    def replacement_snapshot(candidate)
+      application = @context.application
+      [application.updated_at, application.user.updated_at, candidate.recipient.updated_at,
+       candidate.address_owner.id, candidate.address_owner.updated_at]
+    end
+
     # The caller's issuance transaction also owns replacement revocations and tracking.
     def replace_request!(candidate:, request_batch_id:, notification_type:, tracking_metadata: {})
+      open_requests = open_requests_for(candidate.recipient.id)
+      prior_ids = open_requests.ids
+      raise Refused, :request_conflict if @context.resend_of&.recipient_channel_letter? && prior_ids.exclude?(@context.resend_of.id)
+
+      if @context.resend_of.blank? && open_requests.recipient_channel_letter.includes(:print_queue_items).any?(&:postal_notice_outstanding?)
+        raise Refused, :request_conflict
+      end
+
       issued = SecureFormReplacement.replace!(
-        open: open_requests_for(candidate.recipient.id),
+        open: open_requests,
         actor: @context.actor,
         attributes: request_attributes(candidate),
         request_batch_id: request_batch_id
@@ -76,6 +100,7 @@ module Applications
       )
       raise Refused, :request_conflict unless notification
 
+      Letters::Delivery.cancel_replaced_requests!(prior_ids, actor: @context.actor)
       IssuedRequest.new(secure_request_form: form, raw_token: issued.raw_token, notification_id: notification.id)
     end
 

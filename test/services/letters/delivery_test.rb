@@ -47,6 +47,40 @@ module Letters
       assert queue.persisted?
     end
 
+    test 'an ordinary letter override rejects an incomplete postal recipient before admission' do
+      @recipient.update!(physical_address_1: nil)
+      options = { household_size: 2, annual_income: 100_000, communication_preference: 'letter' }
+
+      assert_no_difference ['PrintQueueItem.count', 'ActiveStorage::Blob.count'] do
+        error = assert_raises(EmailDelivery::ConfigurationError) do
+          ApplicationNotificationsMailer.income_threshold_exceeded(@recipient, options).deliver_now
+        end
+        assert_equal 'incomplete_mailing_address', error.reason.to_s
+      end
+
+      @recipient.update!(physical_address_1: '123 Main St')
+      assert_difference('PrintQueueItem.count', 1) do
+        ApplicationNotificationsMailer.income_threshold_exceeded(@recipient, options).deliver_now
+      end
+    end
+
+    test 'text letters embed fonts for mixed names and refuse unsupported scripts' do
+      @recipient.update!(first_name: "Łucja Jose\u0301 Александра 李 さとう 한글", communication_preference: :letter)
+      assert_difference('PrintQueueItem.count', 1) do
+        ApplicationNotificationsMailer.account_created(@recipient).deliver_now
+      end
+      bytes = PrintQueueItem.where(constituent: @recipient).sole.pdf_letter.download
+      assert bytes.include?('NotoSans-Regular'), 'Expected the embedded Noto Sans font'
+      assert bytes.include?('NotoSansCJKJP-Regular'), 'Expected the embedded Noto Sans CJK font'
+
+      @recipient.update!(first_name: 'حسن')
+      assert_no_difference('PrintQueueItem.count') do
+        error = assert_raises(EmailDelivery::ConfigurationError) { ApplicationNotificationsMailer.account_created(@recipient).deliver_now }
+        assert_equal 'unsupported_letter_text', error.reason.to_s
+        assert_no_match(/حسن/, error.message)
+      end
+    end
+
     test 'export records release separately from physical print confirmation' do
       item = queue
       export = Delivery.export!([item.id], actor: @admin)

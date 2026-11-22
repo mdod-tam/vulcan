@@ -32,6 +32,7 @@ module ApplicationProviderInfoRequests
   # Staff must be able to see and revoke a live link after another path
   # completes the provider information.
   def provider_info_requests_visible?
-    missing_required_provider_info? || secure_request_forms.provider_info.active.exists?
+    missing_required_provider_info? || secure_request_forms.provider_info.active.exists? ||
+      secure_request_forms.provider_info.joins(:print_queue_items).merge(PrintQueueItem.awaiting_print_confirmation).exists?
   end
 end

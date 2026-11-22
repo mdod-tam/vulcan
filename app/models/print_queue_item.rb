@@ -64,19 +64,23 @@ class PrintQueueItem < ApplicationRecord
       'delivery_owner_id' => secure_request_form&.delivery_owner_id }.compact
   end
 
-  def display_delivery_state(active_request_ids: nil)
+  def display_delivery_state
     return preloaded_delivery_state if preloaded_delivery_state
     return :printed if printed?
-    return :released if released_at
     return :canceled if canceled?
+    return :released if released_at
 
-    decision = delivery_decision(active_request_ids: active_request_ids)
+    decision = delivery_decision
     return :configuration_error if decision.configuration_error?
 
     decision.allowed? ? :queued : :blocked
   end
 
-  def delivery_decision(active_request_ids: nil)
+  def downloaded_copy_to_resolve?
+    pending? && released_at? && secure_request_form.present? && !secure_request_form.postal_request_open?
+  end
+
+  def delivery_decision
     return EmailDelivery::Decision.suppressed(cancellation_reason || :pending_canceled) if canceled?
 
     decision = EmailDelivery::Policy.verify(delivery_context, channel: :letter)
@@ -85,10 +89,13 @@ class PrintQueueItem < ApplicationRecord
     current_identity = self.class.identity_for(recipient: constituent, application: application, secure_request_form: secure_request_form)
     return EmailDelivery::Decision.suppressed(:delivery_identity_changed) unless delivery_identity == current_identity
 
-    request_active = if secure_request_form_id
-                       active_request_ids ? active_request_ids.include?(secure_request_form_id) : SecureRequestForm.active.exists?(id: secure_request_form_id)
-                     end
-    return EmailDelivery::Decision.suppressed(:request_no_longer_active) if released_at.nil? && secure_request_form && !request_active
+    if secure_request_form && !secure_request_form.postal_recipient_authorized?(application: application, address_owner_id: constituent_id)
+      return EmailDelivery::Decision.suppressed(:letter_recipient_ineligible)
+    end
+
+    if pending? && secure_request_form && !secure_request_form.postal_delivery_eligible?(application: application)
+      return EmailDelivery::Decision.suppressed(:request_no_longer_active)
+    end
 
     EmailDelivery::Decision.allowed
   end
@@ -102,8 +109,8 @@ class PrintQueueItem < ApplicationRecord
     record_delivery_event('letter_released_for_printing', actor: actor)
   end
 
-  def cancel_unreleased!(reason:, actor:)
-    return false unless pending? && released_at.nil?
+  def cancel_pending!(reason:, actor:)
+    return false unless pending?
 
     self.delivery_write = true
     update!(status: :canceled, canceled_at: Time.current, cancellation_reason: reason)
@@ -113,7 +120,8 @@ class PrintQueueItem < ApplicationRecord
   end
 
   def confirm_printed!(actor:)
-    raise Letters::Delivery::ReleaseDenied, { id => 'Release this letter before marking it printed.' } unless released_at && !canceled?
+    raise Letters::Delivery::ReleaseDenied, { id => 'This letter was canceled.' } if canceled?
+    raise Letters::Delivery::ReleaseDenied, { id => 'Release this letter before marking it printed.' } unless released_at
     return if printed?
 
     self.delivery_write = true

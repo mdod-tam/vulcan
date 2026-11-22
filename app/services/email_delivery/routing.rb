@@ -12,5 +12,12 @@ module EmailDelivery
                    end
       preference.to_s == 'letter'
     end
+
+    def self.postal_recipient(recipient, contact_context: nil)
+      return contact_context.address_owner if contact_context
+      return recipient unless recipient.respond_to?(:dependent?) && recipient.dependent?
+
+      recipient.guardian_for_contact || recipient
+    end
   end
 end

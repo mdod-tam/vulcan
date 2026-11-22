@@ -60,7 +60,7 @@ module Applications
       user_id, managing_guardian_id = Application.where(id: @application_id).pick(:user_id, :managing_guardian_id)
       guardian_ids = GuardianRelationship.where(dependent_id: user_id).pluck(:guardian_id)
 
-      compact_ids(@actor_id, @resend_recipient_id, user_id, managing_guardian_id, guardian_ids)
+      compact_ids(@actor_id, @resend_recipient_id, user_id, managing_guardian_id, guardian_ids, pending_letter_recipient_ids)
     end
 
     def build_locked_context(participant_ids)
@@ -78,7 +78,8 @@ module Applications
         locked_application.user_id,
         locked_application.managing_guardian_id,
         relationships.map(&:guardian_id),
-        locked_resend&.recipient_id
+        locked_resend&.recipient_id,
+        pending_letter_recipient_ids
       )
       missing_ids = exact_ids - locked_users.keys
       raise ParticipantSetChanged, missing_ids if missing_ids.any?
@@ -93,6 +94,10 @@ module Applications
         guardian_relationships: relationships,
         known_recipients: known_recipients(locked_application, relationships, locked_users)
       )
+    end
+
+    def pending_letter_recipient_ids
+      PrintQueueItem.pending.where(application_id: @application_id).where.not(secure_request_form_id: nil).distinct.pluck(:constituent_id)
     end
 
     def lock_resend_form

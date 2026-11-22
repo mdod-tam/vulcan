@@ -142,6 +142,8 @@ Rails.application.routes.draw do
       member do
         post :release
         post :mark_as_printed
+        post :cancel
+        post :replace_request
       end
       collection do
         match :download_batch, via: %i[get post]
@@ -161,6 +163,10 @@ Rails.application.routes.draw do
         get :dependent_form
         get :recipient_preference
       end
+    end
+
+    resources :paper_rejection_letters, only: :show do
+      post :record_manual_mail, on: :member
     end
 
     resources :applications, except: :destroy do
@@ -207,6 +213,7 @@ Rails.application.routes.draw do
       resource :proof_resubmission_request,
                only: [:create],
                controller: 'application_proof_resubmission_requests'
+      resource :mailed_proof, only: [:create], controller: 'application_mailed_proofs'
       resource :certification_upload_request,
                only: [:create],
                controller: 'application_certification_upload_requests'

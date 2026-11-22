@@ -51,7 +51,7 @@ module Reports
           filter.fetch(:stages).sum { |stage| stage_counts[stage] }
         end,
         approved_training_waiting_count: self.class.approved_training_waiting_count,
-        print_queue_pending_count: PrintQueueItem.unreleased.count
+        print_queue_pending_count: PrintQueueItem.pending.count
       }
     end
 

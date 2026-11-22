@@ -5,7 +5,7 @@
 class SecureFormExpirationRecorder < BaseService
   def call
     counts = {
-      proof: record_expirations(SecureRequestForm.proof_resubmission.includes(:application, :recipient, :requested_by)),
+      proof: record_expirations(SecureRequestForm.proof_resubmission.not_recipient_channel_letter.includes(:application, :recipient, :requested_by)),
       certification: record_expirations(SecureRequestForm.certification_upload.includes(:application, :requested_by)),
       w9: record_expirations(VendorSecureRequestForm.includes(:vendor, :requested_by))
     }

@@ -57,9 +57,9 @@
                       when "proof_approved", "proof_rejected"
                         "Notification Sent"
                       when "provider_info_requested"
-                        "Provider Info Request Sent"
+                        secure_request_notification_for_postal_mail?(log) ? 'Paper Provider Info Request Recorded' : 'Provider Info Request Sent'
                       when "proof_resubmission_requested"
-                        "Proof Resubmission Request Sent"
+                        secure_request_notification_for_postal_mail?(log) ? 'Paper Proof Request Recorded' : 'Proof Resubmission Request Sent'
                       when "cert_upload_requested"
                         "Certification Upload Request Sent"
                       when 'max_rejections_reached'
@@ -103,7 +103,7 @@
                       when "proof_resubmission_request_revoked"
                         "Proof Resubmission Request Revoked"
                       when "proof_resubmission_request_expired"
-                        "Proof Resubmission Request Expired"
+                        log.metadata['recipient_channel'] == 'letter' ? 'Paper Request Token Expired' : 'Proof Resubmission Request Expired'
                       when "cert_upload_request_revoked"
                         "Certification Upload Request Revoked"
                       when "cert_upload_request_expired"

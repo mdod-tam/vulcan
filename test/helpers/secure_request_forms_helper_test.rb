@@ -9,7 +9,8 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
 
   test 'blocked letter label differs from durable cancellation in both locales' do
     owner = create(:constituent)
-    form = create(:secure_request_form, recipient: owner, delivery_owner: owner, recipient_channel: :letter)
+    form = create(:secure_request_form, application: create(:application, user: owner),
+                                        recipient: owner, delivery_owner: owner, recipient_channel: :letter)
     context = EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form')
     item = Letters::Delivery.queue!(recipient: owner, application: form.application, secure_request_form: form,
                                     letter_type: :disability_certification_form, context: context) { StringIO.new('%PDF label') }
@@ -105,8 +106,7 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       }
     )
 
-    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
-                  delivery_owners_by_id: {})
+    detail = secure_request_notification_detail(notification, application: application, delivery_owners_by_id: {})
 
     assert_includes detail, 'ID proof rejected - Too blurry; secure upload link sent to'
     assert_includes detail, 'via Email'
@@ -129,8 +129,7 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       }
     )
 
-    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
-                  delivery_owners_by_id: {})
+    detail = secure_request_notification_detail(notification, application: application, delivery_owners_by_id: {})
 
     assert_includes detail, 'ID proof not provided; secure upload link sent to'
     assert_not_includes detail, 'rejected'
@@ -159,8 +158,7 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
       }
     )
 
-    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
-                  delivery_owners_by_id: {})
+    detail = secure_request_notification_detail(notification, application: application, delivery_owners_by_id: {})
 
     assert_includes detail, 'ID proof requested; secure upload link sent to'
     assert_not_includes detail, 'Old blurry document'

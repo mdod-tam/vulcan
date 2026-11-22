@@ -7,12 +7,8 @@ module Admin
     before_action :load_nested_application
 
     def create
-      revoked_count = 0
-      ApplicationRecord.transaction do
-        active_batch_requests.each do |secure_request_form|
-          revoked_count += 1 if secure_request_form.revoke!(actor: current_user, reason: :manual_batch_revocation)
-        end
-      end
+      revoked_count = Applications::PostalRequestClosure.revoke!(application: @application, requests: batch_requests,
+                                                                 actor: current_user, reason: :manual_batch_revocation)
 
       redirect_to admin_application_path(@application),
                   status: :see_other,
@@ -26,11 +22,10 @@ module Admin
 
     private
 
-    def active_batch_requests
+    def batch_requests
       @application
         .secure_request_forms
         .provider_info
-        .active
         .where(request_batch_id: batch_revocation_params[:request_batch_id])
     end
 

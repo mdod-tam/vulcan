@@ -16,19 +16,29 @@ module Admin
       return tag.p(email_delivery_t('missing_control_help'), class: 'text-sm text-danger-800 max-w-prose') if enabled.nil?
 
       target = !enabled
-      key = target ? 'turn_on' : 'turn_off'
+      master = extra_params[:control] == EmailDelivery::ALL_CONTROL
+      key = if master
+              target ? 'resume_correspondence' : 'pause_correspondence'
+            else
+              target ? 'turn_on' : 'turn_off'
+            end
+      channel = EmailDelivery::CHANNEL_CONTROLS.key(extra_params[:control])
+      confirmation = channel && !target ? "turn_off_#{channel}_confirm" : "#{key}_confirm"
       button_to email_delivery_t(key), url,
                 method: :patch,
                 params: extra_params.merge(enabled: target, expected_version: version, operation_id: SecureRandom.uuid),
-                class: email_control_button_class(target),
-                aria: { label: email_delivery_t("#{key}_aria", label: label) },
-                form: { class: 'inline' },
-                data: { turbo_confirm: email_delivery_t("#{key}_confirm", label: label) }
+                class: email_control_button_class(target, master: master),
+                aria: { label: master ? email_delivery_t(key) : email_delivery_t("#{key}_aria", label: label) },
+                form: { class: 'inline', data: { turbo_confirm: email_delivery_t(confirmation, label: label) } }
     end
 
     def email_control_state_badge(saved_enabled:, suppressed_by:, category: nil, mixed: false)
       tag.span(class: 'inline-flex flex-wrap items-center gap-1 text-xs') do
-        safe_join([saved_state_badge(saved_enabled, mixed), suppression_note(saved_enabled, suppressed_by, category)].compact)
+        if saved_enabled && suppressed_by
+          safe_join([blocked_state_badge(suppressed_by, category), tag.span(email_delivery_t('saved_on'), class: 'text-gray-700')])
+        else
+          saved_state_badge(saved_enabled, mixed)
+        end
       end
     end
 
@@ -36,8 +46,25 @@ module Admin
       t("admin.email_delivery.#{key}", **, locale: :en)
     end
 
-    def email_bulk_button_class(turning_on)
-      "btn #{email_button_colors(turning_on)}"
+    def email_bulk_template_button(enabled:, counts:, version:)
+      total = counts.values.sum
+      change_count = total - counts.fetch(enabled ? :on : :off, 0)
+      key = enabled ? 'enable_all' : 'disable_all'
+      url = enabled ? bulk_enable_admin_email_templates_path : bulk_disable_admin_email_templates_path
+
+      button_to email_delivery_t("#{key}_groups", count: total), url,
+                method: :patch, params: { operation_id: SecureRandom.uuid, expected_version: version },
+                disabled: change_count.zero?, class: enabled ? 'btn btn-secondary' : 'btn btn-danger-outline',
+                form: { data: { turbo_confirm: email_delivery_t("#{key}_confirm", count: change_count) } }
+    end
+
+    def email_bulk_template_flash(result, enabled:)
+      return { alert: email_delivery_t('bulk_stale') } if result.status == :stale
+      return { notice: email_delivery_t('already_applied') } if result.status == :already_applied
+
+      message = email_delivery_t('bulk_result', count: result.changed_count)
+      message += " #{email_delivery_t('bulk_cancellation')}" if !enabled && result.changed_count.positive?
+      { notice: message }
     end
 
     def email_control_flash(result, label:)
@@ -61,6 +88,8 @@ module Admin
     private
 
     def saved_state_badge(saved_enabled, mixed)
+      return mixed_state_badge if mixed
+
       state = if saved_enabled.nil?
                 'state_missing'
               else
@@ -71,26 +100,25 @@ module Admin
                 else
                   saved_enabled ? :success : :danger
                 end
-      state_badge = badge(email_delivery_t(state), variant)
-      return state_badge unless mixed
-
-      safe_join([state_badge, tag.span(email_delivery_t('pair_mixed'), class: 'text-warning-800')], ' ')
+      badge(email_delivery_t(state), variant)
     end
 
-    def suppression_note(saved_enabled, suppressed_by, category)
-      return unless saved_enabled && suppressed_by
+    def mixed_state_badge
+      safe_join([badge(email_delivery_t('state_mixed'), :attention), tag.span(email_delivery_t('pair_mixed'), class: 'text-warning-800')], ' ')
+    end
+
+    def blocked_state_badge(suppressed_by, category)
+      return badge(email_delivery_t('blocked_by_master'), :attention) if suppressed_by == :all_disabled
+      return badge(email_delivery_t('state_missing'), :attention) if suppressed_by == :configuration_error
 
       reason = EmailDelivery::ControlPanel.reason_text(suppressed_by, category: category)
-      tag.span(email_delivery_t('suppressed_prefix', reason: reason), class: 'text-warning-800')
+      tag.span(email_delivery_t('suppressed_prefix', reason: reason), class: 'rounded-md bg-warning-50 px-2 py-0.5 text-warning-900')
     end
 
-    def email_control_button_class(target)
-      "btn btn-sm #{email_button_colors(target)}"
-    end
+    def email_control_button_class(target, master:)
+      return target ? 'btn btn-primary' : 'btn btn-danger-outline' if master
 
-    # Turning a control on is a success action and turning it off is a danger action.
-    def email_button_colors(turning_on)
-      turning_on ? 'btn-success' : 'btn-danger'
+      target ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-danger-outline'
     end
   end
 end

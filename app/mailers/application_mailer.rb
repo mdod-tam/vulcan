@@ -190,7 +190,7 @@ class ApplicationMailer < ActionMailer::Base
       delivery_context: @delivery_context,
       secure_request_form: secure_request_form,
       request_key: delivery_key
-    ).queue_for_printing
+    ).queue_for_printing(finalize_request: params[:finalize_letter_request])
   end
 
   # Queues a printed letter when the recipient prefers mail. Returns true when the letter route
@@ -205,13 +205,7 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def letter_recipient_for(recipient)
-    context = application_contact_context_for(recipient)
-    return context.address_owner if context
-
-    return recipient unless recipient.respond_to?(:dependent?) && recipient.dependent?
-    return recipient unless recipient.respond_to?(:guardian_for_contact) && recipient.guardian_for_contact.present?
-
-    recipient.guardian_for_contact
+    EmailDelivery::Routing.postal_recipient(recipient, contact_context: application_contact_context_for(recipient))
   end
 
   # The form owns secure-request language. Historical ownerless forms use the

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'digest'
+
 module EmailDelivery
   # The only writer for email controls and template enablement. Turning a control or template pair
   # off bumps its generation in the same transaction, which cancels every email captured under the
@@ -12,11 +14,16 @@ module EmailDelivery
       def changed? = status == :changed
       def stale? = status == :stale
     end
+    BulkResult = Data.define(:status, :changed_count)
 
     # A form carries the version it was rendered from. On/off plus generation changes on every
     # turn-off, so a form loaded before someone else turned a control off and on again is stale.
     def self.version_for(control_or_rows)
       Array(control_or_rows).sort_by(&:id).map { |row| "#{row.id}:#{row.enabled}:#{row.delivery_generation}" }.join(',')
+    end
+
+    def self.bulk_version_for(rows)
+      Digest::SHA256.hexdigest(version_for(rows))
     end
 
     # expected_version (or expected_enabled) is what the admin saw; a newer change by someone else wins.
@@ -59,13 +66,14 @@ module EmailDelivery
 
     # Lock the complete batch in ID order so a failed pair or audit rolls back every
     # setting and generation. A retry identifies the whole operation, not each pair.
-    def self.set_all_template_pairs(enabled:, actor:, operation_id:)
+    def self.set_all_template_pairs(enabled:, actor:, operation_id:, expected_version:)
       raise ArgumentError, 'operation_id is required' if operation_id.blank?
 
       action = enabled ? 'email_templates_bulk_enabled' : 'email_templates_bulk_disabled'
       EmailTemplate.transaction do
         rows = EmailTemplate.deliverable.order(:id).lock.to_a
-        next 0 if applied?(operation_id, action)
+        next BulkResult.new(status: :already_applied, changed_count: 0) if applied?(operation_id, action)
+        next BulkResult.new(status: :stale, changed_count: 0) if bulk_version_for(rows) != expected_version
 
         changed_pairs = rows.group_by { |row| [row.name, row.format] }.values.reject do |pair|
           pair.all? { |row| row.enabled == enabled }
@@ -77,7 +85,7 @@ module EmailDelivery
         AuditEventService.log(actor: actor, action: action, auditable: actor,
                               metadata: { count: changed_pairs.size, operation_id: operation_id })
         Letters::ReconcilePendingJob.schedule if !enabled && changed_pairs.any?
-        changed_pairs.size
+        BulkResult.new(status: :applied, changed_count: changed_pairs.size)
       end
     end
 

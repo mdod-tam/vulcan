@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Notification < ApplicationRecord
+  PAPER_REJECTION_LETTER_ACTION = 'paper_income_rejection_letter'
+
   has_many :email_delivery_attempts, dependent: :nullify
 
   # Suffix: true generates methods like `delivered_status?` and scopes like `delivered_status`.
@@ -21,6 +23,7 @@ class Notification < ApplicationRecord
   scope :unread_notifications, -> { where(read_at: nil) }
   scope :read_notifications, -> { where.not(read_at: nil) }
   scope :disability_certification_requests, -> { where(action: 'disability_certification_requested') }
+  scope :paper_rejection_letters, -> { where(action: PAPER_REJECTION_LETTER_ACTION) }
   scope :with_delivery_handoff, lambda {
     where(delivery_status: %w[queued submitted delivered opened])
       .where("metadata->>'actual_delivery_channel' IN (?)", %w[email sms letter])

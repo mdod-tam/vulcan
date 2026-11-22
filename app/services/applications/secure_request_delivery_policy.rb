@@ -39,14 +39,29 @@ module Applications
       I18n.t("#{self.class::MESSAGE_SCOPE}.#{key}", **, locale: secure_form_locale_for(user))
     end
 
-    def prepare_requests
+    def with_delivery_candidates(validate)
       issuance.with_locked_context do |context|
         @application = context.application
         @actor = context.actor
         @resend_of = context.resend_of
-        yield if block_given?
+        validate&.call
+        yield issuance.resolve_recipients!(recipient_ids: recipient_ids, channel_overrides: channel_overrides)
+      end
+    end
 
-        candidates = issuance.resolve_recipients!(recipient_ids: recipient_ids, channel_overrides: channel_overrides)
+    def send_requests(&validate)
+      return replace_postal_request(validate) if resend_of&.recipient_channel_letter?
+
+      deliveries = prepare_requests(validate)
+      delivery_result = deliver_requests(deliveries)
+      return delivery_result if delivery_result.failure?
+      return delivery_denial_result(deliveries) if denied_candidates.any?
+
+      success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+    end
+
+    def prepare_requests(validate)
+      with_delivery_candidates(validate) do |candidates|
         request_batch_id = SecureRandom.uuid
         candidates.filter_map do |candidate|
           if delivery_denied_for?(candidate)
@@ -57,6 +72,53 @@ module Applications
           create_delivery(candidate, request_batch_id)
         end
       end
+    end
+
+    def replace_postal_request(validate)
+      preview, snapshot = with_delivery_candidates(validate) do |candidates|
+        candidate = candidates.sole
+        if delivery_denied_for?(candidate)
+          denied_candidates << candidate
+          next []
+        end
+
+        [build_delivery(issuance.preview_replacement(candidate), candidate), issuance.replacement_snapshot(candidate)]
+      end
+      return delivery_denial_result([]) unless preview
+
+      committed = nil
+      finalize = lambda do |item|
+        with_delivery_candidates(validate) do |candidates|
+          candidate = candidates.sole
+          raise SecureRequestIssuance::Refused, :request_conflict unless snapshot == issuance.replacement_snapshot(candidate)
+
+          committed = create_delivery(candidate, SecureRandom.uuid)
+          item.application = application
+          item.constituent = candidate.address_owner
+          item.secure_request_form = committed.secure_request_form
+          item.delivery_context = delivery_context_for(committed)
+        end
+      end
+      deliver_letter(preview, finalize_request: finalize)
+      success(message(:request_created), { secure_request_forms: [committed.secure_request_form] })
+    rescue EmailDelivery::ConfigurationError => e
+      configuration_failure(e.reason)
+    rescue ApplicationMailer::DeliverySkipped => e
+      suppressed(e.reason)
+    rescue SecureRequestIssuance::Refused, SecureRequestIssuance::CooldownActive, SecureRequestIssuanceIntegrity::ParticipantSetUnstable,
+           ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique
+      raise
+    rescue StandardError => e
+      report_delivery_failure(e, [preview].compact)
+      postal_replacement_outcome(committed&.secure_request_form)
+    end
+
+    def postal_replacement_outcome(form)
+      return failure('Could not prepare the replacement.') unless form&.persisted? && PrintQueueItem.exists?(secure_request_form: form)
+
+      success(message(:request_created), { secure_request_forms: [form] })
+    rescue ActiveRecord::ActiveRecordError
+      failure('Check the print queue before trying again.', { commit_state: :unknown })
     end
 
     def deliver_sms(delivery)
@@ -86,7 +148,12 @@ module Applications
     end
 
     def configuration_failure(reason, data = {})
-      failure(I18n.t('email_delivery.configuration_error', locale: delivery_result_locale),
+      message = if %w[incomplete_mailing_address unsupported_letter_text].include?(reason.to_s)
+                  EmailDelivery::ControlPanel.reason_text(reason)
+                else
+                  I18n.t('email_delivery.configuration_error', locale: delivery_result_locale)
+                end
+      failure(message,
               data.merge(delivery_error: true, configuration_error: true, reason: reason))
     end
 
@@ -254,6 +321,8 @@ module Applications
     end
 
     def delivery_context_for(delivery)
+      return delivery.context unless delivery.secure_request_form.persisted?
+
       delivery.context.merge('request_id' => "secure-request-#{delivery.secure_request_form.model_name.singular}-#{delivery.secure_request_form.id}",
                              'notification_id' => delivery.notification_id,
                              'channel' => delivery_channel(delivery))

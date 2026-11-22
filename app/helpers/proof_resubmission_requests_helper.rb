@@ -19,16 +19,13 @@ module ProofResubmissionRequestsHelper
 
   def proof_recovery_recipient_ids(forms)
     latest_by_recipient = forms.group_by(&:recipient_id).values.map { |requests| requests.max_by { |form| [form.sent_at, form.id] } }
-    revoked_ids = latest_by_recipient.select { |form| form.revoked? || (form.active? && !proof_request_delivery_active?(form)) }.map(&:recipient_id)
+    revoked_ids = latest_by_recipient.select { |form| form.revoked? || (form.operator_revocable? && !proof_request_delivery_active?(form)) }
+                                     .map(&:recipient_id)
     revoked_ids - forms.select { |form| proof_request_delivery_active?(form) }.map(&:recipient_id)
   end
 
   def proof_request_delivery_active?(form)
-    return false unless form.active?
-    return true unless form.recipient_channel == 'letter'
-
-    item = form.print_queue_items.order(:id).last
-    item.nil? || item.released_at.present? || item.delivery_decision.allowed?
+    form.recipient_channel_letter? ? form.postal_notice_outstanding? : form.active?
   end
 
   def secure_proof_resubmission_button_text(proof_type)

@@ -8,7 +8,7 @@
     <%= link_to 'Communication settings', admin_email_templates_path(anchor: 'email-delivery'), class: 'text-primary-700 underline' %>
     <%= link_to 'Back to Dashboard', admin_dashboard_path, class: 'text-primary-700 underline' %>
   </div>
-  <p class="mb-6 max-w-prose text-sm text-gray-700">Review each letter before you download it for accuracy. Mark it as printed only after you print it.</p>
+  <p class="mb-6 max-w-prose text-sm text-gray-700">Review the recipient and address, then release the PDF. Check the downloaded PDF before printing. Confirm printing after you print it.</p>
 
   <%= render 'letters', letters: @pending_letters, title: 'Awaiting release', release: true, confirm: false %>
   <%= render 'letters', letters: @released_letters, title: 'Released — awaiting print confirmation', release: true, confirm: true %>

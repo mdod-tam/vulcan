@@ -17,10 +17,10 @@ module Admin
     test 'All dominates saved channels and print release explains a refusal without losing history' do
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
-      within('[data-email-control="communications.global"]') { accept_confirm { click_button 'Turn off' } }
+      within('[data-email-control="communications.global"]') { accept_confirm { click_button 'Turn off outgoing correspondence' } }
       within('[data-email-control="communications.sms"]') do
-        assert_text 'On'
-        assert_text 'all outgoing communications are turned off'
+        assert_text 'Saved on'
+        assert_text 'Blocked by master'
       end
       take_screenshot('outbound-all-off-channel-saved-on', html: true)
 
@@ -28,10 +28,14 @@ module Admin
       assert_text 'Awaiting release'
       take_full_page_screenshot('outbound-print-queue')
       click_link "Review letter ##{@letter.id}"
-      assert_text 'Release does not confirm printing or delivery'
+      assert_text 'Current mailing address'
+      assert_text 'Outgoing correspondence is turned off'
+      assert_no_button 'Release and download PDF'
       assert_no_selector 'iframe'
       take_full_page_screenshot('outbound-print-detail')
-      click_button 'Release and download PDF'
+      click_link 'Back to print queue'
+      find("#letter-#{@letter.id}").check
+      click_button 'Release and download selected'
       assert_text 'Nothing was released'
       assert_text 'Recently canceled'
       assert @letter.reload.canceled?
@@ -39,8 +43,8 @@ module Admin
       take_full_page_screenshot('outbound-print-release-refused')
 
       visit admin_email_templates_path
-      within('[data-email-control="communications.global"]') { accept_confirm { click_button 'Turn on' } }
-      assert_text 'All outgoing communications is now on.'
+      within('[data-email-control="communications.global"]') { accept_confirm { click_button 'Resume outgoing correspondence' } }
+      assert_text 'Outgoing correspondence is now on.'
       assert @letter.reload.canceled?
       @letter = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :disability_certification_form,
                                          context: EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form'), actor: @admin) do
@@ -48,13 +52,115 @@ module Admin
       end
       visit admin_print_queue_path(@letter)
       click_button 'Release and download PDF'
-      visit admin_print_queue_path(@letter)
-      assert_text 'Release authorized'
+      assert_button 'Mark as Printed'
+      assert_text 'Awaiting print confirmation'
       take_full_page_screenshot('outbound-print-released')
-      click_button 'Mark as Printed'
+      accept_confirm { click_button 'Mark as Printed' }
       assert_text 'Letter marked as printed.'
       assert @letter.reload.printed?
       take_full_page_screenshot('outbound-print-confirmed')
+    end
+
+    test 'a released letter can be canceled after the download and disappears from pending work' do
+      sign_in(@admin, bypass_mfa_enrollment: true)
+      visit admin_dashboard_path
+      assert_link 'View print queue'
+      take_full_page_screenshot('print-queue-dashboard')
+      click_link 'View print queue'
+      click_link "Review letter ##{@letter.id}"
+      click_button 'Release and download PDF'
+      assert_button 'Mark as Printed'
+      page.current_window.resize_to(390, 844)
+      take_full_page_screenshot('print-letter-released-phone')
+
+      accept_confirm(/Discard unused copies/) { click_button 'Cancel letter' }
+      assert_text 'Letter canceled.'
+      assert_no_button 'Mark as Printed'
+      assert_text 'Released:'
+      take_full_page_screenshot('print-letter-canceled')
+
+      click_link 'Back to print queue'
+      within('section[aria-label="Released — awaiting print confirmation"]') { assert_no_link "Review letter ##{@letter.id}" }
+      within('section[aria-label="Recently canceled"]') { assert_link "Review letter ##{@letter.id}" }
+    ensure
+      page.current_window.resize_to(1200, 800)
+    end
+
+    test 'staff can stage a scanned proof returned by mail after the secure token expires' do
+      recipient = Current.set(paper_context: true) do
+        create(:constituent, email: nil, phone: nil, communication_preference: :letter)
+      end
+      application = create(:application, user: recipient, status: :awaiting_proof)
+      result = Applications::RequestProofResubmission.new(application: application, actor: @admin, proof_type: :id).call
+      assert_predicate result, :success?
+      form = result.data.fetch(:secure_request_forms).sole
+      letter = form.print_queue_items.sole
+
+      travel_to form.sent_at + 72.hours do
+        sign_in(@admin, bypass_mfa_enrollment: true)
+        visit admin_print_queue_path(letter)
+        assert_text 'ID proof request'
+        click_button 'Release and download PDF'
+        assert_text 'Awaiting print confirmation'
+        take_full_page_screenshot('expired-paper-request-released')
+        accept_confirm(/Discard unused downloads/) { click_button 'Replace paper request' }
+        assert_text 'Replacement paper request queued for printing.'
+        assert_text 'Canceled'
+        assert_no_button 'Mark as Printed'
+        take_full_page_screenshot('expired-paper-request-replaced')
+      end
+
+      replacement = application.secure_request_forms.where(revoked_at: nil).sole
+      travel_to replacement.sent_at + 7.days do
+        SecureFormExpirationRecorder.new.call
+        sign_in(@admin, bypass_mfa_enrollment: true)
+        replacement_letter = replacement.print_queue_items.sole
+        visit admin_print_queue_path(replacement_letter)
+        click_button 'Release and download PDF'
+        assert_button 'Mark as Printed'
+        visit admin_application_path(application)
+        assert_selector '#mailed-id-document'
+        within "#secure_request_form_#{form.id}" do
+          assert_text 'Letter canceled'
+          assert_no_text 'canceled before release'
+        end
+        within '#audit-logs' do
+          assert_text 'Paper Proof Request Recorded'
+          assert_text "Paper response requested from #{recipient.full_name}"
+          assert_no_text 'secure upload link sent'
+          assert_no_text 'Proof Resubmission Request Expired'
+        end
+        take_full_page_screenshot('mailed-proof-upload')
+        attach_cleared_document 'mailed-id-document', file_fixture('id_proof.pdf')
+        click_button 'Upload for review'
+        assert_text 'Mailed proof uploaded for review.'
+        assert application.reload.id_proof.attached?
+        assert_not replacement.reload.postal_delivery_eligible?
+        take_full_page_screenshot('mailed-proof-recorded')
+        click_link "Review letter ##{replacement_letter.id}"
+        assert_text 'Resolve downloaded copy'
+        take_screenshot('closed-request-downloaded-copy', html: true)
+        accept_confirm { click_button 'Discard unused copy' }
+        assert_text 'Letter canceled.'
+        assert_predicate replacement_letter.reload, :canceled?
+      end
+    end
+
+    test 'staff can find the failed rejection letter receipt and record manual mailing' do
+      receipt = NotificationService.create_and_deliver!(
+        type: Notification::PAPER_REJECTION_LETTER_ACTION, recipient: @admin, actor: @admin, notifiable: @recipient, deliver: false, channel: :letter
+      )
+      receipt.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(:unsupported_letter_text), channel: :letter)
+      sign_in(@admin, bypass_mfa_enrollment: true)
+      visit notifications_path
+      within("#notification_#{receipt.id}") { click_link 'Income rejection letter' }
+      assert_text 'Letter not queued'
+      assert_text 'Use the approved manual process.'
+      take_screenshot('paper-rejection-letter-failed', html: true)
+      accept_confirm { click_button 'Record as mailed' }
+      assert_text 'Mailed by hand'
+      assert_no_button 'Record as mailed'
+      take_screenshot('paper-rejection-letter-mailed', html: true)
     end
 
     test 'SMS setup preserves a refused phone number and can retry with a replacement' do

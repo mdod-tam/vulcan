@@ -21,13 +21,8 @@ module Applications
 
     def call
       with_recipient_issuance_errors do
-        Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id))
-        deliveries = prepare_requests
-        delivery_result = deliver_requests(deliveries)
-        return delivery_result if delivery_result.failure?
-        return delivery_denial_result(deliveries) if denied_candidates.any?
-
-        success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+        Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id)) unless resend_of
+        send_requests
       end
     end
 
@@ -46,6 +41,10 @@ module Applications
     def create_delivery(candidate, request_batch_id)
       issued = issuance.replace_request!(candidate: candidate, request_batch_id: request_batch_id,
                                          notification_type: 'provider_info_requested')
+      build_delivery(issued, candidate)
+    end
+
+    def build_delivery(issued, candidate)
       Delivery.new(secure_request_form: issued.secure_request_form, raw_token: issued.raw_token,
                    candidate: candidate, context: authorization_for(candidate).last, notification_id: issued.notification_id)
     end
@@ -62,8 +61,9 @@ module Applications
     def delivery_mail_action = 'ApplicationNotificationsMailer#provider_info_requested'
     def sms_action = 'SmsService#provider_info'
 
-    def deliver_letter(delivery)
-      mail = ApplicationNotificationsMailer.provider_info_requested(
+    def deliver_letter(delivery, finalize_request: nil)
+      mailer = finalize_request ? ApplicationNotificationsMailer.with(finalize_letter_request: finalize_request) : ApplicationNotificationsMailer
+      mail = mailer.provider_info_requested(
         application, delivery.secure_request_form, secure_url: nil, letter_recipient: delivery.candidate.address_owner
       )
       EmailDelivery.deliver_now!(mail, context: delivery_context_for(delivery))
