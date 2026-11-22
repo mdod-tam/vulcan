@@ -110,6 +110,7 @@ module Admin
 
     test 'bulk changes confirm scope and require review before retrying failed or stale settings' do
       template = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', locale: :en)
+      group_count = EmailTemplate.deliverable.pluck(:name, :format).uniq.size
       before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == template.id }
       EmailTemplate.set_callback(:update, :after, callback)
@@ -121,7 +122,7 @@ module Admin
       page.execute_script("document.querySelector('#bulk-template-actions summary').focus()")
       page.driver.browser.keyboard.type(:Enter)
       assert_text 'Applies to all available languages'
-      assert_selector disable_button, text: /Turn off all \d+ template groups/
+      assert_selector disable_button, text: "Turn off #{group_count} template groups"
       take_screenshot('email-controls-bulk-review', html: true)
       dismiss_confirm(/template groups across their available languages/) { find(disable_button).click }
       assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
@@ -144,11 +145,18 @@ module Admin
       take_screenshot('email-controls-bulk-stale', html: true)
 
       find('#bulk-template-actions summary').click
-      accept_confirm { find(disable_button).click }
+      remaining = group_count - 1
+      disable_label = "Turn off #{remaining} #{'template group'.pluralize(remaining)}"
+      assert_selector disable_button, text: disable_label
+      assert_button 'Turn on 1 template group'
+      take_screenshot('email-controls-bulk-remaining', html: true)
+      accept_confirm(/^#{Regexp.escape(disable_label)}/) { find(disable_button).click }
 
       assert_text(/\d+ template groups? changed\./)
       assert_text 'Check the print queue for each letter'
       assert EmailTemplate.deliverable.none?(&:enabled)
+      find('#bulk-template-actions summary').click
+      assert_selector "#{disable_button}[disabled]", text: 'No template groups to turn off'
       take_screenshot('email-controls-bulk-retried', html: true)
     ensure
       EmailTemplate.skip_callback(:update, :after, callback) if callback

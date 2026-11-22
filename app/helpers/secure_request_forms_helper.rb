@@ -218,10 +218,8 @@ module SecureRequestFormsHelper
       recipient_name = metadata['recipient_name'].presence || 'the recipient'
       proof_name = metadata['proof_type'].to_s.humanize.downcase.presence || 'proof'
       change = event.action.end_with?('_revoked') ? 'revoked' : 'expired'
-      if metadata['recipient_channel'] == 'letter'
-        subject = change == 'expired' ? "Internal token for the paper #{proof_name} request" : "Paper #{proof_name} request"
-        return "#{subject} #{change} for #{recipient_name}#{reason_text}"
-      end
+      paper_revocation = change == 'revoked' && metadata['recipient_channel'] == 'letter'
+      return "Paper #{proof_name} request revoked for #{recipient_name}#{reason_text}" if paper_revocation
 
       channel = secure_request_channel_label_for(metadata['recipient_channel'])
       "Secure #{proof_name} upload link #{change} for #{recipient_name} via #{channel}#{reason_text}"

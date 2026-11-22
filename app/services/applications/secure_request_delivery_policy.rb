@@ -102,7 +102,7 @@ module Applications
       deliver_letter(preview, finalize_request: finalize)
       success(message(:request_created), { secure_request_forms: [committed.secure_request_form] })
     rescue EmailDelivery::ConfigurationError => e
-      configuration_failure(e.reason)
+      configuration_failure(e.reason, unsupported_codepoint: e.unsupported_codepoint)
     rescue ApplicationMailer::DeliverySkipped => e
       suppressed(e.reason)
     rescue SecureRequestIssuance::Refused, SecureRequestIssuance::CooldownActive, SecureRequestIssuanceIntegrity::ParticipantSetUnstable,
@@ -147,9 +147,9 @@ module Applications
       EmailDelivery.issuance(channel.to_s == 'sms' ? sms_action : delivery_mail_action, channel: channel.to_s)
     end
 
-    def configuration_failure(reason, data = {})
+    def configuration_failure(reason, data = {}, unsupported_codepoint: nil)
       message = if %w[incomplete_mailing_address unsupported_letter_text].include?(reason.to_s)
-                  EmailDelivery::ControlPanel.reason_text(reason)
+                  EmailDelivery::ControlPanel.reason_text(reason, unsupported_codepoint: public_recovery ? nil : unsupported_codepoint)
                 else
                   I18n.t('email_delivery.configuration_error', locale: delivery_result_locale)
                 end
@@ -183,7 +183,7 @@ module Applications
       if delivery_failures.any?
         data = delivery_failure_data(delivery_failures, deliveries)
         if (configuration = delivery_failures.find { |item| item[:configuration_error] })
-          return configuration_failure(configuration[:reason], data)
+          return configuration_failure(configuration[:reason], data, unsupported_codepoint: configuration[:unsupported_codepoint])
         end
 
         return failure(message(:delivery_failed), data)
@@ -252,7 +252,7 @@ module Applications
     def persist_delivery_failure(delivery, error)
       notification = Notification.find_by(id: delivery.notification_id)
       if error.is_a?(EmailDelivery::ConfigurationError)
-        notification&.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(error.reason), channel: delivery_channel(delivery))
+        notification&.mark_delivery_not_sent!(error.decision, channel: delivery_channel(delivery))
       else
         notification&.mark_delivery_failed!(error, channel: delivery_channel(delivery), details: delivery_failure_context(error, [delivery]))
       end
@@ -276,8 +276,9 @@ module Applications
         secure_request_form_ids: forms.map(&:id),
         recipient_channels: Array(deliveries).map { |delivery| delivery_channel(delivery).to_s }
       }.merge(delivery_failure_details(forms))
-      context.merge!(configuration_error: true, reason: error.reason) if error.is_a?(EmailDelivery::ConfigurationError)
-      context
+      return context unless error.is_a?(EmailDelivery::ConfigurationError)
+
+      context.merge({ configuration_error: true, reason: error.reason, unsupported_codepoint: error.unsupported_codepoint }.compact)
     end
 
     def delivery_failure_details(forms)

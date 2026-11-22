@@ -150,10 +150,13 @@ module Admin
       receipt = NotificationService.create_and_deliver!(
         type: Notification::PAPER_REJECTION_LETTER_ACTION, recipient: @admin, actor: @admin, notifiable: @recipient, deliver: false, channel: :letter
       )
-      receipt.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(:unsupported_letter_text), channel: :letter)
+      receipt.record_delivery_queued!
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit notifications_path
       within("#notification_#{receipt.id}") { click_link 'Income rejection letter' }
+      assert_text 'Queued for preparation'
+      receipt.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(:unsupported_letter_text), channel: :letter)
+      click_link 'Refresh status'
       assert_text 'Letter not queued'
       assert_text 'Use the approved manual process.'
       take_screenshot('paper-rejection-letter-failed', html: true)

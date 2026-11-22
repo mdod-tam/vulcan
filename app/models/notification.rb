@@ -94,6 +94,7 @@ class Notification < ApplicationRecord
     details = { 'reason' => decision.reason }
     if decision.configuration_error?
       details['message'] = EmailDelivery::ConfigurationError::MESSAGE
+      details['unsupported_codepoint'] = decision.unsupported_codepoint if decision.unsupported_codepoint
       key = 'delivery_error'
       status = :error
       route = "#{channel}_configuration_error"

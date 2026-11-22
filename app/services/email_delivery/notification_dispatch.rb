@@ -80,7 +80,7 @@ module EmailDelivery
         process_notification_mail(notification, mailer_class, method_name, requested_channel: requested_channel)
       end
     rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
-      decision = e.is_a?(EmailDelivery::ConfigurationError) ? EmailDelivery::Decision.configuration_error(e.reason) : EmailDelivery::Decision.suppressed(e.reason)
+      decision = e.is_a?(EmailDelivery::ConfigurationError) ? e.decision : EmailDelivery::Decision.suppressed(e.reason)
       notification.mark_delivery_not_sent!(decision, channel: inferred_actual_delivery_channel(notification))
       ['none', notification.reload.metadata['delivery_route_reason']]
     end

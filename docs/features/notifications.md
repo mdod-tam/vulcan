@@ -66,7 +66,7 @@ Shared communication policy refusals use one locked notification writer. All dom
 
 ### Printed letters
 
-Addressed correspondence requires a complete address for the selected postal recipient before it enters the print queue. A missing address is recorded as a preparation error. Correct the postal recipient's address and issue the notice again. Generated letters and certification forms support the bundled Latin, Cyrillic and CJK fonts. If text cannot be rendered faithfully, arrange approved manual correspondence.
+Addressed correspondence requires a complete address for the selected postal recipient before it enters the print queue. A missing address is recorded as a preparation error. Correct the postal recipient's address and issue the notice again. Generated letters and certification forms embed Noto Sans and use Noto Sans CJK for characters that need it. Before printing, the renderer removes soft hyphens, zero-width spaces, and left-to-right marks from pasted text. When text cannot be rendered faithfully, the failure records an unsupported character as a code point, such as `U+0E2A`. Use the approved manual process.
 
 Open the letter detail to review the current address and source, release the PDF, and inspect it before printing. Confirm after the letter has physically printed. Staff can cancel unused pending letters after release. Cancellation retains the release timestamp and prevents further downloads and print confirmation. Downloaded copies must be discarded separately. The dashboard counts both letters awaiting release and letters awaiting print confirmation.
 

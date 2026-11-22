@@ -955,11 +955,13 @@ en:
       count_mixed: "%{count} mixed"
       bulk_scope: "Applies to all available languages for email and printed-letter templates. Use Delivery controls to change correspondence or channel settings."
       disable_all_groups:
+        zero: "No template groups to turn off"
         one: "Turn off 1 template group"
-        other: "Turn off all %{count} template groups"
+        other: "Turn off %{count} template groups"
       enable_all_groups:
+        zero: "No template groups to turn on"
         one: "Turn on 1 template group"
-        other: "Turn on all %{count} template groups"
+        other: "Turn on %{count} template groups"
       disable_all_confirm:
         one: "Turn off 1 template group across its available languages? Affected queued email and unreleased letters will be permanently blocked. Previously downloaded letters and sent messages cannot be recalled."
         other: "Turn off %{count} template groups across their available languages? Affected queued email and unreleased letters will be permanently blocked. Previously downloaded letters and sent messages cannot be recalled."

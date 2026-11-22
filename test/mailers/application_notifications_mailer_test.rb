@@ -115,7 +115,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                               ))
         assert_operator pdf_path.size, :>, 1_000
         unless action == :provider_info_requested
-          pdf_text = inflated_pdf_text(item.pdf_letter.download)
+          pdf_text = extracted_pdf_text(item.pdf_letter.download)
           assert_includes pdf_text, I18n.t('secure_proof_forms.proof_types.income', locale: locale)
           assert_not_includes pdf_text, I18n.l(3.years.from_now.to_date, format: :long, locale: locale) if action == :proof_rejected
         end
@@ -209,7 +209,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       assert_difference 'PrintQueueItem.count', 1 do
         assert_no_emails { ApplicationNotificationsMailer.proof_received(@application, :income).deliver_now }
       end
-      assert_includes inflated_pdf_text(PrintQueueItem.order(:id).last.pdf_letter.download), subject
+      assert_includes extracted_pdf_text(PrintQueueItem.order(:id).last.pdf_letter.download), subject
     end
   end
 
@@ -285,7 +285,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
           assert_difference('PrintQueueItem.count', 1) { assert_no_emails { delivery.deliver_now } }
           item = PrintQueueItem.order(:created_at, :id).last
           assert_equal owner.id, item.constituent_id
-          text = inflated_pdf_text(item.pdf_letter.download).force_encoding(Encoding::Windows_1252).encode(Encoding::UTF_8)
+          text = extracted_pdf_text(item.pdf_letter.download)
           assert_not_includes text, secure_url
           assert_not_includes text, locale == 'en' ? 'Use the secure upload link below.' : 'Use el enlace de carga segura'
           text
@@ -1440,9 +1440,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_equal guardian.id, item.constituent_id
     assert_equal 'provider_info_requested', item.letter_type
 
-    pdf_text = inflated_pdf_text(item.pdf_letter.download)
+    pdf_text = extracted_pdf_text(item.pdf_letter.download)
     assert_includes pdf_text, 'LETTER BODY ES MARKER'
-    # ASCII-safe fragment of the Spanish letter instructions (accents are WinAnsi-encoded).
     assert_includes pdf_text, 'con nuestro equipo por'
     assert_not_includes pdf_text, 'LETTER BODY EN MARKER'
     assert_not_includes pdf_text, 'Please contact our team'

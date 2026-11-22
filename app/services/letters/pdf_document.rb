@@ -10,6 +10,7 @@ module Letters
     SUPPORTED_CHARACTER = /\A[\p{Latin}\p{Cyrillic}\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}\p{Common}]\z/
     LAYOUT_CHARACTER = /\A[\r\n\t]\z/
     NON_PRINTING = /[\p{C}\p{M}]/
+    PASTE_CHARACTERS = "\u00AD\u200B\u200E"
 
     def initialize
       super(&nil)
@@ -17,17 +18,17 @@ module Letters
         LATIN_FONT => font_files('NotoSans'),
         CJK_FONT => font_files('NotoSansCJKjp')
       )
+      font(LATIN_FONT)
       yield self if block_given?
     end
 
     def text(string, options = {})
       return super if string.nil?
 
-      normalized = string.unicode_normalize(:nfc)
+      normalized = string.delete(PASTE_CHARACTERS).unicode_normalize(:nfc)
       characters = normalized.each_char.uniq.grep_v(LAYOUT_CHARACTER)
-      raise unsupported_text unless characters.all? { |character| character.match?(SUPPORTED_CHARACTER) && !character.match?(NON_PRINTING) }
-
-      return super(normalized, options) if windows_1252?(normalized)
+      unsupported = characters.find { |character| !character.match?(SUPPORTED_CHARACTER) || character.match?(NON_PRINTING) }
+      raise unsupported_text(unsupported) if unsupported
 
       style = options.fetch(:style, :normal)
       font(LATIN_FONT, style: style) do
@@ -39,16 +40,10 @@ module Letters
 
     private
 
-    def windows_1252?(string)
-      string.encode(Encoding::Windows_1252)
-      true
-    rescue Encoding::UndefinedConversionError
-      false
-    end
-
     def verify_cjk_coverage!(characters, style)
       font(CJK_FONT, style: style) do
-        raise unsupported_text unless characters.all? { |character| font.glyph_present?(character) }
+        missing = characters.find { |character| !font.glyph_present?(character) }
+        raise unsupported_text(missing) if missing
       end
     end
 
@@ -59,9 +54,11 @@ module Letters
       }
     end
 
-    def unsupported_text
+    def unsupported_text(character)
       reason = :unsupported_letter_text
-      EmailDelivery::ConfigurationError.new(EmailDelivery::ControlPanel.reason_text(reason), reason: reason)
+      unsupported_codepoint = format('U+%04X', character.ord)
+      message = EmailDelivery::ControlPanel.reason_text(reason, unsupported_codepoint: unsupported_codepoint)
+      EmailDelivery::ConfigurationError.new(message, reason: reason, unsupported_codepoint: unsupported_codepoint)
     end
   end
 end

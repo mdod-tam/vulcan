@@ -112,7 +112,7 @@ module Admin
       assert_predicate result, :success?
       form = result.data.fetch(:secure_request_forms).sole
       item = form.print_queue_items.sole
-      pdf_text = inflated_pdf_text(item.pdf_letter.download)
+      pdf_text = extracted_pdf_text(item.pdf_letter.download)
       assert_includes pdf_text, 'mail a copy of your document'
       assert_no_match(/[?&]token=/, pdf_text)
 
@@ -154,7 +154,7 @@ module Admin
       assert_predicate result, :success?
       form = result.data.fetch(:secure_request_forms).sole
       item = form.print_queue_items.sole
-      pdf_text = inflated_pdf_text(item.pdf_letter.download)
+      pdf_text = extracted_pdf_text(item.pdf_letter.download)
       assert_includes pdf_text, 'Please contact our team by phone'
       assert_no_match(/[?&]token=/, pdf_text)
 

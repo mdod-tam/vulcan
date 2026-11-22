@@ -79,7 +79,6 @@ module Applications
 
     def generate_pdf
       pdf = Letters::PdfDocument.new
-      pdf.font 'Helvetica'
       pdf.text 'Disability Certification Form', size: 18, style: :bold, align: :center
       pdf.move_down 20
       pdf.text "Applicant: #{application.constituent_full_name}"

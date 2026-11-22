@@ -98,7 +98,7 @@ module EmailDelivery
     end
 
     # Why an email is not going out, in words an admin can act on.
-    def self.reason_text(reason, category: nil)
+    def self.reason_text(reason, category: nil, unsupported_codepoint: nil)
       case reason.to_s
       when 'all_disabled' then 'outgoing correspondence is turned off'
       when 'letters_disabled' then 'printed letters are turned off'
@@ -108,7 +108,9 @@ module EmailDelivery
       when 'request_no_longer_active' then 'This request no longer needs a letter.'
       when 'operator_canceled' then 'this letter was canceled'
       when 'incomplete_mailing_address' then 'Complete the mailing address and try again.'
-      when 'unsupported_letter_text' then 'This letter could not be generated. Use the approved manual process.'
+      when 'unsupported_letter_text'
+        failure = unsupported_codepoint ? "This letter contains an unsupported character (#{unsupported_codepoint})." : 'This letter could not be generated.'
+        "#{failure} Use the approved manual process."
       when 'global_disabled' then I18n.t('admin.email_delivery.reasons.global_disabled', locale: :en)
       when 'category_disabled'
         I18n.t('admin.email_delivery.reasons.category_disabled', category: category_label(category).downcase, locale: :en)

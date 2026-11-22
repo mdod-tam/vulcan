@@ -52,7 +52,7 @@ module Admin
       key = enabled ? 'enable_all' : 'disable_all'
       url = enabled ? bulk_enable_admin_email_templates_path : bulk_disable_admin_email_templates_path
 
-      button_to email_delivery_t("#{key}_groups", count: total), url,
+      button_to email_delivery_t("#{key}_groups", count: change_count), url,
                 method: :patch, params: { operation_id: SecureRandom.uuid, expected_version: version },
                 disabled: change_count.zero?, class: enabled ? 'btn btn-secondary' : 'btn btn-danger-outline',
                 form: { data: { turbo_confirm: email_delivery_t("#{key}_confirm", count: change_count) } }

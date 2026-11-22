@@ -19,6 +19,8 @@ module Letters
     def self.queue!(recipient:, application:, letter_type:, context:, actor: nil, secure_request_form: nil, request_key: nil, finalize_request: nil) # rubocop:disable Metrics/ParameterLists
       action = context&.dig('mail_action')
       EmailDelivery.verify!(action, context: context, channel: 'letter')
+      # A replacement gets a new request ID at admission. This key keeps the preview ID.
+      # Checking the original request under lock prevents duplicate replacements.
       key = [action, application&.id, recipient.id, request_key || context.fetch('request_id')].join(':')
       existing = PrintQueueItem.find_by(delivery_key: key)
       return retry_item!(existing) if existing
@@ -38,7 +40,7 @@ module Letters
     rescue ActiveRecord::RecordNotUnique
       retry_item!(PrintQueueItem.find_by!(delivery_key: key))
     rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
-      decision = e.is_a?(EmailDelivery::ConfigurationError) ? EmailDelivery::Decision.configuration_error(e.reason) : EmailDelivery::Decision.suppressed(e.reason)
+      decision = e.is_a?(EmailDelivery::ConfigurationError) ? e.decision : EmailDelivery::Decision.suppressed(e.reason)
       EmailDelivery::Outcome.record_not_sent(decision, context: context&.merge('channel' => 'letter'), mail_action: action)
       raise
     ensure
