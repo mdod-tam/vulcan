@@ -10,7 +10,6 @@ es:
       evaluation_report: "Registrar informe de evaluación"
       evaluation_report_aria: "Registrar informe de evaluación para una visita programada"
       all_evaluation_reports_aria: "Registrar informe de evaluación para una visita programada con cualquier evaluador"
-      evaluation_report_help: "Registre el informe después de la visita; se incluyen las visitas futuras."
       followup: "Revisar seguimiento"
     days:
       one: "%{value} día"

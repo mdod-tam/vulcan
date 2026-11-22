@@ -20,7 +20,7 @@ Recording tracking queues one email per package for each authorized contact. Che
 
 ## Filing workflow
 
-Open **iCanConnect filing preparation** from the Admin Dashboard and choose the date range and category. Filing preparation is a global workspace; each device on an application shows its own MAT or ICC funding label. **Unclaimed expenses** shows costs that have not been marked filed, including rows with missing information. **Period activity, including filed costs** includes previously filed costs. Equipment uses constituent receipt dates, services use performed dates, and shared PO charges use the last device receipt date. The worksheet keeps request, invoice, performed, receipt and installation dates separate. Unknown amounts stay blank.
+Open **iCanConnect filing preparation** from the Admin Dashboard and choose the date range and category. Filing preparation is a global workspace; each device on an application shows its own MAT or ICC funding label. **Costs not yet filed** includes costs with missing information. Choose **All costs for this period** to include previously filed costs. Equipment uses constituent receipt dates, services use performed dates, and shared PO charges use the last device receipt date. The worksheet keeps request, invoice, performed, receipt and installation dates separate. Unknown amounts stay blank.
 
 The CSV worksheet and document ZIP help staff prepare the external filing. The ZIP contains the worksheet and each referenced current, cleared document once. The filing screen, worksheet, and ZIP use the same document reference. Earlier versions are available in the private financial record history.
 

@@ -18,8 +18,7 @@
     <div class="p-4">
       <% if @application.status_approved? && @application.income_proof_update_offered? %>
         <p class="mb-3 rounded border border-warning-300 bg-warning-50 p-3">
-          Updated income proof is needed before adding iCanConnect equipment or services. Request updated income proof below.
-          The application stays approved and MAT-funded work can continue.
+          Request updated proof of income below before adding iCanConnect equipment or services. This is an ICC program requirement. MAT work can continue.
         </p>
       <% end %>
       <% if @application.previous_income_proofs.attached? %>

@@ -36,7 +36,7 @@ en:
         tried_help: "Choose each product the applicant tried and rate their satisfaction. Include at least one trial when recommending catalog products after a direct assessment. Trials are optional for consultations with an outside specialist."
         catalog_heading: "Recommended catalog products"
         details: "Recommendation details"
-        details_help: "Describe any products outside the catalog, helpful resources or services, and next steps. If no product is suitable, explain why. Details are optional when recommending catalog products. The applicant or managing guardian receives this text exactly as written in their confirmation email or letter. Put private assessment notes in Report internal notes."
+        details_help: "The applicant or their guardian will receive this text as written. List products outside the catalog, useful resources or services, and next steps. If no product fits, explain why. These details are optional for catalog recommendations. Put private notes in Report internal notes."
         no_suitable_product_label: "No suitable product was found"
         no_suitable_product_help: "Select only when no catalog or non-catalog recommendation is appropriate. Explain why and any next steps in recommendation details."
         conflict: "Clear the catalog selections before marking that no suitable product was found."

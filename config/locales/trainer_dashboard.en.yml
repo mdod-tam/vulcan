@@ -20,7 +20,6 @@ en:
       view_requested_aria: "Schedule training for assigned requests"
       scheduled: "Enter training report"
       scheduled_count_suffix: " scheduled sessions"
-      upcoming_help: "Enter the report after the visit; future visits are included."
       assigned_to_you: "%{count} assigned to you"
       my_scheduled: "My scheduled"
       view_scheduled: "Enter training report"

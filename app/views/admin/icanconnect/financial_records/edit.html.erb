@@ -36,8 +36,7 @@
       <% if @correction_required %>
         This invoice is already part of a filing. Explain what changed and give the claim or support ticket reference.
       <% elsif @record.icc_receipt_evidence_locked? %>
-        This PO’s charges have been filed using its device receipt dates. You can record installation normally.
-        To change the receipt date or price, explain what changed and give the claim or support ticket reference.
+        To change the receipt date or price, give a reason and a claim or support ticket reference.
       <% else %>
         Receipt and installation dates can be recorded normally. To change the price, explain what changed and give the claim or support ticket reference.
       <% end %>

@@ -45,7 +45,7 @@
     </label>
     <p>The oldest stock of each model is reserved first. Nothing is reserved unless all requested quantities are available.</p>
     <%= button_tag 'Refresh address and setup (keep changes)', name: :refresh_profiles, value: '1', formnovalidate: true, class: 'btn btn-outline' %>
-  <%= form.submit 'Reserve for dispatch', class: 'btn btn-primary' %>
+  <%= form.submit 'Reserve', class: 'btn btn-primary' %>
   <% end %>
   <%= link_to 'Back to equipment queue', equipment_return_path(@return_context), class: 'text-primary-700 underline' %>
 </div>

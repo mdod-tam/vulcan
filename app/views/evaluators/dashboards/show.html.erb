@@ -72,7 +72,6 @@
             <h3 class="summary-card-title"><%= t('service_dashboard.actions.evaluation_report') %></h3>
             <p class="summary-card-count"><%= @scheduled_summary.count %></p>
           </div>
-          <p class="text-xs text-gray-600"><%= t('service_dashboard.actions.evaluation_report_help') %></p>
         </div>
         <%= render 'shared/service_wait_summary', summary: @scheduled_summary,
                                                   oldest_path: @scheduled_summary.oldest && evaluators_evaluation_path(@scheduled_summary.oldest.record),

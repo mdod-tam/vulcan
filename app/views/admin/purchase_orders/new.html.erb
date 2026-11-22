@@ -22,7 +22,7 @@
     <% @return_context.each do |key, value| %>
       <%= hidden_field_tag "return_context[#{key}]", value %>
     <% end %>
-    <p id="award-price-help" class="text-sm text-gray-600">Enter the price for one device from the awarded quote. Don’t enter guesses. Leave unknown prices blank.</p>
+    <p id="award-price-help" class="text-sm text-gray-600">Enter the quoted price per device.</p>
     <% @lines.each do |line| %>
       <article class="border rounded p-4 space-y-3">
         <h2 class="font-semibold"><%= equipment_catalog_label(line.product) %> · <%= pluralize(line.quantity, 'unit') %></h2>
@@ -44,8 +44,10 @@
         </div>
       </article>
     <% end %>
-    <%= form.label :existing, 'Add to a PO with no sent date and the same purpose and funding', class: 'form-label' %>
-    <%= form.select :existing, options_for_select(@existing_options, @existing), { include_blank: 'Create a new PO' }, class: 'form-input' %>
+    <%= form.label :existing, 'Add to an unsent purchase order', class: 'form-label' %>
+    <p id="existing-order-help" class="text-sm text-gray-600">Choose an existing unsent order with the same purpose and funding source.</p>
+    <%= form.select :existing, options_for_select(@existing_options, @existing), { include_blank: 'Create a new PO' },
+                    class: 'form-input', aria: { describedby: 'existing-order-help' } %>
     <details class="border rounded p-4">
       <summary>View products already in these POs</summary>
       <% @existing_orders.each do |order| %>

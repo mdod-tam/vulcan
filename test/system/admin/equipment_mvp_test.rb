@@ -48,18 +48,18 @@ module Admin
       assert_text 'These stock devices keep MAT funding'
       assert_unchecked_field 'I understand these stock devices use MAT funding.'
       take_screenshot('icc-replacement-mat-stock-review', full: true, html: true)
-      click_button 'Reserve for dispatch'
+      click_button 'Reserve'
       assert_selector '#allocation_confirm_mat_funding:invalid'
       assert_nil detached.reload.withdrawn_at
       check 'I understand these stock devices use MAT funding.'
-      click_button 'Reserve for dispatch'
+      click_button 'Reserve'
       assert_text 'Available stock changed. Review quantities; no partial allocation was made.'
       assert_checked_field 'I understand these stock devices use MAT funding.'
       assert_nil detached.reload.withdrawn_at
       take_screenshot('icc-replacement-mat-stock-acknowledgement-retained', full: true, html: true)
       stock = Equipment::StockReceipt.new(actor: @admin).existing!(product: @product, quantity: 1, received_on: Date.current,
                                                                    provenance: 'Verified MAT stock for retry').sole
-      click_button 'Reserve for dispatch'
+      click_button 'Reserve'
       assert_text 'Stock reserved for dispatch.'
       assert_current_path admin_equipment_index_path(tab: 'ordered', source: 'stock')
       assert_equal stock.id, detached.reload.replaced_by_equipment_item_id
@@ -560,7 +560,7 @@ module Admin
       assert_text '101 Confirmed Street'
       assert(stock.all? { |item| item.reload.application_id.nil? })
       take_screenshot('fulfillment-stock-review-before-reserving', html: true, full: true)
-      click_button 'Reserve for dispatch'
+      click_button 'Reserve'
       assert_text 'Stock reserved for dispatch.'
       assert_current_path admin_equipment_index_path(tab: 'ordered', source: 'stock', search: 'Samuel Reed')
       assert_equal 1, need.reload.remaining_quantity
@@ -743,7 +743,7 @@ module Admin
       visit new_admin_stock_allocation_path(need_ids: [need.id], quantities: { need.id.to_s => 1 })
       assert_text '101 Confirmed Street'
       application.update!(shipping_address_1: '202 Updated Confirmed Street')
-      click_button 'Reserve for dispatch'
+      click_button 'Reserve'
       assert_text 'Application details changed'
       assert_field 'Quantity', with: '1'
       take_screenshot('allocation-stale-profile-draft', html: true, full: true)
@@ -752,7 +752,7 @@ module Admin
       assert_text '202 Updated Confirmed Street'
       assert_field 'Quantity', with: '1'
       take_screenshot('allocation-explicit-profile-refresh', html: true, full: true)
-      click_button 'Reserve for dispatch'
+      click_button 'Reserve'
       assert_text 'Stock reserved for dispatch.'
       item = application.equipment_items.sole
       take_screenshot('stock-reserved-grouped-dispatch-queue', html: true, full: true)

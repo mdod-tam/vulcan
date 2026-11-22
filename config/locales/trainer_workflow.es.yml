@@ -26,7 +26,7 @@ es:
       preparation: "Preparación y contacto para la coordinación"
       evaluation_recommendations: "Recomendaciones de la evaluación más reciente"
       known_products: "Productos comprados o enviados"
-      known_products_help: "Use esta lista para preparar la capacitación. Un envío no confirma que la persona haya recibido el producto. Confirme qué producto usará."
+      known_products_help: "Antes de la capacitación, confirme que la persona tenga el dispositivo que usará."
       no_known_products: "No hay productos registrados como comprados o enviados para esta solicitud."
       request_pending: "La persona ha solicitado otra cita de capacitación."
       what_happened: "¿Qué ocurrió?"
