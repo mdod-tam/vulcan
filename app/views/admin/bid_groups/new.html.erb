@@ -1,0 +1,70 @@
+<div class="max-w-5xl mx-auto p-6 space-y-4">
+  <h1 class="text-2xl font-bold">Enter bid number</h1>
+<%= render 'admin/equipment/form_errors', errors: @form_errors %>
+<%= form_with url: admin_bid_groups_path, scope: :bid_group, class: 'space-y-4' do |form| %>
+<% @return_context.each do |key, value| %>
+<%= hidden_field_tag "return_context[#{key}]", value %>
+<% end %>
+<%= form.hidden_field :purpose, value: @purpose %>
+<% if @purpose == 'program_stock' %>
+<%= form.hidden_field :funding_source, value: 'mat' %>
+<p>Funding source: MAT. Stock purchases use MAT funds.</p>
+<% elsif @voucher_requests %>
+<%= form.hidden_field :funding_source, value: 'icanconnect' %>
+<p>Funding source: iCanConnect. MAT equipment for these applications is handled through vouchers.</p>
+<% unless @icanconnect_active %>
+  <p class="text-sm text-gray-700">
+    iCanConnect bids open on the start date in <%= link_to 'System Policies', admin_policies_path(anchor: 'icanconnect-participation'), class: 'underline' %>.
+  </p>
+<% end %>
+<% elsif @icanconnect_active %>
+<%= form.label :funding_source, 'Funding source', class: 'form-label' %>
+<%= form.select :funding_source, options_for_select([%w[MAT mat], %w[iCanConnect icanconnect]], @funding_source), {},
+                class: 'form-input', aria: { describedby: 'bid-funding-help' } %>
+<p id="bid-funding-help" class="text-sm text-gray-600">MAT and iCanConnect products go in separate bids. When adding to an open bid, choose its funding source.</p>
+<% else %>
+<%= form.hidden_field :funding_source, value: 'mat' %>
+<p>Funding source: MAT.</p>
+<% end %>
+<%= form.label :number, 'Bid number', class: 'form-label' %>
+<%= form.text_field :number, value: @number, autocomplete: 'off', class: 'form-input' %>
+<%= form.label :existing, 'Or add these products to an open bid', class: 'form-label' %>
+<%= form.select :existing, options_for_select(@open_options, @existing), { include_blank: 'Create a new bid' }, class: 'form-input' %>
+<% @need_rows.each do |row| %>
+<% need = @needs[row[:id].to_i] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<fieldset class="border rounded p-4">
+        <legend>
+<% if need %>
+<%= equipment_catalog_label(need.product) %> · <%= need.application.user.full_name %> · Application #<%= need.application_id %>
+<% else %>
+Request no longer available #<%= row[:id] %> — remove and refresh
+<% end %>
+</legend>
+<%= hidden_field_tag 'bid_group[needs][][id]', row[:id], id: nil %>
+<%= hidden_field_tag 'bid_group[needs][][lock_version]', row[:lock_version], id: nil %>
+<%= label_tag "bid-quantity-#{row[:id]}", 'Quantity' %>
+<%= number_field_tag 'bid_group[needs][][quantity]', row[:quantity], min: 1, step: 1, required: true, autocomplete: 'off',
+                                                                     id: "bid-quantity-#{row[:id]}", class: 'form-input' %>
+<p>Setup: <%= Product::PROGRAM_GROUPS[need&.disability_setup_group] || 'Setup needed' %>
+ · Destination: <%= need&.application&.shipping_ready? ? 'Confirmed' : 'Needed before award' %>
+</p>
+      </fieldset>
+<% end %>
+<% @item_rows.each do |row| %>
+<p>
+<%= @items[row[:id].to_i] ? equipment_catalog_label(@items[row[:id].to_i].product) : 'Unavailable device' %> · Device #<%= row[:id] %> · 1 unit</p>
+<% row.each do |key, value| %>
+<%= hidden_field_tag "bid_group[items][][#{key}]", value, id: nil %>
+<% end %>
+<% end %>
+<% @stock_rows.each do |row| %>
+<p>For program stock: <%= equipment_catalog_label(@stock_products[(row['product_id'] || row[:product_id]).to_s]) %>
+ · <%= pluralize(row['quantity'] || row[:quantity], 'unit') %>
+ · Disability group: <%= Product::PROGRAM_GROUPS[row['supplier_setup_group'] || row[:supplier_setup_group]] || 'Unassigned' %></p>
+<% row.each do |key, value| %>
+<%= hidden_field_tag "bid_group[stock][][#{key}]", value, id: nil %>
+<% end %>
+<% end %>
+<%= form.submit 'Reserve selected products under this bid', class: 'btn btn-primary', disabled: @voucher_requests && !@icanconnect_active %>
+<% end %>
+</div>

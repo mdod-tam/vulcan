@@ -1,0 +1,15 @@
+en:
+  equipment_shipping:
+    subject: Your MAT equipment is on its way
+    corrected_subject: Updated tracking for your MAT equipment
+    greeting: Hi %{name},
+    intro: A package with your equipment from the Maryland Accessible Telecommunications (MAT) Program shipped on %{date}.
+    guardian_intro: A package with MAT equipment for %{name} shipped on %{date}.
+    corrected_intro: Here is the updated tracking number for the MAT equipment package that shipped on %{date}.
+    corrected_guardian_intro: Here is the updated tracking number for the MAT equipment package for %{name} that shipped on %{date}.
+    tracking_label: Tracking number
+    help: If you have questions about your shipment, email %{email}.
+    signature: Maryland Accessible Telecommunications Program
+  notifications:
+    actions:
+      equipment_shipment_notice: Equipment shipment notice

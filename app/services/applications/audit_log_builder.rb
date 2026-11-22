@@ -48,7 +48,7 @@ module Applications
         notification.action.in?(%w[provider_info_requested proof_resubmission_requested])
       end
       ActiveRecord::Associations::Preloader.new(records: recipient_notifications, associations: :recipient).call
-      EmailDelivery::Visibility.preload(notifications.select { |notification| notification.action == 'max_rejections_reached' })
+      EmailDelivery::Visibility.preload(notifications.select { |notification| notification.action.in?(%w[max_rejections_reached equipment_shipment_notice]) })
       preload_delivery_owners(events)
     end
 
@@ -133,6 +133,7 @@ module Applications
                  review_requested
                  documents_requested
                  max_rejections_reached
+                 equipment_shipment_notice
                ])
         .order(created_at: :desc)
         .to_a
@@ -184,11 +185,20 @@ module Applications
     end
 
     def load_equipment_events
-      Event
-        .where("action LIKE 'equipment\\_%' ESCAPE '\\'")
-        .where("(auditable_type = 'Application' AND auditable_id = ?) OR metadata->>'application_id' = ? OR metadata->'application_ids' @> ?::jsonb",
-               application.id, application.id.to_s, [application.id].to_json)
-        .order(created_at: :desc, id: :desc).to_a
+      related = Event.where(auditable: application).or(Event.with_metadata(:application_id, application.id))
+                     .or(Event.with_metadata(:application_ids, [application.id]))
+      units = EquipmentItem.where(application_id: application.id)
+      unit_ids = units.ids
+      related = related.or(Event.where(auditable_type: 'EquipmentItem', auditable_id: unit_ids))
+      related = related.or(Event.where(auditable_type: 'Evaluation', auditable_id: application.evaluations.select(:id)))
+                       .or(Event.where(auditable_type: 'TrainingSession', auditable_id: application.training_sessions.select(:id)))
+                       .or(Event.where(auditable_type: 'ApplicationServiceExpense', auditable_id: application.application_service_expenses.select(:id)))
+      unit_ids.each { |id| related = related.or(Event.with_metadata(:equipment_item_ids, [id])) }
+      acquisition_bids = BidGroupLine.where(id: units.select(:acquisition_bid_group_line_id)).select(:bid_group_id)
+      related = related.or(Event.where(auditable_type: 'BidGroup', auditable_id: acquisition_bids))
+      equipment = Event.where("action LIKE 'equipment\\_%' ESCAPE '\\'")
+      financial = Event.where(action: Icanconnect::FINANCIAL_HISTORY_ACTIONS)
+      equipment.or(financial).merge(related).order(created_at: :desc, id: :desc).to_a
     end
   end
 end

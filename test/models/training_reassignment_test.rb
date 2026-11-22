@@ -20,7 +20,7 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
   end
 
   test 'transfers the open row and the coverage, keeping schedules, outcomes and notes' do
-    before = @scheduled.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id')
+    before = @scheduled.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id', 'lock_version')
     completed = create(:training_session, :completed, application: @application, trainer: @trainer)
     previous_operation = @scheduled.assignment_operation_id
 
@@ -32,7 +32,7 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     assert_predicate result, :success?
     assert_equal @replacement.id, @application.reload.assigned_trainer_id
     assert_equal @replacement.id, @scheduled.reload.trainer_id
-    assert_equal before, @scheduled.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id')
+    assert_equal before, @scheduled.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id', 'lock_version')
     assert_equal @trainer.id, completed.reload.trainer_id
     assert_not_equal previous_operation, @scheduled.assignment_operation_id
 

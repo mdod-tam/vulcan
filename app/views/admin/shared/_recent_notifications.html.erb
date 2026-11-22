@@ -1,0 +1,22 @@
+<%# locals: (notifications:) -%>
+<section aria-labelledby="notifications-heading" class="compact-notifications card px-4 py-2 mb-6">
+  <div class="flex items-center justify-between mb-1">
+    <h2 id="notifications-heading" class="text-lg font-medium text-gray-900">Recent Notifications</h2>
+    <%= link_to notifications_path(scope: 'all'),
+                class: 'text-sm font-medium text-primary-700 underline flex items-center', aria: { label: 'View all notifications' } do %>
+      View All
+      <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+    <% end %>
+  </div>
+  <% if notifications.present? %>
+    <ul class="divide-y divide-gray-200">
+      <% notifications.each do |notification| %>
+        <%= render 'notifications/notification', notification: notification %>
+      <% end %>
+    </ul>
+  <% else %>
+    <p class="text-sm text-gray-500">No recent notifications</p>
+  <% end %>
+</section>

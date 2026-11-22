@@ -11,12 +11,15 @@ module EmailTemplates
       assert(keys.any? { |k| k[:name] == 'application_notifications_proof_rejected' && k[:locale] == 'en' })
     end
 
-    test 'every deliverable notification action has an audit alias' do
-      missing = EmailDelivery::Catalog::NOTIFICATION_ACTIONS.values.reject(&:audit_only?).map(&:action).reject do |action|
-        Audit::ACTION_TEMPLATE_ALIASES.key?(action)
+    test 'only notifications backed by database templates have audit aliases' do
+      EmailDelivery::Catalog::NOTIFICATION_ACTIONS.each_value do |notification|
+        template = EmailDelivery::Catalog.mail_action(notification.mail_action)&.template
+        if template
+          assert_equal template, Audit::ACTION_TEMPLATE_ALIASES[notification.action], notification.action
+        else
+          assert_not Audit::ACTION_TEMPLATE_ALIASES.key?(notification.action), notification.action
+        end
       end
-
-      assert_empty missing, "Missing ACTION_TEMPLATE_ALIASES for: #{missing.join(', ')}"
     end
 
     test 'STAFF_ONLY_TEMPLATE_NAMES matches planned PR 2 staff-only list' do

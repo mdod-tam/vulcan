@@ -22,6 +22,9 @@ module EmailTemplates
     def for_template(template, subject: nil, include_optional_variables: nil)
       include_optional_variables = !template.liquid? if include_optional_variables.nil?
       base_data = base(subject: subject || template.subject)
+      if template.name == 'application_notifications_proof_rejected'
+        base_data['request_explanation'] = I18n.t('applications.proof_resubmission.rejection_explanation.pending', locale: @locale)
+      end
       base_data = remove_sample_paths(base_data, optional_only_variables(template)) unless include_optional_variables
       generated = generated_sample_data_for(template, base_data, include_optional_variables: include_optional_variables)
       base_data.deep_merge(generated)
@@ -104,6 +107,8 @@ module EmailTemplates
         'annual_income_formatted' => '$45,000.00',
         'threshold_formatted' => '$55,000.00',
         'proof_type_formatted' => is_es ? 'Verificación de Ingresos' : 'Income Verification',
+        'request_explanation' => I18n.t('applications.proof_resubmission.request_explanation.pending',
+                                        proof: I18n.t('secure_proof_forms.proof_types.income', locale: locale), locale: locale),
         'additional_notes' => is_es ? 'Estas son algunas notas adicionales.' : 'These are some additional notes.'
       }.merge(training_completion_sample_data)
     end

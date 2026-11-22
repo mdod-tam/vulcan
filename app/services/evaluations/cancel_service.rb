@@ -16,6 +16,7 @@ module Evaluations
           status: :cancelled,
           notes: cancellation_reason
         )
+        @evaluation.application.update!(needs_evaluator_since: Time.current, report_wait_started_at: nil)
         create_event!
       end
 

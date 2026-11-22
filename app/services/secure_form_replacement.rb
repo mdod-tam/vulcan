@@ -29,7 +29,7 @@ class SecureFormReplacement
     @attributes.merge(
       status: :sent,
       request_batch_id: @request_batch_id,
-      expires_at: SecureFormPolicy.expires_at,
+      expires_at: @attributes[:expires_at] || SecureFormPolicy.expires_at,
       sent_at: Time.current,
       requested_by: @actor
     )

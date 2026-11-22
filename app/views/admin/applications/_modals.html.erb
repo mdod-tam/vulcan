@@ -58,7 +58,7 @@ end
   <%= render "certification_history_modal" %>
 
   <% proof_modal_configs = []
-     if @application.income_proof_required?
+     if @application.income_proof_review_applicable?
        proof_modal_configs << { id: 'incomeProofReviewModal',  key: :income,   title: 'Review Income Proof',   approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'income', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'income', confirm_message: "Approve income proof?", can_reject: @application.proof_type_reviewable?("income") }
      end
      proof_modal_configs << { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?", can_reject: @application.proof_type_reviewable?("residency") }

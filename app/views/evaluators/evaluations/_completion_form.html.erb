@@ -2,11 +2,14 @@
 <% form_values = @evaluation_form_values.fetch(:submit_report, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <% trial_inputs = (form_values.empty? ? evaluation.products_tried_inputs : form_values.fetch(:products_tried_inputs, {})).with_indifferent_access # rubocop:disable Lint/UselessAssignment -- ERB local. %>
 <% outside_specialist = evaluation.status_requested? || form_values[:assessment_source] == 'outside_specialist' # rubocop:disable Lint/UselessAssignment -- ERB local. %>
+<% confirmed_groups = Array(form_values.fetch(:program_disability_groups, evaluation.application.program_disability_groups)).compact_blank.uniq # rubocop:disable Lint/UselessAssignment -- ERB local. %>
+<% selected_ids = form_values.fetch(:recommended_product_ids, evaluation.recommended_product_ids) # rubocop:disable Lint/UselessAssignment -- ERB local. %>
+<% profile_values = evaluation_equipment_profile_values(evaluation, form_values) # rubocop:disable Lint/UselessAssignment -- ERB local. %>
 <% location_required = !outside_specialist && !evaluation.outside_specialist_report_allowed?(current_user) # rubocop:disable Lint/UselessAssignment -- ERB local. %>
 <div class="card">
   <div class="px-4 py-5 sm:p-6">
     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
-      Mark Evaluation as Completed
+      Complete evaluation report
     </h3>
     <p class="text-sm text-gray-600 mb-4">
       <%= t('evaluators.evaluations.forms.report_help') %>
@@ -40,14 +43,18 @@
                        aria: action_form_field_aria(:submit_report, :assessment_source, describedby: 'assessment-source-help', form_errors: @evaluation_form_errors),
                        data: { recommendation_outcome_target: 'source', action: 'recommendation-outcome#update' } %>
           <p id="assessment-source-help" class="form-hint">
-            Outside-specialist reports require the actual consultation date and written source/context in Working Notes. Record trials only when known. Use scheduling for a direct assessment.
+            Add internal staff-facing notes to document the constituent's experience during the evaluation. Only list products the applicant tried.
           </p>
           <%= render 'shared/field_errors', action: :submit_report, attribute: :assessment_source, form_errors: @evaluation_form_errors %>
         </div>
       <% end %>
       <div>
         <%= f.label :appointment_completed_at, class: 'form-label' do %>
-          <%= evaluation.outside_specialist_report_allowed?(current_user) ? 'Assessment/Consultation Date/Time' : t('evaluators.evaluations.forms.appointment_date_time') %> <span class="text-danger-600">*</span><span class="sr-only"> (required)</span>
+          <%= if evaluation.outside_specialist_report_allowed?(current_user)
+                'Assessment or consultation date and time'
+              else
+                t('evaluators.evaluations.forms.appointment_date_time')
+              end %> <span class="text-danger-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
         <%= f.datetime_local_field(
               :appointment_completed_at,
@@ -95,6 +102,39 @@
         <%= render 'shared/field_errors', action: :submit_report, attribute: :attendees_field, form_errors: @evaluation_form_errors %>
       </div>
 
+      <fieldset id="program-groups-group" class="rounded border border-gray-300 p-4" tabindex="-1">
+        <legend class="form-label">Program eligibility groups</legend>
+        <p class="form-hint">Select each group the applicant qualifies for.</p>
+        <%= hidden_field_tag 'evaluation[program_disability_groups][]', '', id: nil %>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <% (Product::PROGRAM_GROUPS.keys | Array(confirmed_groups)).each do |group| %>
+            <label class="flex items-center gap-2">
+              <%= check_box_tag 'evaluation[program_disability_groups][]', group, confirmed_groups.include?(group),
+                                id: "report-program-group-#{group}", data: { recommendation_outcome_target: 'group' } %>
+              <%= Product::PROGRAM_GROUPS.fetch(group, "#{group} (invalid group)") %>
+            </label>
+          <% end %>
+        </div>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :program_disability_groups, form_errors: @evaluation_form_errors %>
+      </fieldset>
+
+      <details class="rounded border border-gray-300 p-4">
+        <summary class="font-medium">Default equipment shipping address</summary>
+        <p class="form-hint mt-2">Check the shipping address, including the apartment or unit number. The suggested address may be the guardian’s. You can submit the report and confirm the address later.</p>
+        <div class="mt-3 grid gap-4 sm:grid-cols-2">
+          <% EquipmentShipping::FIELDS.each do |field| %>
+            <div>
+              <%= f.label field, field.delete_prefix('shipping_').humanize, class: 'form-label' %>
+              <%= f.text_field field, value: profile_values[field], class: 'form-input mt-1' %>
+            </div>
+          <% end %>
+        </div>
+        <label class="mt-4 flex items-center gap-2">
+          <%= check_box_tag 'evaluation[shipping_confirmed]', '1', form_values[:shipping_confirmed] == '1', id: 'report-shipping-confirmed' %>
+          Use this confirmed address for equipment shipments
+        </label>
+      </details>
+
       <fieldset id="products-tried-group" tabindex="-1" class="rounded-md"
                 <%= tag.attributes(aria: action_form_field_aria(
                       :submit_report, :products_tried_inputs,
@@ -109,8 +149,11 @@
         </legend>
         <p id="products-tried-help" class="form-hint"><%= t('evaluators.evaluations.recommendations.tried_help') %></p>
         <%= render 'shared/field_errors', action: :submit_report, attribute: :products_tried_inputs, form_errors: @evaluation_form_errors %>
-        <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
-          <% available_products.each do |product| %>
+        <div class="mt-2 space-y-3 border border-gray-300 rounded-md p-3 bg-white">
+          <% available_products.group_by(&:category).each do |category, products| %>
+            <details open class="rounded border border-gray-200 p-3">
+              <summary class="font-medium"><%= Product::CATEGORIES.fetch(category, category) %></summary>
+              <% products.each do |product| %>
             <% trial = trial_inputs.fetch(product.id.to_s, {}).with_indifferent_access # rubocop:disable Lint/UselessAssignment -- ERB local. %>
             <div class="space-y-2" data-recommendation-outcome-target="trialRow">
               <div class="flex items-start gap-3">
@@ -118,18 +161,20 @@
                 <%= check_box_tag "evaluation[products_tried_inputs][#{product.id}][selected]", '1', trial[:selected] == '1',
                                   id: "trial-#{product.id}", class: 'mt-1 h-4 w-4 rounded border-gray-300 text-primary-600',
                                   data: { trial_choice: true } %>
-                <%= label_tag "trial-#{product.id}", product.name, class: 'form-label' %>
+                <%= label_tag "trial-#{product.id}", product.catalog_label, class: 'form-label' %>
               </div>
-              <div class="ml-7" data-trial-rating>
+              <div class="ml-7" data-trial-rating <%= 'hidden' unless trial[:selected] == '1' %>>
                 <%= label_tag "trial-#{product.id}-reaction", "Satisfaction with #{product.name}", class: 'form-label' %>
                 <%= select_tag "evaluation[products_tried_inputs][#{product.id}][reaction]",
                                options_for_select(Evaluation::TRIAL_REACTIONS, trial[:reaction]),
                                include_blank: 'Select satisfaction', id: "trial-#{product.id}-reaction",
-                               class: 'form-input mt-1',
+                               class: 'form-input mt-1', disabled: trial[:selected] != '1', required: trial[:selected] == '1',
                                aria: action_form_field_aria(:submit_report, :products_tried_inputs, form_errors: @evaluation_form_errors),
                                data: { trial_reaction: true } %>
               </div>
             </div>
+              <% end %>
+            </details>
           <% end %>
         </div>
       </fieldset>
@@ -139,23 +184,36 @@
                 <%= tag.attributes(aria: action_form_field_aria(:submit_report, :recommended_product_ids, form_errors: @evaluation_form_errors)) %>>
         <legend class="form-label"><%= t('evaluators.evaluations.recommendations.catalog_heading') %></legend>
         <%= render 'shared/field_errors', action: :submit_report, attribute: :recommended_product_ids, form_errors: @evaluation_form_errors %>
-        <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
-          <%= f.collection_check_boxes(
-                :recommended_product_ids,
-                recommendation_products,
-                :id,
-                :name,
-                checked: form_values.fetch(:recommended_product_ids, evaluation.recommended_product_ids)
-              ) do |b| %>
-            <div class="flex items-start">
-              <div class="flex items-center h-5">
-                <%= b.check_box class: 'h-4 w-4 text-primary-600 border-gray-300 rounded',
-                                data: { recommendation_outcome_target: 'catalog' } %>
-              </div>
-              <div class="ml-3 text-sm">
-                <%= b.label class: 'font-medium text-gray-700' %>
-              </div>
-            </div>
+        <div class="my-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div class="grow">
+            <%= label_tag 'report-catalog-search', 'Search manufacturer or model', class: 'form-label' %>
+            <%= search_field_tag nil, nil, id: 'report-catalog-search', class: 'form-input', autocomplete: 'off',
+                                           data: { recommendation_outcome_target: 'search', action: 'input->recommendation-outcome#filter' } %>
+          </div>
+          <label class="flex items-center gap-2">
+            <%= check_box_tag 'catalog_show_all', '1', false, data: { recommendation_outcome_target: 'showAll', action: 'recommendation-outcome#filter' } %>
+            Show all active products
+          </label>
+        </div>
+        <p class="form-hint">You may select another group if the applicant qualifies.</p>
+        <div class="mt-2 space-y-3">
+          <% recommendation_products.group_by(&:category).each do |category, products| %>
+            <details open class="rounded border border-gray-300 p-3">
+              <summary class="font-medium"><%= Product::CATEGORIES.fetch(category, category) %></summary>
+              <%= f.collection_check_boxes :recommended_product_ids, products, :id, :catalog_label,
+                                           checked: selected_ids do |box| %>
+                <div class="mt-3 flex items-start gap-3 <%= 'hidden' unless evaluation_recommendation_visible?(box.object, confirmed_groups, selected_ids) %>"
+                     data-recommendation-outcome-target="productRow"
+                     data-product-groups="<%= box.object.eligible_disability_groups.join(' ') %>"
+                     data-product-search="<%= box.object.catalog_label.downcase %>">
+                  <%= box.check_box class: 'mt-1 h-4 w-4 rounded border-gray-300 text-primary-600', data: { recommendation_outcome_target: 'catalog' } %>
+                  <div>
+                    <%= box.label class: 'font-medium text-gray-700' %>
+                    <% unless box.object.available? %><p class="text-danger-700">This product is unavailable. Uncheck it before submitting the report.</p><% end %>
+                  </div>
+                </div>
+              <% end %>
+            </details>
           <% end %>
         </div>
       </fieldset>
@@ -200,7 +258,7 @@
 
       <div>
         <%= f.label :notes, class: 'form-label' do %>
-          <%= t('evaluators.evaluations.working_notes.label') %> <span class="text-danger-600">*</span><span class="sr-only"> (required)</span>
+          <%= t('evaluators.evaluations.forms.report_internal_notes') %> <span class="text-danger-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
         <%= f.text_area(
               :notes,
@@ -211,11 +269,14 @@
               required: true,
               aria: action_form_field_aria(:submit_report, :notes, describedby: 'complete-internal-notes-help', form_errors: @evaluation_form_errors)
             ) %>
-        <p id="complete-internal-notes-help" class="mt-1 text-sm text-gray-700"><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
+        <p id="complete-internal-notes-help" class="mt-1 text-sm text-gray-700">
+          <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
+          <%= t('evaluators.evaluations.forms.report_internal_notes_help') %>
+        </p>
         <%= render 'shared/field_errors', action: :submit_report, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
 
-      <%= f.submit 'Mark as Completed',
+      <%= f.submit 'Submit completed report',
                    data: { turbo_submits_with: 'Submitting report...' },
                    class: 'btn btn-success w-full' %>
     <% end %>

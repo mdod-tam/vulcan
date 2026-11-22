@@ -1,0 +1,58 @@
+<%# locals: (groups:, return_context:, available_counts:) -%>
+<% groups.each do |product, rows| %>
+  <section class="card border border-gray-200 p-4 space-y-3" data-equipment-selection-target="group">
+    <h2 class="text-lg font-semibold"><%= equipment_catalog_label(product) %></h2>
+    <% if return_context[:tab] == 'needs_ordering' %>
+    <label><input type="checkbox" data-equipment-selection-target="groupCheckbox" data-action="equipment-selection#selectGroup"> Select matching requests for this model</label>
+      <%= render 'needs_table', product: product, rows: rows, available_stock: available_counts[product.id].to_i, return_context: return_context %>
+    <% else %>
+    <% rows.each do |row| %>
+      <article id="equipment-item-<%= row.id %>" class="space-y-3 border-t border-gray-200 py-3" data-equipment-selection-target="row"
+               data-model="<%= product.id %>" data-manufacturer="<%= product.manufacturer %>" data-category="<%= product.category %>"
+               data-program-groups="<%= row.application.program_disability_groups.join(',') %>"
+               data-source="<%= row.stock? ? 'stock' : 'vendor' %>"
+               data-search-text="<%= row.application.user.full_name %> Application #<%= row.application_id %>">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <div>
+            <h3 class="font-semibold">
+              <%= link_to row.application.user.full_name, admin_application_path(row.application_id, anchor: 'equipment', return_context:),
+                          class: 'text-primary-700 underline' %>
+            </h3>
+            <p class="text-sm text-gray-600">Application #<%= row.application_id %> · Device #<%= row.id %></p>
+          </div>
+          <% if row.awaiting_delivery? %>
+            <%= status_badge(:equipment, :awaiting_delivery, label: 'Awaiting delivery') %>
+          <% else %>
+            <%= status_badge(:equipment, :shipment_recorded, label: 'Delivered') %>
+          <% end %>
+        </div>
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3 lg:grid-cols-5">
+          <% if row.purchase_order %>
+            <div>
+              <dt class="font-medium text-gray-700">Purchase order</dt>
+              <dd class="[overflow-wrap:anywhere]">
+                <%= link_to row.purchase_order.number, admin_purchase_order_path(row.purchase_order), class: 'text-primary-700 underline' %>
+              </dd>
+            </div>
+          <% end %>
+          <div><dt class="font-medium text-gray-700">Funding</dt><dd><%= equipment_funding_label(row) %></dd></div>
+          <div><dt class="font-medium text-gray-700">Device setup</dt><dd><%= equipment_request_setup(row) %></dd></div>
+          <div><dt class="font-medium text-gray-700">Shipping address</dt><dd><%= row.shipping_ready? ? 'Confirmed' : 'Needs review' %></dd></div>
+          <% if row.delivered_on? %>
+            <div><dt class="font-medium text-gray-700">Date received</dt><dd><%= accessible_date_value(row.delivered_on) %></dd></div>
+          <% end %>
+        </dl>
+        <% if row.awaiting_delivery? %>
+          <%= render 'delivery_form', item: row, return_context: return_context, retry_values: (@delivery_retry if @delivery_retry&.[](:item_id) == row.id) %>
+        <% end %>
+        <div class="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+          <%= link_to 'Correct device or shipment details', edit_admin_equipment_item_path(row, return_context:),
+                      class: 'text-primary-700 underline', aria: { label: "Correct device or shipment details for device ##{row.id}" } %>
+          <%= link_to 'Edit costs and receipt dates', edit_admin_icanconnect_financial_record_path("EquipmentItem:#{row.id}"),
+                      class: 'text-primary-700 underline', aria: { label: "Edit costs and receipt dates for device ##{row.id}" } %>
+        </div>
+      </article>
+    <% end %>
+    <% end %>
+  </section>
+<% end %>

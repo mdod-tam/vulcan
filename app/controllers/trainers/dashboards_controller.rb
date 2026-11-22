@@ -27,7 +27,6 @@ module Trainers
                                              .includes(application: :user)
                                              .order(created_at: :desc, id: :desc)
       @scheduled_sessions = training_sessions.where(status: %i[scheduled confirmed])
-      @scheduled_sessions_count = @scheduled_sessions.count
       @overdue_sessions = @scheduled_sessions.where(scheduled_for: ..now).includes(application: :user).order(:scheduled_for, :id)
       @overdue_sessions_count = @overdue_sessions.count
       @completed_sessions = training_sessions.where(status: :completed)
@@ -41,7 +40,21 @@ module Trainers
                                      Application.with_pending_training_request.where(assigned_trainer_id: current_user.id)
                                                 .includes(:user).order(:training_requested_at, :id)
                                    end
-      @needs_scheduling_count = @requested_sessions.count + @pending_training_requests.count
+      @unassigned_training_requests =
+        if current_user.admin?
+          Application.awaiting_trainer_assignment.includes(:user).order(:training_requested_at, :id)
+        else
+          Application.none
+        end
+      @needs_trainer_summary = Applications::TrainingQueueSummary.new(applications: @unassigned_training_requests).call if current_user.admin?
+      @assignable_trainers = User.assignable_for(:can_train).order(:last_name, :first_name, :id).to_a if current_user.admin? && @unassigned_training_requests.load.any?
+      @pending_training_requests = @pending_training_requests.where.not(assigned_trainer_id: nil).includes(:assigned_trainer)
+      summaries = ServiceDashboardSummary.new(training_sessions, timings: ServiceDashboardSummary::TRAINING,
+                                                                 pending_requests: @pending_training_requests).call
+      @scheduling_summary = summaries.fetch(:requested)
+      @scheduled_summary = summaries.fetch(:scheduled)
+      @scheduled_sessions_count = @scheduled_summary.count
+      @needs_scheduling_count = @scheduling_summary.count
       @pending_request_sessions = TrainingSession.latest_per_application_records
                                                  .where(application: @pending_training_requests)
                                                  .index_by(&:application_id)
@@ -64,11 +77,11 @@ module Trainers
 
     def load_display_data
       @overdue_sessions_display = @overdue_sessions.limit(10)
-      @requested_sessions_display = @requested_sessions.limit(10)
-      @upcoming_sessions_display = @upcoming_sessions.limit(10)
-      @my_scheduled_sessions_display = @my_upcoming_sessions.limit(10)
+      @requested_sessions_display = @requested_sessions.includes(:trainer).limit(10)
+      @upcoming_sessions_display = @upcoming_sessions.includes(:trainer).limit(10)
+      @my_scheduled_sessions_display = @my_upcoming_sessions.includes(:trainer).limit(10)
       @recent_completed_sessions = @completed_sessions
-                                   .includes(application: :user)
+                                   .includes(:trainer, application: :user)
                                    .order(completed_at: :desc)
                                    .limit(5)
       @recent_followup_sessions = @followup_sessions.limit(5)

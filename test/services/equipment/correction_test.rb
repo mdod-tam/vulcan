@@ -16,36 +16,37 @@ module Equipment
       old_order = @item.purchase_order
       @service.update_item!(item: @item, attributes: {}, expected_version: @item.lock_version, reason: 'Ordered accidentally', operation: 'detach')
       assert_nil @item.reload.purchase_order_id
+      assert @item.unfulfilled_since.present?
       assert_equal 0, need.reload.remaining_quantity
       assert_equal 'needs_ordering', @item.queue_status
       assert_equal 'No equipment currently linked', old_order.reload.shipment_status
-      new_order = create(:purchase_order)
-      @service.update_item!(item: @item, attributes: { purchase_order_id: new_order.id }, expected_version: @item.lock_version,
-                            purchase_order_versions: { new_order.id => new_order.lock_version }, reason: 'Reordered with correct vendor')
+      group = Bidding.new(actor: @admin).create!(number: 'REBID-DEVICE', items: [{ id: @item.id, lock_version: @item.lock_version }])
+      new_order = Ordering.new(actor: @admin).call(bid_group: group, application_versions: equipment_bid_profile_versions(group), expected_version: group.lock_version,
+                                                   line_versions: group.active_lines.to_h { |line| [line.id.to_s, line.lock_version.to_s] },
+                                                   purchase_order_attributes: { number: 'REORDERED' })
       assert_equal old_id, @item.reload.id
       assert_equal new_order.id, @item.purchase_order_id
       assert_equal 0, need.reload.remaining_quantity
-      assert_equal 2, @item.events.count
     end
 
-    test 'a normal correction cannot detach a linked device through a blank PO selection' do
+    test 'a normal correction cannot assign another PO outside a bid award' do
       original_order_id = @item.purchase_order_id
+      another_order = create(:purchase_order)
       assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
         error = assert_raises(Conflict) do
-          @service.update_item!(item: @item, attributes: { purchase_order_id: '' }, expected_version: 0, reason: 'Remove this order')
+          @service.update_item!(item: @item, attributes: { purchase_order_id: another_order.id }, expected_version: 0, reason: 'Move this order')
         end
-        assert_includes error.message, 'detach action'
+        assert_includes error.message, 'bid award'
       end
       assert_equal original_order_id, @item.reload.purchase_order_id
       assert_equal 0, @item.lock_version
-      assert_equal 'ordered', @item.queue_status
+      assert_equal 'awaiting_shipment', @item.queue_status
     end
 
     test 'detach and withdrawal reject changed details without changing the device or audit history' do
       replacement = create(:product)
-      another_order = create(:purchase_order)
       changes = [
-        { product_id: replacement.id.to_s }, { purchase_order_id: another_order.id.to_s },
+        { product_id: replacement.id.to_s },
         { shipped_at: Date.current.iso8601 }, { shipped_at: '13/45/2026' },
         { tracking_number: 'CorrectedPackage' }, { carrier: 'usps' },
         { serial_number: 'CorrectedSerial' }, { imei: '123456789012345' }
@@ -67,24 +68,13 @@ module Equipment
           end
           assert_equal original, @item.reload.attributes
         end
-
-        [{ vendor_id: another_order.vendor_id, number: 'Unrecorded header', sent_at: Date.current.iso8601 },
-         { vendor_id: '', number: '', sent_at: '' }].each do |new_order|
-          assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
-            assert_raises(Conflict) do
-              @service.update_item!(item: @item, attributes: {}, expected_version: @item.lock_version,
-                                    reason: 'New header while changing disposition', operation: operation, new_purchase_order: new_order)
-            end
-          end
-          assert_equal original, @item.reload.attributes
-        end
       end
     end
 
     test 'detach and withdrawal accept unchanged typed and normalized full form values' do
       @item.update!(tracking_number: 'RecordedPackage', serial_number: 'RecordedSerial')
       details = @item.attributes.slice(*Correction::EDITABLE_ITEM_FIELDS).except('purchase_order_id')
-      attributes = { product_id: @item.product_id.to_s, purchase_order_id: @item.purchase_order_id.to_s,
+      attributes = { product_id: @item.product_id.to_s,
                      shipped_at: '', tracking_number: ' RecordedPackage ', carrier: '', serial_number: ' RecordedSerial ', imei: '' }
 
       %w[detach withdraw].each do |operation|
@@ -94,25 +84,23 @@ module Equipment
         end
         assert_equal details, @item.reload.attributes.slice(*details.keys)
         assert_nil @item.purchase_order_id
-        assert_equal [operation == 'detach' ? 'purchase_order_id' : 'withdrawn_at'], @item.events.order(:id).last.field_changes.keys
-        attributes[:purchase_order_id] = ''
+        expected_fields = operation == 'detach' ? %w[purchase_order_id unfulfilled_since] : ['withdrawn_at']
+        assert_equal expected_fields, @item.events.order(:id).last.field_changes.keys
       end
       assert @item.withdrawn_at?
     end
 
-    test 'serial acknowledgment text is encrypted with the device change audit' do
+    test 'a serial reused across models is encrypted in the device change audit' do
       other_model = create(:product, manufacturer: @item.product.manufacturer, model_number: 'Another model')
       create(:equipment_item, product: other_model, serial_number: 'PRIVATE-SERIAL')
-      acknowledgment = 'Reviewed PRIVATE-SERIAL and IMEI 123456789012345; separate manufacturer models.'
       @service.update_item!(item: @item, attributes: { serial_number: 'PRIVATE-SERIAL' }, expected_version: 0,
-                            reason: 'Identity reviewed', serial_duplicate_reason: acknowledgment)
+                            reason: 'Identity reviewed')
 
       event = @item.events.sole
-      assert_nil event.metadata['serial_duplicate_reason']
-      assert_equal({}, event.metadata.dig('changes', 'serial_duplicate_reason'))
-      assert_equal [nil, acknowledgment], event.field_changes['serial_duplicate_reason']
+      assert_equal({}, event.metadata.dig('changes', 'serial_number'))
+      assert_equal [nil, 'PRIVATE-SERIAL'], event.field_change_pairs['serial_number']
       raw = Event.connection.select_one("SELECT metadata, change_values FROM events WHERE id = #{event.id}")
-      assert(raw.values.none? { |value| value.to_s.include?(acknowledgment) || value.to_s.include?('PRIVATE-SERIAL') || value.to_s.include?('123456789012345') })
+      assert(raw.values.none? { |value| value.to_s.include?('PRIVATE-SERIAL') })
     end
 
     test 'withdrawal keeps the detached device and history but cannot withdraw an ordered device' do
@@ -123,25 +111,12 @@ module Equipment
       assert EquipmentItem.exists?(@item.id)
     end
 
-    test 'moving to a new header preserves the item and sibling and stale or invalid retries roll back the header' do
-      old_order = @item.purchase_order
-      sibling = create(:equipment_item, application: @item.application, product: @item.product, purchase_order: old_order)
-      new_order = { vendor_id: old_order.vendor_id, number: 'Corrected Header', sent_at: old_order.sent_at.iso8601 }
-      assert_difference 'PurchaseOrder.count', 1 do
-        assert_no_difference 'EquipmentItem.count' do
-          @service.update_item!(item: @item, attributes: { purchase_order_id: '' }, expected_version: 0, new_purchase_order: new_order,
-                                reason: 'One device belongs to another order')
-        end
-      end
-      assert_equal old_order.id, sibling.reload.purchase_order_id
-      assert_not_equal old_order.id, @item.reload.purchase_order_id
-      assert_no_difference ['PurchaseOrder.count', 'Event.count'] do
+    test 'correction rejects purchase order assignment without creating headers' do
+      order = create(:purchase_order, sent_at: nil)
+      assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
         assert_raises(Conflict) do
-          @service.update_item!(item: @item, attributes: {}, expected_version: 0, new_purchase_order: new_order, reason: 'Repeated old browser submission')
-        end
-        assert_raises(ActiveRecord::RecordInvalid) do
-          @service.update_item!(item: @item, attributes: { shipped_at: Date.current + 1.day, tracking_number: 'Package' },
-                                expected_version: @item.lock_version, new_purchase_order: new_order.merge(number: 'Invalid Header'), reason: 'Invalid future shipment')
+          @service.update_item!(item: @item, attributes: { purchase_order_id: order.id }, expected_version: @item.lock_version,
+                                reason: 'This assignment must go through bid award')
         end
       end
     end
@@ -157,7 +132,7 @@ module Equipment
     test 'tracking saves and rapid corrections keep distinct encrypted old and new history' do
       @service.update_item!(item: @item, attributes: { tracking_number: 'FirstPackage', imei: '123456789012345' }, expected_version: 0, reason: 'Device identified')
       @service.update_item!(item: @item, attributes: { tracking_number: 'SecondPackage' }, expected_version: @item.lock_version, reason: 'Tracking corrected')
-      assert_equal 'ordered', @item.reload.queue_status
+      assert_equal 'awaiting_shipment', @item.reload.queue_status
       events = @item.events.order(:id).to_a
       assert_equal 2, events.size
       assert_equal({}, events.last.metadata.dig('changes', 'tracking_number'))
@@ -171,7 +146,7 @@ module Equipment
       replacement = create(:product)
       attributes = { 'product_id' => replacement.id.to_s }
       assert_raises(Conflict) { @service.update_item!(item: @item, attributes: attributes, expected_version: @item.lock_version, reason: 'Wrong catalog product', confirmed_impact: true) }
-      token = Correction.impact_token(record: @item, attributes: attributes, extra: { operation: 'update', new_purchase_order: {} })
+      token = Correction.impact_token(record: @item, attributes: attributes, extra: { operation: 'update' })
       @service.update_item!(item: @item, attributes: attributes, expected_version: @item.lock_version,
                             reason: 'Wrong catalog product', confirmed_impact: true, impact_token: token)
       assert_equal replacement, @item.reload.product
@@ -224,7 +199,7 @@ module Equipment
       order = create(:purchase_order)
       assert_raises(Conflict) do
         @service.update_item!(item: detached, attributes: { purchase_order_id: order.id }, expected_version: 0,
-                              purchase_order_versions: { order.id => order.lock_version }, reason: 'New assignment')
+                              reason: 'New assignment')
       end
       assert_raises(Conflict) { Correction.new(actor: create(:evaluator)) }
     end

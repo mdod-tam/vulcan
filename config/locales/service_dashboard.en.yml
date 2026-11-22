@@ -1,0 +1,41 @@
+en:
+  service_dashboard:
+    followup_help: "Review cancellations and no-shows for rescheduling."
+    practitioner:
+      trainer: "Trainer: %{name}"
+      evaluator: "Evaluator: %{name}"
+    actions:
+      schedule_evaluation: "Schedule evaluation"
+      schedule_evaluation_aria: "Schedule evaluation for an assigned request"
+      evaluation_report: "Enter evaluation report"
+      evaluation_report_aria: "Enter evaluation report for a scheduled visit"
+      all_evaluation_reports_aria: "Enter evaluation report for a scheduled visit with any evaluator"
+      followup: "Review follow-up"
+    days:
+      one: "%{value} day"
+      other: "%{value} days"
+    waiting_since:
+      assignment: "Waiting since assignment"
+      request: "Waiting since request"
+      scheduled: "Waiting since scheduling"
+    wait_not_recorded: "Wait start not recorded"
+    not_recorded: "Not recorded"
+    average_to_schedule: "Average assignment to scheduling"
+    average_to_visit: "Average scheduling to completed visit"
+    recorded_schedules:
+      one: "Based on 1 recorded appointment."
+      other: "Based on %{count} recorded appointments."
+    recorded_visits:
+      one: "Based on 1 recorded visit."
+      other: "Based on %{count} recorded visits."
+    unknown_dates:
+      one: "1 wait start not recorded."
+      other: "%{count} wait starts not recorded."
+    disability_unknown: "Disability group not recorded"
+    groups:
+      deaf: "Deaf"
+      deafblind: "DeafBlind"
+      hard_of_hearing: "Hard of Hearing"
+      low_vision_blind: "Low Vision / Blind"
+      speech: "Speech"
+      mobility: "Mobility"

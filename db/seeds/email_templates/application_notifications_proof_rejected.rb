@@ -8,7 +8,9 @@ template.body = <<~TEXT
 
   Dear %<constituent_full_name>s,
 
-  Thank you for submitting your %<proof_type_formatted>s for your MAT application. We reviewed it and need a corrected copy before we can continue processing your application.
+  We reviewed your %<proof_type_formatted>s.
+
+  %<request_explanation>s
 
   Reason we could not accept this document:
   %<rejection_reason>s
@@ -23,9 +25,9 @@ template.body = <<~TEXT
   %<footer_text>s
 TEXT
 template.variables = {
-  'required' => %w[header_text constituent_full_name proof_type_formatted rejection_reason footer_text],
+  'required' => %w[header_text constituent_full_name proof_type_formatted rejection_reason footer_text request_explanation],
   'optional' => %w[organization_name secure_upload_url remaining_attempts_message_text additional_instructions default_options_text archived_message_text]
 }
-template.version = 3
+template.version = 4
 template.save! if template.new_record? || template.changed?
 Rails.logger.debug 'Seeded application_notifications_proof_rejected (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

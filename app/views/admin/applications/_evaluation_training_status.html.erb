@@ -12,7 +12,7 @@
     <%# The panel follows the evaluation still owed; a newer completed one must not hide it. %>
     <% current_evaluation = @application.open_evaluation || @application.latest_evaluation # rubocop:disable Lint/UselessAssignment -- Used below. %>
 
-    <% if @application.equipment_fulfillment? %>
+    <% if @application.equipment_procurement_eligible? %>
       <div>
         <div class="mb-3">
           <h3 class="text-base font-semibold text-gray-900">Evaluation</h3>
@@ -94,7 +94,7 @@
       <p class="mt-3">
         <%= @completed_training_sessions_count %> completed,
         <%= @reserved_training_sessions_count - @completed_training_sessions_count %> reserved,
-        <%= @remaining_training_sessions %> remaining of <%= @max_training_sessions %>.
+        <%= @application.unlimited_training_sessions? ? t('icanconnect.unlimited') : "#{@remaining_training_sessions} remaining of #{@max_training_sessions}." %>
       </p>
       <% if @application.training_request_pending? %>
         <p class="mt-3 font-medium" data-testid="training-request-pending">Training requested by constituent</p>
@@ -136,7 +136,7 @@
                        **trainer_transfer_copy(open_sessions) %>
           <% end %>
         </div>
-      <% elsif @remaining_training_sessions.positive? && @application.service_window_active? %>
+      <% elsif @application.training_capacity_available? && @application.service_window_active? %>
         <%= render(
               'assignment_section',
               type: 'trainer', entity: nil, assigned_person: nil,
@@ -145,7 +145,9 @@
               available_assignees: User.assignable_for(:can_train)
             ) %>
       <% else %>
-        <p class="mt-3">New training assignment is unavailable because capacity or the service window has ended.</p>
+        <p class="mt-3">
+          New training assignment is unavailable because capacity or the service window has ended.
+        </p>
       <% end %>
     </section>
   </div>
@@ -187,6 +189,9 @@
           evaluators_evaluation_path(latest_completed_evaluation),
           class: "btn btn-secondary",
           data: { turbo_frame: "_top" } %>
+      <%= link_to 'Evaluation costs and funding',
+                  edit_admin_icanconnect_financial_record_path("Evaluation:#{latest_completed_evaluation.id}"),
+                  class: 'btn btn-secondary', data: { turbo_frame: '_top' } %>
     </div>
   <% end %>
 
@@ -207,6 +212,9 @@
                     class: "btn btn-secondary",
                     data: { turbo_frame: "_top" } %>
                 <% if session.status_completed? %>
+                  <%= link_to 'Training costs and funding',
+                              edit_admin_icanconnect_financial_record_path("TrainingSession:#{session.id}"),
+                              class: 'btn btn-secondary', data: { turbo_frame: '_top' } %>
                   <span class="text-sm text-gray-600">
                     Completed on <%= session.completed_at&.strftime("%B %d, %Y") %>
                     (<%= training_duration_hours_label(session.duration_hours) %>)

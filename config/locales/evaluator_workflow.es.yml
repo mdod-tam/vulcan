@@ -1,0 +1,22 @@
+es:
+  evaluator_workflow:
+    dashboard:
+      assign_evaluator: "Asignar evaluador"
+      assign_evaluator_for: "Asignar evaluador para %{name}"
+      assignment_help: "Solicitudes aprobadas pendientes de un evaluador"
+      longest_wait: "Mayor tiempo de espera"
+      longest_known_wait: "Mayor tiempo de espera registrado"
+      date_unavailable: "Fecha de espera no disponible"
+      unknown_waits:
+        one: "1 solicitud sin fecha de espera."
+        other: "%{count} solicitudes sin fecha de espera."
+      view_unassigned: "Ver solicitudes sin asignar"
+      view_unassigned_aria: "Ver solicitudes sin asignar para asignar un evaluador"
+      waiting_since: "En espera desde"
+      constituent: "Persona solicitante"
+      actions: "Acciones"
+      assignment_window_ended: "El plazo de servicio ha terminado. No se puede asignar un evaluador."
+      no_assignable_evaluators: "No hay evaluadores activos disponibles."
+      select_evaluator: "Seleccione un evaluador…"
+      select_evaluator_for: "Seleccione un evaluador para %{name}"
+      empty_unassigned: "No hay solicitudes pendientes de un evaluador."

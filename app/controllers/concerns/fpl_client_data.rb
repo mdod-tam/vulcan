@@ -5,17 +5,19 @@ module FplClientData
   extend ActiveSupport::Concern
 
   included do
-    helper_method :fpl_thresholds_json, :fpl_modifier_value
+    helper_method :income_validation_data
   end
 
   private
 
-  def fpl_thresholds_json
-    fpl_client_data[:thresholds].to_json
-  end
-
-  def fpl_modifier_value
-    fpl_client_data[:modifier]
+  def income_validation_data(locale: I18n.locale)
+    {
+      'income-validation-fpl-thresholds-value' => fpl_client_data[:thresholds].to_json,
+      'income-validation-modifier-value' => fpl_client_data[:modifier],
+      'income-validation-additional-person-value' => fpl_client_data[:additional_person],
+      'income-validation-messages-value' => I18n.t('applications.income_validation', locale: locale).to_json,
+      'income-validation-locale-value' => locale
+    }
   end
 
   def fpl_client_data

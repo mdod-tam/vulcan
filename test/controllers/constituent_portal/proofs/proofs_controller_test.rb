@@ -7,8 +7,10 @@ require 'test_helper'
 class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
   include ActionDispatch::TestProcess::FixtureFile
   include ActiveJob::TestHelper
+  include IcanconnectTestSupport
 
   setup do
+    start_icanconnect!
     @user = create(:constituent)
 
     # The paper trait rejects proofs with no attachment.
@@ -111,6 +113,48 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     assert_raises StandardError do
       post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
            params: { proof_type: 'income', income_proof: @valid_pdf }
+    end
+  end
+
+  %w[en es].each do |locale|
+    test "a concurrent income update keeps the accepted proof and returns a friendly #{locale} response" do
+      ensure_system_audit_actor!
+      FeatureFlag.disable!(:vouchers_enabled)
+      @admin = create(:admin)
+      applicant = create(:constituent, hearing_disability: true, vision_disability: true, locale: locale)
+      application = nil
+      travel_to 1.year.ago - 1.day do
+        application = approved_deafblind_application(user: applicant)
+        icc_order_with_unit(application: application)
+      end
+      original_proof = application.income_proof.blob
+      assert application.reload.income_proof_update_available?
+      sign_in_for_integration_test(applicant)
+      winner = scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'), user: applicant, purpose: :proof, slot: 'income_proof')
+      attempted = scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'), user: applicant, purpose: :proof, slot: 'income_proof')
+      attach = ProofAttachmentService.method(:attach_proof)
+      rejected_result = nil
+      concurrent_upload = lambda do |arguments|
+        accepted = attach.call(arguments.merge(application: Application.find(application.id), blob_or_file: winner.signed_id))
+        assert accepted[:success], accepted[:error]&.message
+        rejected_result = attach.call(arguments)
+      end
+
+      ProofAttachmentService.stub(:attach_proof, concurrent_upload) do
+        post "/constituent_portal/applications/#{application.id}/proofs/resubmit",
+             params: { proof_type: 'income', income_proof: attempted.signed_id }
+      end
+
+      assert_response :see_other
+      assert_redirected_to constituent_portal_application_path(application)
+      assert_equal I18n.t('applications.proof_resubmission.messages.no_longer_needed', locale: locale), flash[:alert]
+      assert_instance_of ProofAttachmentService::IncomeUpdateUnavailable, rejected_result[:error]
+      assert_equal winner.id, application.reload.income_proof.blob.id
+      assert_equal 'not_reviewed', application.income_proof_status
+      assert application.status_approved?
+      assert_includes application.previous_income_proofs.blobs, original_proof
+      assert_equal 1, Event.where(auditable: application, action: 'income_proof_attached').count
+      assert_equal 0, Event.where(auditable: application, action: 'proof_submitted').count
     end
   end
 

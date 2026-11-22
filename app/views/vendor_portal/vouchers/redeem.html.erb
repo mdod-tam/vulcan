@@ -6,7 +6,7 @@
       </div>
       <div class="mt-4 flex md:mt-0 md:ml-4">
         <%= link_to vendor_portal_dashboard_path,
-            class: 'btn btn-outline' do %>
+                    class: 'btn btn-outline' do %>
           Back to Dashboard
         <% end %>
       </div>
@@ -18,7 +18,7 @@
       <div>
         <p class="mb-1"><strong>Voucher Code:</strong> <%= @voucher.code %></p>
         <p class="mb-1"><strong>Constituent:</strong> <%= @voucher.application.constituent_full_name %></p>
-        <p class="mb-1"><strong>Issue Date:</strong> <%= @voucher.issued_at.strftime("%B %d, %Y") %></p>
+        <p class="mb-1"><strong>Issue Date:</strong> <%= @voucher.issued_at.strftime('%B %d, %Y') %></p>
       </div>
       <div>
         <p class="mb-1"><strong>Original Amount:</strong> <%= number_to_currency(@voucher.initial_value) %></p>
@@ -54,7 +54,7 @@
     <div class="card p-6 mb-6">
       <div class="mb-4">
         <h2 class="text-xl font-semibold">Select Products</h2>
-        <p class="text-sm text-gray-500">Choose which products the constituent is purchasing with this voucher. The selection is recorded for reference only.</p>
+        <p class="text-sm text-gray-500">Choose the products purchased with this voucher.</p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <% @products.each do |product| %>
@@ -66,6 +66,7 @@
                                   data: { product_name: product.name, voucher_redemption_target: 'product', action: 'change->voucher-redemption#update' } } %>
               <label for="product_<%= product.id %>" class="ml-3 block text-sm cursor-pointer flex-1">
                 <span class="font-semibold text-gray-900"><%= product.name %></span>
+                <% unless product.available? %><p class="mt-1 text-danger-700">This product is unavailable. Uncheck it and choose another product.</p><% end %>
                 <p class="mt-1 text-sm text-gray-500"><%= product.description %></p>
               </label>
             </div>
@@ -86,7 +87,7 @@
       <%= f.submit 'Process Redemption', id: 'submit-redemption',
                                          class: 'btn btn-primary',
                                          data: { disable_with: 'Processing...', voucher_redemption_target: 'submit' } %>
-      <%= link_to "Cancel", vendor_portal_vouchers_path, class: 'btn btn-outline' %>
+      <%= link_to 'Cancel', vendor_portal_vouchers_path, class: 'btn btn-outline' %>
     </div>
   <% end %>
 </div>

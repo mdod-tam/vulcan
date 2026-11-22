@@ -6,7 +6,7 @@ module Equipment
   class RequestParametersTest < ActiveSupport::TestCase
     test 'return context retains supported tabs and numeric filters from request parameters' do
       source = ActionController::Parameters.new(return_context: { tab: 'ordered', product_id: '7', vendor_id: '8', next: 'https://evil.example/' })
-      assert_equal({ tab: 'ordered', product_id: '7', vendor_id: '8' }, RequestParameters.return_context(source))
+      assert_equal({ tab: 'ordered', product_id: '7' }, RequestParameters.return_context(source))
       assert_equal({ tab: 'shipped', product_id: '9' }, RequestParameters.return_context('tab' => 'shipped', 'product_id' => 9))
     end
 
@@ -16,6 +16,13 @@ module Equipment
        { return_to: '//evil.example/admin/equipment' }, { tab: 'elsewhere', product_id: '-1', vendor_id: 'bad' }].each do |source|
         assert_equal({}, RequestParameters.return_context(source))
       end
+    end
+
+    test 'unused selectors are discarded while the equipment queue filters survive' do
+      filters = { tab: 'ordered', application_id: '3', product_id: '7', manufacturer: 'Example', category: 'devices',
+                  program_group: 'deaf', source: 'stock', search: 'Samuel' }
+      assert_equal filters, RequestParameters.return_context(return_context: filters.merge(destination: 'home', stock_state: 'available',
+                                                                                           sort: 'oldest', direction: 'asc'))
     end
 
     test 'submitted record versions remain opaque strings while malformed map entries are excluded' do

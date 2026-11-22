@@ -1,43 +1,95 @@
-<div class="max-w-4xl mx-auto px-4 py-6">
-  <h1 class="text-2xl font-bold mb-4">Record Winning Bid & PO</h1>
-  <p class="mb-4">Staff issue the PO externally; this records the purchasing decision.</p>
-  <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'purchase-order-errors' %>
-  <%= form_with model: @purchase_order, url: admin_purchase_orders_path, class: 'space-y-4',
-                data: { controller: 'equipment-selection', equipment_selection_existing_units_value: @item_rows.size } do |form| %>
-    <p role="status" aria-live="polite"><span data-equipment-selection-target="unitCount"><%= @unit_count %></span>
-      <span data-equipment-selection-target="unitLabel"><%= 'physical unit'.pluralize(@unit_count) %></span> across <%= pluralize(@application_count, 'application') %>.</p>
-    <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
-    <h2 class="text-lg font-semibold">New devices to materialize</h2>
-    <% @need_rows.each do |row| %>
-      <% need = @needs[row[:id].to_i] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
-      <div class="rounded border border-gray-200 p-3">
-        <%= hidden_field_tag 'purchase_order[needs][][id]', row[:id], id: nil %><%= hidden_field_tag 'purchase_order[needs][][lock_version]', row[:lock_version], id: nil %>
-        <% if need %><p><%= equipment_catalog_label(need.product) %> · Application #<%= need.application_id %> · <%= need.remaining_quantity %> currently remaining</p><% else %><p>Selected need is unavailable. Return to Equipment to refresh.</p><% end %>
-        <%= label_tag "quantity_#{row[:id]}", 'New quantity to order', class: 'form-label' %>
-        <%= number_field_tag 'purchase_order[needs][][quantity]', row[:quantity],
-                             id: "quantity_#{row[:id]}", min: 1, max: need&.remaining_quantity,
-                             required: true, autocomplete: 'off', class: 'form-input w-32',
-                             data: { equipment_selection_target: 'quantity', action: 'input->equipment-selection#updateQuantities' } %>
-      </div>
+<div id="equipment-profile-review" class="max-w-5xl mx-auto p-6 space-y-4">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-2xl font-bold">Enter PO details for bid <%= @group.number %></h1>
+    <%= link_to 'Back to Bid', admin_bid_group_path(@group, return_context: @return_context), class: 'btn btn-outline' %>
+  </div>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors %>
+  <% if @profile_review_refreshed %>
+    <p role="status" tabindex="-1" data-controller="error-summary" class="rounded bg-primary-50 p-3">The shipping address and device setup have been refreshed. Review them before saving.</p>
+  <% end %>
+  <% if @group.membership_changed_at %>
+    <p>This bid has changed. Review the products and quantities before awarding it.</p>
+  <% end %>
+  <%= form_with model: @purchase_order, url: admin_purchase_orders_path, class: 'space-y-4' do |form| %>
+    <% @application_versions.each do |id, version| %>
+      <%= hidden_field_tag "application_versions[#{id}]", version %>
     <% end %>
-    <h2 class="text-lg font-semibold">Previously ordered devices to relink</h2>
-    <% if @item_rows.empty? %><p class="text-sm text-gray-600">No detached devices selected.</p><% end %>
-    <% @item_rows.each do |row| %>
-      <% item = @items[row[:id].to_i] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
-      <%= hidden_field_tag 'purchase_order[items][][id]', row[:id], id: nil %><%= hidden_field_tag 'purchase_order[items][][lock_version]', row[:lock_version], id: nil %>
-      <p>Device #<%= row[:id] %><% if item %> · <%= equipment_catalog_label(item.product) %> · Application #<%= item.application_id %><% end %></p>
+    <%= hidden_field_tag :bid_group_id, @group.id %>
+    <%= hidden_field_tag :expected_version, @expected_version %>
+    <% @line_versions.each do |id, version| %>
+      <%= hidden_field_tag "line_versions[#{id}]", version %>
     <% end %>
-    <fieldset class="rounded border border-gray-200 p-4 space-y-4">
-      <legend class="font-semibold">Purchase order</legend>
+    <% @return_context.each do |key, value| %>
+      <%= hidden_field_tag "return_context[#{key}]", value %>
+    <% end %>
+    <p id="award-price-help" class="text-sm text-gray-600">Enter the quoted price per device.</p>
+    <% @lines.each do |line| %>
+      <article class="border rounded p-4 space-y-3">
+        <h2 class="font-semibold"><%= equipment_catalog_label(line.product) %> · <%= pluralize(line.quantity, 'unit') %></h2>
+        <% if line.application %>
+          <p>
+            <%= line.application.user.full_name %> · Application #<%= line.application.id %>
+            · Disability group: <%= Product::PROGRAM_GROUPS[line.equipment_need&.disability_setup_group || line.equipment_item&.disability_setup_group] || 'Setup needed' %>
+          </p>
+          <p class="whitespace-pre-line"><%= (line.equipment_item || line.application).shipping_label %></p>
+          <%= link_to 'Review equipment', edit_admin_application_equipment_needs_path(line.application), class: 'text-primary-700 underline' %>
+        <% else %>
+          <p>Program stock · Disability group: <%= Product::PROGRAM_GROUPS[line.supplier_setup_group] || 'Unassigned' %></p>
+        <% end %>
+        <div>
+          <%= label_tag "line-unit-cost-#{line.id}", 'Price per device', class: 'form-label' %>
+          <%= text_field_tag "line_unit_costs[#{line.id}]", @line_unit_costs[line.id.to_s],
+                             id: "line-unit-cost-#{line.id}", inputmode: 'decimal', autocomplete: 'off',
+                             class: 'form-input max-w-xs', aria: { describedby: 'award-price-help' } %>
+        </div>
+      </article>
+    <% end %>
+    <%= form.label :existing, 'Add to an unsent purchase order', class: 'form-label' %>
+    <p id="existing-order-help" class="text-sm text-gray-600">Choose an existing unsent order with the same purpose and funding source.</p>
+    <%= form.select :existing, options_for_select(@existing_options, @existing), { include_blank: 'Create a new PO' },
+                    class: 'form-input', aria: { describedby: 'existing-order-help' } %>
+    <details class="border rounded p-4">
+      <summary>View products already in these POs</summary>
+      <% @existing_orders.each do |order| %>
+        <h2 class="font-semibold mt-3"><%= link_to order.selection_label, admin_purchase_order_path(order), class: 'text-primary-700 underline' %></h2>
+        <% order.equipment_items.each do |item| %>
+          <p>
+            <%= equipment_catalog_label(item.product) %>
+            · <%= item.application ? item.application.user.full_name : 'Program stock' %>
+            · <%= item.stock? ? order.shipping_label : item.shipping_label %>
+          </p>
+        <% end %>
+      <% end %>
+    </details>
+    <fieldset class="border rounded p-4 space-y-3">
+      <legend class="font-semibold">New PO details</legend>
+      <p class="text-sm text-gray-600">Adding to an existing PO keeps its number and vendor.</p>
       <div>
-        <%= form.label :existing, 'Link to an existing PO (leave blank to create one)', class: 'form-label' %>
-        <%= form.select :existing, options_for_select(@existing_options, @existing),
-                        { include_blank: 'Create a new PO' }, class: 'form-input' %>
+        <%= form.label :number, 'New PO number', class: 'form-label' %>
+        <%= form.text_field :number, autocomplete: 'off', class: 'form-input' %>
       </div>
-      <p class="text-sm text-gray-600">New PO fields apply when no existing PO is selected. Duplicate vendor/PO numbers must be linked explicitly to the existing order.</p>
-      <%= render 'admin/purchase_orders/fields', form: form, purchase_order: @purchase_order, vendors: @vendors %>
+      <div>
+        <%= form.label :vendor_name, 'Vendor name', class: 'form-label' %>
+        <%= form.text_field :vendor_name, list: 'purchase-order-vendors', autocomplete: 'off', class: 'form-input' %>
+        <datalist id="purchase-order-vendors">
+          <% @vendor_names.each do |name| %>
+            <%= tag.option value: name %>
+          <% end %>
+        </datalist>
+      </div>
     </fieldset>
-    <%= form.submit 'Record purchase order', class: 'btn btn-primary' %>
-    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-primary-700 underline' %>
+    <% if @group.program_stock? %>
+      <fieldset class="border rounded p-4">
+        <legend>Confirm program receiving address for this PO</legend>
+        <p>Enter the address where the program will receive this order.</p>
+        <% EquipmentShipping::FIELDS.each do |field| %>
+          <%= form.label field, class: 'form-label' %>
+          <%= form.text_field field, autocomplete: 'off', class: 'form-input' %>
+        <% end %>
+      </fieldset>
+    <% end %>
+    <p>Save the PO here, then record its sent date after sending it to the supplier.</p>
+    <%= button_tag 'Refresh address and setup (keep changes)', name: :refresh_profiles, value: '1', formnovalidate: true, class: 'btn btn-outline' %>
+    <%= form.submit 'Save PO details', class: 'btn btn-primary' %>
   <% end %>
 </div>

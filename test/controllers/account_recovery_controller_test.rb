@@ -31,7 +31,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, I18n.t('portal_self_service.account_recovery.contact_hint', locale: :es)
     assert_includes response.body, I18n.t('portal_self_service.account_recovery.remember_key_prompt', locale: :es)
     assert_select 'input[name=?][value=?]', 'locale', 'es'
-    assert_not_includes response.body, I18n.t('sessions.form.contact_hint', locale: :es)
+    assert_not_includes response.body, I18n.t('portal_self_service.contact_hint', locale: :es)
   end
 
   test 'should create recovery request for existing user' do

@@ -45,6 +45,16 @@
                                                          form_errors: @training_form_errors) } %>
       <%= render 'shared/field_errors', action: :complete, attribute: :product_trained_on_id, form_errors: @training_form_errors %>
     </div>
+    <fieldset class="space-y-2 border p-4"><legend><%= t('icanconnect.training_equipment') %></legend>
+      <p><%= t('icanconnect.training_equipment_help') %></p>
+      <%= f.collection_check_boxes :equipment_item_ids, @completion_equipment_items, :id, :id do |choice| %>
+        <div>
+          <%= choice.check_box checked: Array(training_form_value(:complete, :equipment_item_ids, [],
+                                                                  form_values: @training_form_values)).map(&:to_s).include?(choice.value.to_s) %>
+          <%= choice.label { "##{choice.object.id} — #{choice.object.product.name}" } %>
+        </div>
+      <% end %>
+    </fieldset>
     <div>
       <%= f.label :duration_hours, training_required_label(t('trainer_workflow.fields.duration')), class: 'form-label' %>
       <%= f.number_field :duration_hours, data: { training_duration_confirmation_target: 'duration' },

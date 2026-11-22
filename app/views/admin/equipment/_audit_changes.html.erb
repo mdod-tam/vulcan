@@ -1,0 +1,13 @@
+<%# locals: (changes:, records:, initial:) -%>
+<% if !initial && changes.any? { |_, _, before, _| before.present? } %>
+  <%= render 'admin/equipment/change_comparison', changes:, records: %>
+<% else %>
+  <dl class="grid gap-x-5 gap-y-2 sm:grid-cols-2">
+    <% changes.each do |field, label, _before, value| %>
+      <div>
+        <dt class="font-medium text-gray-900"><%= label %></dt>
+        <dd class="[overflow-wrap:anywhere]"><%= equipment_impact_value(field, value, **records) %></dd>
+      </div>
+    <% end %>
+  </dl>
+<% end %>

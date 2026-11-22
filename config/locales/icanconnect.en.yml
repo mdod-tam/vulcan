@@ -1,0 +1,6 @@
+en:
+  icanconnect:
+    unlimited: "No session limit (iCanConnect)"
+    training_available_through: "Training available through %{date}."
+    training_equipment: "Devices used in training"
+    training_equipment_help: "Choose the devices used in this session. You can add or update them later when recording training costs."

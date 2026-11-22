@@ -1,0 +1,30 @@
+<div class="max-w-7xl mx-auto p-6 space-y-4">
+  <%= render 'admin/shared/index_header', title: 'Bids' %>
+<%= render 'admin/equipment/navigation' %>
+<%= link_to 'Buy devices for stock', admin_stock_index_path(anchor: 'buy-stock'), class: 'btn btn-primary' %>
+<div class="grid gap-4 sm:grid-cols-3">
+<% [['Enter PO details', @awaiting_award_ids.size], ['Awarded', @groups.count(&:purchase_order_id?)], ['Cancelled', @groups.count(&:cancelled_at?)]].each do |label, count| %>
+<div class="border rounded p-4">
+<%= label %>: <strong>
+<%= pluralize(count, 'bid') %></strong></div>
+<% end %>
+</div>
+<% @groups.each do |group| %>
+<article class="border rounded p-4">
+<%= link_to "Bid #{group.number}", admin_bid_group_path(group, return_context: @return_context), class: 'underline' %>
+ · <%= group.purpose.humanize %>
+ · <%= equipment_funding_label(group) %>
+ · <%= if group.open? && @awaiting_award_ids.exclude?(group.id)
+         'Open — no products reserved'
+       elsif group.open?
+         'Awaiting award'
+       else
+         (group.cancelled_at? ? 'Cancelled' : 'Awarded')
+       end %>
+<% if group.open? %> · Open <%= equipment_wait_length(group.created_at) %><% end %>
+</article>
+<% end %>
+<% if @groups.empty? %>
+<p>No bids yet. Select requests in Needs bid number or buy devices for program stock.</p>
+<% end %>
+</div>

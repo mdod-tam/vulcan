@@ -6,10 +6,14 @@ module Admin
     before_action :set_product, only: %i[show edit update archive unarchive]
 
     def index
+      @selected_device_types = Array(params[:device_types]).compact_blank.uniq
+      @selected_disability_groups = Array(params[:disability_groups]).compact_blank.uniq
+      @query = params[:q].to_s.strip
+      @selected_sort = params[:sort] == 'model' ? 'model' : 'manufacturer'
       scope = filtered_products_scope
-      @products = params[:show_archived] ? scope : scope.active
+      @products = params[:include_discontinued] == '1' ? scope : scope.active
       @pagy, @products = paginate_or_first_page(@products)
-      @products_by_type = group_products_by_type(@products)
+      @products_by_category = group_products_by_category(@products)
     end
 
     def show
@@ -18,19 +22,15 @@ module Admin
 
     def new
       @product = Product.new
-      load_vendors
     end
 
-    def edit
-      load_vendors
-    end
+    def edit; end
 
     def create
       @product = Product.new(product_params)
       if @product.save
         redirect_to admin_products_path, notice: t('.product_created_pass')
       else
-        load_vendors
         render :new, status: :unprocessable_content
       end
     end
@@ -39,7 +39,6 @@ module Admin
       if @product.update(product_params)
         redirect_to admin_products_path, notice: t('.product_updated_pass')
       else
-        load_vendors
         render :edit, status: :unprocessable_content
       end
     end
@@ -69,10 +68,12 @@ module Admin
                   :features,
                   :compatibility_notes,
                   :documentation_url,
+                  :category, :model_confirmed, :msrp,
                   { device_types: [],
-                    vendor_ids: [] }]
+                    eligible_disability_groups: [] }]
       )
       filtered_params[:device_types]&.reject!(&:blank?)
+      filtered_params[:eligible_disability_groups]&.reject!(&:blank?)
       filtered_params
     end
 
@@ -83,24 +84,22 @@ module Admin
       redirect_to admin_products_path, alert: t('.product_not_found')
     end
 
-    def load_vendors
-      @vendors = User.vendors.order(:first_name, :id)
-    end
-
     def filtered_products_scope
-      scope = Product.includes(:vendors).ordered_by_name
-      return scope if params[:device_types].blank?
-
-      types = Array(params[:device_types]).compact_blank
-      types.any? ? scope.by_device_types(types) : scope
+      scope = Product.ordered_by_name
+      scope = scope.reorder(:model_number, :name, :id) if @selected_sort == 'model'
+      if @query.present?
+        pattern = "%#{Product.sanitize_sql_like(@query)}%"
+        scope = scope.where('manufacturer ILIKE :query OR model_number ILIKE :query OR name ILIKE :query', query: pattern)
+      end
+      scope = scope.by_device_types(@selected_device_types) if @selected_device_types.any?
+      scope = scope.eligible_for_groups(@selected_disability_groups) if @selected_disability_groups.any?
+      scope
     end
 
-    def group_products_by_type(products)
-      products.each_with_object({}) do |product, hash|
-        (product.device_types || []).each do |type|
-          hash[type] ||= []
-          hash[type] << product
-        end
+    def group_products_by_category(products)
+      products.group_by(&:category).transform_values do |category_products|
+        category_products.group_by { |product| product.eligible_disability_groups.uniq.sort }
+                         .sort_by { |groups, _| groups.map { |group| Product::PROGRAM_GROUPS.fetch(group) }.join(', ') }.to_h
       end
     end
   end

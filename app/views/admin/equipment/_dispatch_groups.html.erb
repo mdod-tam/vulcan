@@ -1,0 +1,49 @@
+<%# locals: (groups:, return_context:) -%>
+<% groups.each do |group| %>
+  <section class="card space-y-4 border border-gray-200 p-4" data-equipment-selection-target="group">
+    <h2 class="text-lg font-semibold">
+      <%= group.beneficiary.full_name %>
+      · <%= group.stock ? 'From program stock — awaiting dispatch' : 'From vendor — awaiting shipment' %>
+    </h2>
+    <p class="whitespace-pre-line"><%= group.items.first.shipping_label.presence || 'Shipping address needed — review equipment' %></p>
+    <p class="text-sm text-gray-700"><%= equipment_dispatch_group_wait(group) %></p>
+    <label><input type="checkbox" data-equipment-selection-target="groupCheckbox" data-action="equipment-selection#selectGroup"> Select this recipient and destination</label>
+    <% group.items.each do |item| %>
+      <article class="flex flex-wrap items-start gap-3 border-t py-3" data-equipment-selection-target="row"
+               data-model="<%= item.product_id %>" data-manufacturer="<%= item.product.manufacturer %>" data-category="<%= item.product.category %>"
+               data-program-groups="<%= item.application.program_disability_groups.join(',') %>" data-source="<%= group.stock ? 'stock' : 'vendor' %>"
+               data-search-text="<%= group.beneficiary.full_name %> Application #<%= item.application_id %>">
+        <label>
+          <%= check_box_tag 'item_ids[]', item.id, false,
+                            id: "equipment-row-EquipmentItem-#{item.id}",
+                            data: { equipment_selection_target: 'rowCheckbox', action: 'equipment-selection#selectRow' } %>
+          <span class="sr-only">Select <%= item.product.name %> for <%= group.beneficiary.full_name %></span>
+        </label>
+        <div class="min-w-0 flex-1 space-y-1">
+          <h3 class="font-semibold"><%= equipment_catalog_label(item.product) %> · 1 device</h3>
+          <p>
+            <%= link_to "#{item.application.user.full_name} · Application ##{item.application_id}", admin_application_path(item.application_id),
+                        class: 'text-primary-700 underline' %>
+            · Device #<%= item.id %> · <%= equipment_shipment_wait(item) %>
+          </p>
+          <p>Setup for this recipient: <%= Product::PROGRAM_GROUPS[item.disability_setup_group] || 'Setup needed' %></p>
+          <p>Funding: <%= equipment_funding_label(item) %> · Date received: <%= accessible_date_value(item.delivered_on) || 'Not recorded' %></p>
+          <% if group.stock %>
+            <p>Setup ordered for stock: <%= equipment_ordered_stock_setup(item) %></p>
+            <p>Serial: <%= item.serial_number.presence || 'Identifier not recorded' %> · IMEI: <%= item.imei.presence || 'Not recorded' %></p>
+          <% end %>
+          <% unless item.destination_and_setup_ready? %>
+            <p class="font-medium text-warning-900">Confirm the shipping address and device setup before shipping.</p>
+          <% end %>
+          <%= link_to 'Review device and shipping address', edit_admin_equipment_item_path(item, return_context:), class: 'text-primary-700 underline' %>
+          <%= link_to 'Costs and receipt dates', edit_admin_icanconnect_financial_record_path("EquipmentItem:#{item.id}"), class: 'text-primary-700 underline' %>
+          <% if item.purchase_order %>
+            <%= link_to "PO #{item.purchase_order.number}", admin_purchase_order_path(item.purchase_order), class: 'text-primary-700 underline' %>
+          <% end %>
+        </div>
+      </article>
+    <% end %>
+    <%= link_to 'Enter shipping date and tracking',
+                new_admin_equipment_shipment_path(item_ids: group.items.map(&:id), return_context:), class: 'btn btn-primary' %>
+  </section>
+<% end %>

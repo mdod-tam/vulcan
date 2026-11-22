@@ -1,8 +1,21 @@
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-2xl font-bold mb-6">Feature Flags</h1>
-
-  <div class="card overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200">
+  <div class="max-w-7xl mx-auto space-y-6">
+    <%= render 'admin/shared/index_header', title: 'Feature Flags', applications_link: false %>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="max-w-prose space-y-2 text-sm text-gray-700">
+        <p>Feature flags turn workflows on or off. Policies set amounts and limits.</p>
+        <p>
+          Message delivery switches are under
+          <%= link_to 'communication controls', admin_email_templates_path(anchor: 'email-delivery'),
+                      class: 'text-primary-700 hover:text-primary-800 underline font-medium' %>.
+        </p>
+      </div>
+      <%= link_to 'System Policies', admin_policies_path, class: 'btn btn-outline' %>
+    </div>
+    <div class="card overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600"
+         role="region" aria-label="Workflow feature flags" tabindex="0">
+    <table class="w-full min-w-[44rem] divide-y divide-gray-200">
+      <caption class="sr-only">Workflow feature flags</caption>
       <thead class="bg-gray-50">
         <tr>
           <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feature</th>
@@ -13,14 +26,14 @@
       <tbody class="bg-white divide-y divide-gray-200">
         <% @feature_flags.each do |flag| %>
           <tr data-feature-flag="<%= flag.name %>">
-            <td class="px-6 py-4 text-sm font-medium text-gray-900">
+            <th scope="row" class="px-6 py-4 text-left text-sm font-medium text-gray-900">
+              <%= feature_flag_label(flag.name) %>
               <% if flag.name == 'dcf_auto_request_certification' %>
-                Auto-send DCF provider request
-                <p class="mt-2 max-w-prose font-normal text-gray-700">Applies to future moves to DCF when required proofs are approved and certification has not been requested. Existing applications awaiting DCF are unchanged. All, Email, Certification and template controls still apply. When disabled, staff request certification from the application page.</p>
-              <% else %>
-                <%= flag.name.humanize.titleize %>
+                <p class="mt-2 max-w-prose font-normal text-gray-700">Auto-send the provider's disability certification request after required proofs are approved. This applies to future moves to DCF. When off, staff send the request from the application. Communication controls still apply.</p>
+              <% elsif flag.name == 'vouchers_enabled' %>
+                <p class="mt-2 max-w-prose font-normal text-gray-700">Use vouchers for new applications. New applications require income proof when vouchers are off. iCanConnect requires approved income proof.</p>
               <% end %>
-            </td>
+            </th>
             <td class="px-6 py-4 whitespace-nowrap">
               <span class="badge <%= flag.enabled ? 'badge-success' : 'badge-danger' %>">
                 <%= flag.enabled ? 'Enabled' : 'Disabled' %>
@@ -28,14 +41,15 @@
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
               <%= form_with(model: [:admin, flag], local: true, method: :patch) do |f| %>
-                <%= f.hidden_field :enabled, value: !flag.enabled %>
+                <%= f.hidden_field :enabled, value: !flag.enabled, id: nil %>
                 <%= f.submit flag.enabled ? 'Disable' : 'Enable',
-                             class: "text-sm #{flag.enabled ? 'text-danger-600 hover:text-danger-900' : 'text-success-600 hover:text-success-900'}" %>
+                             class: 'btn btn-outline', aria: { label: "#{flag.enabled ? 'Disable' : 'Enable'} #{feature_flag_label(flag.name)}" } %>
               <% end %>
             </td>
           </tr>
         <% end %>
       </tbody>
     </table>
+    </div>
   </div>
 </div>

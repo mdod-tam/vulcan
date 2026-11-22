@@ -82,6 +82,12 @@ class ApplicationForm
   validate :validate_disability_selection, if: :is_submission
   validate :validate_guardian_relationship, if: :for_dependent?
   validate :validate_certifying_professional, if: :is_submission
+  validate :validate_income_eligibility, if: -> { is_submission && income_collection_required? }
+
+  def household_size=(value)
+    @submitted_household_size = value
+    super
+  end
 
   def initialize(attributes = {})
     @current_user = attributes.delete(:current_user)
@@ -143,7 +149,12 @@ class ApplicationForm
     scalars = scalar_params(app_params, *SCALAR_APPLICATION_PARAMS)
 
     assign_attributes(scalars)
-    self.annual_income = annual_income&.gsub(/[^\d.]/, '') if scalars.key?(:annual_income)
+    ProofManageable::REVIEW_PROOF_TYPES.each do |type|
+      field = "#{type}_proof"
+      key = :"#{field}_signed_id"
+      public_send("#{field}=", scalar_params(app_params, key)[key]) if public_send(field).blank?
+    end
+    self.annual_income = annual_income.strip.delete_prefix('$').delete(',') if scalars.key?(:annual_income) && MoneyInput.parse(annual_income)
 
     # A top-level checkbox takes precedence over the nested one.
     assign_attributes(scalar_params(params, :use_guardian_address))
@@ -227,6 +238,21 @@ class ApplicationForm
     I18n.with_locale(message_locale) do
       errors.add(:base, :certifying_professional_required)
     end
+  end
+
+  def validate_income_eligibility
+    size = Integer(@submitted_household_size.to_s, 10, exception: false)
+    amount = MoneyInput.parse(annual_income)
+    errors.add(:household_size, :positive_integer, locale: message_locale) unless size&.positive?
+    errors.add(:annual_income, :invalid_amount, locale: message_locale) if annual_income.present? && (!amount&.finite? || amount.negative?)
+    return unless size&.positive? && amount&.finite? && amount >= 0
+
+    result = IncomeThresholdCalculationService.call(size)
+    unless result.success?
+      errors.add(:base, :income_check_unavailable, locale: message_locale)
+      return
+    end
+    errors.add(:annual_income, :income_above_limit, locale: message_locale) if amount > result.data.fetch(:threshold)
   end
 
   def income_collection_required?

@@ -50,8 +50,8 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_equal 2, evaluation.products_tried.size
     iphone = Product.find_by(name: 'iPhone')
     pixel = Product.find_by(name: 'Pixel')
-    assert_equal iphone.id, evaluation.products_tried.first['product_id']
-    assert_equal pixel.id, evaluation.products_tried.second['product_id']
+    assert_equal iphone.id.to_s, evaluation.products_tried.first['product_id']
+    assert_equal pixel.id.to_s, evaluation.products_tried.second['product_id']
   end
 
   test 'selected trial inputs retain actual satisfaction and exclude unchecked products' do
@@ -80,7 +80,7 @@ class EvaluationTest < ActiveSupport::TestCase
 
     evaluation.products_tried_inputs = { '0' => { selected: '1', reaction: 'Neutral' } }
     assert_not evaluation.valid?
-    assert_includes evaluation.errors[:products_tried], 'must reference catalog products'
+    assert_includes evaluation.errors[:products_tried], 'must reference confirmed catalog products'
   end
 
   test 'historical actual trial reactions survive supplemental notes without reclassification' do
@@ -219,7 +219,7 @@ class EvaluationTest < ActiveSupport::TestCase
     }
 
     assert_not evaluation.update(completion)
-    assert_includes evaluation.errors[:recommended_products], 'cannot include archived catalog products'
+    assert_includes evaluation.errors[:recommended_products], 'must contain confirmed available models'
     assert_equal 'scheduled', evaluation.reload.status
 
     historical_trials = evaluation.products_tried
@@ -319,13 +319,13 @@ class EvaluationTest < ActiveSupport::TestCase
 
   test 'working notes can be stored without changing appointment report or product fields' do
     evaluation = create(:evaluation)
-    original_record = evaluation.attributes.except('working_notes', 'updated_at')
+    original_record = evaluation.attributes.except('working_notes', 'updated_at', 'lock_version')
     original_recommendations = evaluation.recommended_product_ids
 
     evaluation.update!(working_notes: 'Left a voicemail; call again next week')
 
     assert_equal 'Left a voicemail; call again next week', evaluation.reload.working_notes
-    assert_equal original_record, evaluation.attributes.except('working_notes', 'updated_at')
+    assert_equal original_record, evaluation.attributes.except('working_notes', 'updated_at', 'lock_version')
     assert_equal original_recommendations, evaluation.recommended_product_ids
   end
 

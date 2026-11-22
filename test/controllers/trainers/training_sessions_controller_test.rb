@@ -45,6 +45,24 @@ module Trainers
       assert_select '#complete_internal_notes[aria-describedby=complete-observations-help]'
     end
 
+    test 'completion equipment choices stay scoped to active beneficiary devices and preserve a rejected selection' do
+      unit = create(:equipment_item, application: @application, product: @product)
+      withdrawn = create(:equipment_item, application: @application, product: @product, purchase_order: nil, withdrawn_at: Time.current)
+      unrelated = create(:equipment_item)
+
+      get trainers_training_session_path(@session)
+
+      assert_response :success
+      assert_select "input[name='equipment_item_ids[]'][value='#{unit.id}']"
+      [withdrawn, unrelated].each { |item| assert_select "input[name='equipment_item_ids[]'][value='#{item.id}']", count: 0 }
+
+      post complete_trainers_training_session_path(@session), params: completion_params.merge(duration_hours: '', equipment_item_ids: [unit.id.to_s])
+
+      assert_response :unprocessable_content
+      assert_select "input[name='equipment_item_ids[]'][value='#{unit.id}'][checked]"
+      [withdrawn, unrelated].each { |item| assert_select "input[name='equipment_item_ids[]'][value='#{item.id}']", count: 0 }
+    end
+
     test 'completion defaults use recorded appointment details but rejected blanks still win' do
       @session.update!(product_trained_on: @product, duration_hours: '1.5')
       travel_to(@session.scheduled_for + 1.hour) do

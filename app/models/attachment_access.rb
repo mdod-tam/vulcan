@@ -30,7 +30,9 @@ class AttachmentAccess
 
   def application_document_allowed?(attachment, user)
     record = attachment.record
+    return user.admin? if record.is_a?(Icanconnect::Claimable) && %w[financial_document superseded_financial_documents].include?(attachment.name)
     return false unless record.is_a?(Application)
+    return user.admin? if attachment.name == 'previous_income_proofs'
     return user.admin? if CERTIFICATION_NAMES.include?(attachment.name)
     return false unless PROOF_NAMES.include?(attachment.name)
 

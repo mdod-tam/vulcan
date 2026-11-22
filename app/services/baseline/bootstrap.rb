@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require Rails.root.join('db/seeds/products')
+
 module Baseline
   # Initializes an environment after its schemas are migrated. `bin/rails db:bootstrap` validates input, migrates,
   # then calls run!. It overwrites staff-edited baseline data but never changes an existing eligible administrator.
@@ -27,6 +29,7 @@ module Baseline
       ApplicationRecord.transaction do
         system_actor = Accounts.provision_system_audit_actor!
         Accounts.provision_administrator!(**input)
+        Seeds::Products.call
         Policies.reset!(actor: system_actor)
         FeatureFlags.reset!(actor: system_actor)
         RejectionReasons.reset!(actor: system_actor)
@@ -52,6 +55,8 @@ module Baseline
         problems << 'feature flags differ from the defaults'
       end
       problems << 'rejection reasons differ from the catalog' unless rejection_reasons_current?
+      missing_products = Seeds::Products.required_keys - Product.where(catalog_key: Seeds::Products.required_keys).pluck(:catalog_key)
+      problems << "required catalog entries are missing: #{missing_products.join(', ')}" if missing_products.any?
       report = EmailTemplates::Audit.run
       problems.concat(EmailTemplates::Audit.blocking_findings(report))
       raise VerificationError, problems.join('; ') if problems.any?
@@ -68,7 +73,8 @@ module Baseline
 
     def self.summary
       "Bootstrap complete: #{Policy.count} policies, #{FeatureFlag.count} feature flags, #{RejectionReason.count} rejection reasons, " \
-        "#{EmailTemplate.count} email templates. Sign in as the configured administrator and enroll in MFA."
+        "#{EmailTemplate.count} email templates, #{Product.where(catalog_key: Seeds::Products.required_keys).count} catalog products. " \
+        'Sign in as the configured administrator and enroll in MFA.'
     end
     private_class_method :summary
   end

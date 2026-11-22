@@ -2,13 +2,12 @@
 
 module Admin
   class PoliciesController < Admin::BaseController
+    include PolicyEditor
+
     before_action :set_policy, only: %i[show edit update]
 
     def index
-      @policies = Policy.order(:key)
-      @recent_changes = PolicyChange.includes(:policy, :user)
-                                    .order(created_at: :desc)
-                                    .limit(10)
+      load_policies
     end
 
     def show
@@ -19,10 +18,7 @@ module Admin
     end
 
     def edit
-      @policies = Policy.all
-      @recent_changes = PolicyChange.includes(:policy, :user)
-                                    .order(created_at: :desc)
-                                    .limit(10)
+      load_policies
     end
 
     def changes
@@ -49,17 +45,13 @@ module Admin
       if @policy.update(value: params[:policy][:value])
         redirect_to admin_policies_path, notice: "Policy '#{@policy.key}' updated successfully."
       else
-        @policies = Policy.all
-        @recent_changes = PolicyChange.includes(:policy, :user)
-                                      .order(created_at: :desc)
-                                      .limit(10)
+        load_policies
         flash.now[:alert] = "Failed to update policy: #{@policy.errors.full_messages.join(', ')}"
         render :edit, status: :unprocessable_content
       end
     end
 
     def bulk_update
-      @policies = Policy.all
       result = Policies::BulkUpdateService.new(
         policies_data: policy_params,
         current_user: current_user
@@ -76,11 +68,7 @@ module Admin
     private
 
     def set_policy
-      @policy = Policy.find(params[:id])
-    end
-
-    def set_policies
-      @policies = Policy.all
+      @policy = Policy.find(params.expect(:id))
     end
 
     def policy_params

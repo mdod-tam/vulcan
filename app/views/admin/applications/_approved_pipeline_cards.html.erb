@@ -1,0 +1,119 @@
+<%# locals: (summaries:, group_labels:) -%>
+<section aria-label="Approved application stages" class="mb-6 space-y-4">
+  <% if @pipeline.groups.count { |group, rows| rows.any? || group == @pipeline_group } > 1 %>
+    <nav class="flex flex-wrap gap-2" aria-label="Approved application groups">
+      <% group_labels.each do |group, label| %>
+        <% next if @pipeline.groups.fetch(group).empty? && @pipeline_group != group %>
+        <%= link_to "#{label} (#{@pipeline.groups.fetch(group).size})", application_list_path(view: 'pipeline', group: group, stage: 'all'),
+                    class: class_names('btn btn-outline', 'bg-primary-50 border-primary-600 text-primary-700' => @pipeline_group == group),
+                    aria: { current: @pipeline_group == group ? 'page' : nil },
+                    data: { turbo_frame: 'applications_list', turbo_action: 'advance' } %>
+      <% end %>
+    </nav>
+  <% else %>
+    <h2 class="text-lg font-semibold"><%= group_labels.fetch(@pipeline_group) %> (<%= @pipeline.groups.fetch(@pipeline_group).size %> matching applications)</h2>
+  <% end %>
+  <div id="pipeline-status-cards" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <% summaries.each do |summary| %>
+      <% terminal = Applications::ApprovedPipeline.terminal_stage?(summary.stage) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <article class="card summary-card summary-card-compact <%= 'border-primary-600 bg-primary-50' if @pipeline_stage == summary.stage.to_s %>">
+        <%= link_to application_list_path(stage: summary.stage),
+                    class: 'summary-card-content rounded-t-lg text-primary-700 hover:underline',
+                    aria: { current: @pipeline_stage == summary.stage.to_s ? 'page' : nil, label: "#{summary.label}: #{pluralize(summary.count, 'application')}" },
+                    data: { turbo_frame: 'applications_list', turbo_action: 'advance', pipeline_stage: summary.stage } do %>
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="summary-card-title text-primary-700"><%= summary.label %></h3>
+            <p class="summary-card-count"><%= summary.count %></p>
+          </div>
+          <p class="text-xs text-gray-600">matching applications</p>
+          <% if summary.stage == :voucher_expired %><p class="mt-1 text-sm text-warning-900"><%= number_to_currency(summary.remaining_value) %> unused</p><% end %>
+        <% end %>
+        <% if summary.count.positive? %>
+          <div class="summary-card-details">
+            <% if summary.oldest %>
+              <p>
+                <span class="text-gray-600"><%= terminal ? 'Completed:' : 'Longest wait:' %></span>
+                <% if terminal %><%= summary.oldest.entered_at.to_date.to_fs(:long) %><% else %><%= pluralize(summary.oldest.days, 'day') %><% end %>
+              </p>
+              <%= link_to approved_pipeline_action_path(summary.oldest),
+                          class: 'block text-primary-700 underline', data: { turbo_frame: '_top' } do %>
+                <%= summary.oldest.application.user.full_name %><% if summary.stage == :needs_fulfillment %> — <%= approved_pipeline_device_summary(summary.oldest) %><% end %>
+              <% end %>
+              <% if summary.stage == :needs_fulfillment %>
+                <p class="text-xs text-gray-600"><%= approved_pipeline_next_step(summary.oldest) %></p>
+              <% elsif summary.stage == :awaiting_report %>
+                <p class="text-xs text-gray-600">Evaluator: <%= summary.oldest.evaluation.evaluator&.full_name || 'Not recorded' %></p>
+                <p class="text-xs text-gray-600"><%= approved_pipeline_next_step(summary.oldest) %></p>
+              <% end %>
+            <% else %>
+              <p>Longest wait: Not recorded</p>
+            <% end %>
+            <% unless terminal %>
+              <p class="text-xs text-gray-600">Average wait: <%= summary.average_days ? pluralize(summary.average_days, 'day') : 'Not recorded' %></p>
+            <% end %>
+          </div>
+        <% end %>
+      </article>
+    <% end %>
+    <article id="training-summary-card" class="card summary-card summary-card-compact">
+      <%= link_to trainers_dashboard_path, class: 'summary-card-content rounded-t-lg text-primary-700 hover:underline',
+                                           data: { turbo_frame: '_top' },
+                                           aria: { label: "Assign trainer: #{pluralize(@training_summary.count, 'unassigned request')}" } do %>
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="summary-card-title text-primary-700">Assign trainer</h3>
+          <p class="summary-card-count"><%= @training_summary.count %></p>
+        </div>
+        <p class="text-xs text-gray-600">Unassigned requests across all approved applications</p>
+      <% end %>
+      <% if @training_summary.count.positive? %>
+        <div class="summary-card-details">
+          <% if @training_summary.oldest %>
+            <p><span class="text-gray-600">Longest wait:</span> <%= pluralize(@training_summary.oldest.days, 'day') %></p>
+            <%= link_to trainers_dashboard_path(anchor: "training-request-#{@training_summary.oldest.application.id}"),
+                        class: 'block text-primary-700 underline', data: { turbo_frame: '_top' } do %>
+              <%= @training_summary.oldest.application.user.full_name %> —
+              <%= @training_summary.oldest.disability_labels.to_sentence.presence || 'Disability group not recorded' %>
+            <% end %>
+          <% else %>
+            <p>Longest wait: Not recorded</p>
+          <% end %>
+          <p class="text-xs text-gray-600">
+            Average wait to assign trainer:
+            <% if @training_summary.average_assignment_days %>
+              <%= pluralize(number_with_precision(@training_summary.average_assignment_days, precision: 1, strip_insignificant_zeros: true), 'day') %>
+            <% else %>
+              Not recorded
+            <% end %>
+            <% if @training_summary.assignment_sample_count.positive? %>
+              (<%= pluralize(@training_summary.assignment_sample_count, 'recorded assignment') %>)
+            <% end %>
+          </p>
+        </div>
+      <% end %>
+    </article>
+    <% if @income_follow_up && (@pipeline_group == :voucher || @income_follow_up.any? || @pipeline_stage == Icanconnect::IncomeFollowUp::STAGE) %>
+      <% follow_up_stage = Icanconnect::IncomeFollowUp::STAGE # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <% waiting = @income_follow_up.values.count(&:requested_at) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <article id="icanconnect-income-follow-up-card"
+               class="card summary-card summary-card-compact <%= 'border-primary-600 bg-primary-50' if @pipeline_stage == follow_up_stage %>">
+        <%= link_to application_list_path(group: @pipeline_group, stage: follow_up_stage),
+                    class: 'summary-card-content rounded-t-lg text-primary-700 hover:underline',
+                    aria: { current: @pipeline_stage == follow_up_stage ? 'page' : nil },
+                    data: { turbo_frame: 'applications_list', turbo_action: 'advance' } do %>
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="summary-card-title text-primary-700">iCanConnect income follow-up</h3>
+            <p class="summary-card-count"><%= @income_follow_up.size %></p>
+          </div>
+          <p class="text-xs text-gray-600"><%= @income_follow_up.size - waiting %> to contact · <%= waiting %> waiting for proof</p>
+        <% end %>
+      </article>
+    <% end %>
+  </div>
+  <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+    <p class="text-gray-600">Wait times use recorded dates. Averages include only applications with a known date.</p>
+    <% unless @pipeline_stage == 'all' %>
+      <%= link_to 'All stages', application_list_path(stage: 'all'),
+                  class: 'text-primary-700 underline', data: { turbo_frame: 'applications_list', turbo_action: 'advance' } %>
+    <% end %>
+  </div>
+</section>

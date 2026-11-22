@@ -56,6 +56,22 @@ module VendorPortal
       assert_equal 'Voucher successfully processed', flash[:notice]
     end
 
+    test 'unavailable selected model remains removable on retry without spending voucher value' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      Vouchers::RedemptionService.any_instance.stubs(:identity_verified?).returns(true)
+      product = create(:product, archived_at: Time.current)
+      assert_no_difference ['VoucherTransaction.count', 'VoucherTransactionProduct.count'] do
+        post process_redemption_vendor_portal_voucher_path(@voucher.code),
+             params: { amount: '100.00', product_ids: [product.id.to_s], submission_id: 'unavailable-retry' }
+      end
+      assert_response :unprocessable_content
+      assert_select "input[name='product_ids[]'][value='#{product.id}'][checked]"
+      assert_select 'body', text: /This product is unavailable\. Uncheck it and choose another product\./
+      assert_select "input[name='submission_id'][value='unavailable-retry']"
+      assert_select "input[name='amount'][value='100.00']"
+      assert_equal @voucher.initial_value, @voucher.reload.remaining_value
+    end
+
     def test_voucher_redemption_handles_service_failure
       @voucher.update(initial_value: 500.0, remaining_value: 500.0, issued_at: Time.current)
 

@@ -6,7 +6,9 @@ import AdminUserSearchController from "./admin/user_search_controller"
 import ProtectedVariablesController from "./admin/protected_variables_controller"
 import EmailPreviewController from "./admin/email_preview_controller"
 import AutosubmitController from "./admin/autosubmit_controller"
+import ProductClassificationController from "./admin/product_classification_controller"
 import EquipmentSelectionController from "./admin/equipment_selection_controller"
+import StockPurchaseController from "./admin/stock_purchase_controller"
 
 // Auth Controllers
 import AddCredentialController from "./auth/add_credential_controller"
@@ -64,6 +66,8 @@ application.register("protected-variables", ProtectedVariablesController)
 application.register("email-preview", EmailPreviewController)
 application.register("autosubmit", AutosubmitController)
 application.register("equipment-selection", EquipmentSelectionController)
+application.register("stock-purchase", StockPurchaseController)
+application.register("product-classification", ProductClassificationController)
 
 // Auth Controllers
 application.register("add-credential", AddCredentialController)
@@ -113,3 +117,6 @@ application.register("adult-picker", AdultPickerController)
 application.register("applicant-type", ApplicantTypeController)
 application.register("document-proof-handler", DocumentProofHandlerController)
 application.register("guardian-picker", GuardianPickerController)
+
+import StockReceiptController from "./admin/stock_receipt_controller"
+application.register("stock-receipt", StockReceiptController)

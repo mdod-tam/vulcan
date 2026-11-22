@@ -13,7 +13,13 @@ es:
       es: español
     devices:
       heading: Dispositivos
-      description: Dispositivos comprados con vales del programa o enviados por el programa, agrupados por beneficiario.
+      description: Equipos del programa y compras completadas con vales, agrupados por beneficiario.
+      dashboard_heading: Mis equipos y ayuda
+      in_progress: Preparación del equipo en curso
+      in_progress_details: Consulte aquí sus dispositivos y las instrucciones a medida que estén disponibles.
+      quantity:
+        one: 1 unidad
+        other: "%{count} unidades"
       shipment_notice: El programa registra el envío; esto no confirma la recepción.
       beneficiary: "Dispositivos de %{name}"
       model: "Modelo: %{number}"
@@ -24,6 +30,8 @@ es:
       sources:
         voucher_purchase: Comprado con vale
         program_shipment: Enviado por el programa
+        order_in_progress: Pedido en curso
+        stock_preparation: Preparando el envío desde el inventario
     heading_for: "Guías de %{product}"
     external_context: " — %{product}, %{language}, enlace externo, se abre en una pestaña nueva"
     pdf_context: " — %{product}, %{language}, descarga PDF, %{size}"

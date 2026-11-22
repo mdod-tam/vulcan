@@ -1,13 +1,32 @@
-<%= turbo_frame_tag "policies" do %>
-  <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="edit-policies-title">
-    <div class="card">
-      <div class="p-6 border-b border-gray-200">
-        <h1 id="edit-policies-title" class="text-2xl font-semibold text-gray-900">
-          Edit System Policies
-        </h1>
-      </div>
+<%# locals: (title: 'Edit System Policies') -%>
+<%= turbo_frame_tag 'policies' do %>
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto space-y-6">
+      <%= render 'admin/shared/index_header', title: title, title_id: 'edit-policies-title', applications_link: false %>
+      <nav aria-label="Program settings" class="flex flex-wrap gap-3">
+        <%= link_to 'Feature Flags', admin_feature_flags_path, class: 'btn btn-outline', data: { turbo_frame: '_top' } %>
+      </nav>
 
-      <%= render "policies_form" %>
+      <%= render 'admin/policies/icanconnect_setting', setting: @icanconnect_setting %>
+
+      <%= render 'admin/policies/mileage_rates', rates: @mileage_rates, new_rate: @new_mileage_rate,
+                                                 events: @mileage_rate_events, error: @mileage_rate_error %>
+
+      <% if @missing_policy_defaults.any? %>
+        <section class="card p-6" aria-labelledby="missing-policies-title">
+          <h2 id="missing-policies-title" class="text-lg font-semibold text-gray-900 mb-4">Missing policies</h2>
+          <p class="text-sm text-gray-700 mb-4">Create these settings before adding them to the policy editor.</p>
+          <div class="grid gap-4 md:grid-cols-2">
+            <% @missing_policy_defaults.each do |key, default_value| %>
+              <%= render 'admin/policies/create_missing_policy', key: key, default_value: default_value %>
+            <% end %>
+          </div>
+        </section>
+      <% end %>
+
+      <div class="card overflow-hidden">
+        <%= render 'admin/policies/policies_form' %>
+      </div>
     </div>
-  </main>
+  </div>
 <% end %>

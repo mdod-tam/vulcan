@@ -1,0 +1,21 @@
+<%# locals: (metric:, noun:, suffix:, tab: nil) -%>
+<div>
+  <p class="text-sm"><strong class="text-2xl font-semibold text-primary-700"><%= metric.count %></strong> <%= noun.pluralize(metric.count) %> <%= suffix %></p>
+  <% if metric.count.positive? %>
+    <p class="text-xs text-gray-600">
+      <%= metric.unknown_dates.positive? ? 'Longest known wait' : 'Longest wait' %>:
+      <%= metric.oldest_at ? equipment_wait_length(metric.oldest_at) : 'Date unavailable' %>
+    </p>
+    <% if metric.oldest_at && metric.unknown_dates.positive? %>
+      <p class="text-xs text-gray-600"><%= pluralize(metric.unknown_dates, noun) %> without a wait date.</p>
+    <% end %>
+    <% if metric.oldest_record %>
+      <p class="text-sm">
+        <%= link_to metric.oldest_application ? metric.oldest_application.user.full_name : 'Program stock',
+                    equipment_navigation_record_path(metric, tab:), class: 'rounded text-primary-700 underline',
+                                                                    data: { turbo_frame: '_top' } %>
+        <span class="text-gray-600">— <%= equipment_navigation_description(metric) %></span>
+      </p>
+    <% end %>
+  <% end %>
+</div>

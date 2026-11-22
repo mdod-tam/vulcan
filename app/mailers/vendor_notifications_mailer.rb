@@ -3,6 +3,19 @@
 class VendorNotificationsMailer < ApplicationMailer
   include ActionView::Helpers::NumberHelper
 
+  def equipment_order(shipping_request, secure_url)
+    number = shipping_request.purchase_order.number
+    @order_url = secure_url
+    @order_intro = "Your bid was accepted for purchase order #{number}."
+    @order_instructions = 'Open the order for the items and shipping instructions. Use the same link to enter tracking after each package ships.'
+    @order_link_label = 'View purchase order and enter tracking'
+    @order_help = "For help or a new link, contact #{ProgramContact.support_email}."
+    mail(to: shipping_request.recipient_email, subject: "MAT purchase order #{number}", message_stream: 'notifications') do |format|
+      format.text { render plain: [@order_intro, @order_instructions, "#{@order_link_label}\n#{@order_url}", @order_help].join("\n\n") }
+      format.html
+    end
+  end
+
   def invoice_generated
     invoice      = params[:invoice]
     vendor       = invoice.vendor

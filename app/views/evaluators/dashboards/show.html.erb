@@ -1,146 +1,155 @@
-<div class="container mx-auto px-4 py-8">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">Evaluations Dashboard</h1>
-  </div>
-
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-    <div class="card p-5">
-      <h2 class="text-lg font-semibold text-gray-700 mb-3">Requested Evaluations</h2>
-      <p class="text-3xl font-bold text-purple-600"><%= @requested_evaluations.count %></p>
-      <p class="text-sm text-gray-500 mt-1">New evaluation requests</p>
-      <div class="mt-3">
-        <%= link_to 'View requested', '#needs-scheduling-heading',
-                    class: 'btn btn-primary' %>
-      </div>
+<% content_for :skip_link do %>
+  <a href="#main-content" class="skip-link">Skip to evaluations dashboard</a>
+<% end %>
+<div id="main-content" class="min-w-0 max-w-7xl mx-auto px-4 py-6" aria-labelledby="evaluator-dashboard-title" tabindex="-1">
+  <% if current_user.admin? %>
+    <%= render 'admin/shared/index_header', title: 'Evaluations Dashboard', title_id: 'evaluator-dashboard-title' %>
+  <% else %>
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <h1 id="evaluator-dashboard-title" class="text-2xl font-bold">Evaluations Dashboard</h1>
     </div>
+  <% end %>
 
-    <div class="card p-5">
-      <h2 class="text-lg font-semibold text-gray-700 mb-3">Scheduled Evaluations</h2>
-      <p class="text-3xl font-bold text-info-600"><%= @scheduled_evaluations.count %></p>
-      <p class="text-sm text-gray-500 mt-1">Upcoming evaluations</p>
+  <section aria-labelledby="evaluator-summary-heading" class="mb-6">
+    <h2 id="evaluator-summary-heading" class="sr-only">Evaluation summary</h2>
+    <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" role="list">
       <% if current_user.admin? %>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <%= link_to 'My scheduled', '#my-upcoming-evaluations-table-heading',
-                      class: 'btn btn-secondary min-h-[44px]',
-                      aria: { label: 'My scheduled evaluations assigned to me' } %>
-          <%= link_to "View scheduled", evaluators_evaluations_path(status: "scheduled"),
-              class: 'btn btn-primary min-h-[44px]',
-              aria: { label: "View scheduled evaluations for all evaluators" } %>
-        </div>
-      <% else %>
-        <div class="mt-3">
-          <%= link_to 'View scheduled', '#upcoming-evaluations-heading',
-                      class: 'btn btn-primary' %>
-        </div>
-      <% end %>
-    </div>
-
-    <div class="card p-5">
-      <h2 class="text-lg font-semibold text-gray-700 mb-3">Completed Evaluations</h2>
-      <p class="text-3xl font-bold text-success-600"><%= @completed_evaluations.count %></p>
-      <p class="text-sm text-gray-500 mt-1">Evaluations completed</p>
-      <div class="mt-3">
-        <%= link_to 'View completed', '#recent-completed-heading',
-                    class: 'btn btn-primary' %>
-      </div>
-    </div>
-
-    <div class="card p-5">
-      <h2 class="text-lg font-semibold text-gray-700 mb-3">Needs Follow-up</h2>
-      <p class="text-3xl font-bold text-warning-600"><%= @followup_evaluations.count %></p>
-      <p class="text-sm text-gray-500 mt-1">Cancellations and no-shows</p>
-      <div class="mt-3">
-        <%= link_to 'View follow up', evaluators_evaluations_path(status: 'needs_followup'),
-                    class: 'btn btn-primary' %>
-      </div>
-    </div>
-  </div>
-
-  <div id="needs-scheduling-section" class="card p-6 mb-8">
-    <div class="flex justify-between items-center mb-4">
-      <h2 id="needs-scheduling-heading" tabindex="-1" class="text-xl font-semibold">Needs Scheduling</h2>
-      <%= link_to "View All", evaluators_evaluations_path(status: "requested"), class: 'text-primary-600 hover:text-primary-800' %>
-    </div>
-
-    <% if @requested_evaluations_display.any? %>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requested Date</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Constituent</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <% @requested_evaluations_display.each do |evaluation| %>
-              <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <%= evaluation.created_at.strftime("%B %d, %Y") %>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <%= evaluation.constituent.full_name %>
-                  <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
-                    Needs Scheduling
+        <li id="needs-evaluator-card" class="card summary-card summary-card-compact">
+          <div class="summary-card-content">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="summary-card-title"><%= t('evaluator_workflow.dashboard.assign_evaluator') %></h3>
+              <p class="summary-card-count"><%= @unassigned_evaluation_requests.size %></p>
+            </div>
+            <p class="text-xs text-gray-600"><%= t('evaluator_workflow.dashboard.assignment_help') %></p>
+          </div>
+          <% if @unassigned_evaluation_requests.any? %>
+            <div class="summary-card-details">
+              <% if @oldest_evaluation_request %>
+                <p>
+                  <span class="text-gray-600">
+                    <%= t(@evaluation_request_dates.value?(nil) ? 'evaluator_workflow.dashboard.longest_known_wait' : 'evaluator_workflow.dashboard.longest_wait') %>:
                   </span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <%= link_to "View/Schedule", evaluators_evaluation_path(evaluation), class: 'btn btn-primary btn-sm' %>
-                </td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      </div>
-    <% else %>
-      <p class="text-gray-500 text-center py-4">No evaluations currently awaiting scheduling.</p>
-    <% end %>
-  </div>
+                  <%= t('service_dashboard.days', count: Equipment::WaitTime.days_since(@evaluation_request_dates.fetch(@oldest_evaluation_request.id)),
+                                                  value: Equipment::WaitTime.days_since(@evaluation_request_dates.fetch(@oldest_evaluation_request.id))) %>
+                </p>
+                <%= link_to "#evaluation-request-#{@oldest_evaluation_request.id}", class: 'block text-primary-700 underline' do %>
+                  <%= @oldest_evaluation_request.user.full_name %> — <%= service_dashboard_disabilities(@oldest_evaluation_request) %>
+                <% end %>
+              <% else %>
+                <p><%= t('evaluator_workflow.dashboard.date_unavailable') %></p>
+              <% end %>
+              <% if @evaluation_request_dates.value?(nil) %>
+                <p class="text-xs text-gray-600"><%= t('evaluator_workflow.dashboard.unknown_waits', count: @evaluation_request_dates.values.count(nil)) %></p>
+              <% end %>
+            </div>
+          <% end %>
+          <div class="summary-card-actions">
+            <%= link_to t('evaluator_workflow.dashboard.view_unassigned'), '#needs-evaluator-section',
+                        class: 'btn btn-outline', aria: { label: t('evaluator_workflow.dashboard.view_unassigned_aria') } %>
+          </div>
+        </li>
+      <% end %>
+      <li class="card summary-card summary-card-compact">
+        <div class="summary-card-content">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="summary-card-title"><%= t('service_dashboard.actions.schedule_evaluation') %></h3>
+            <p class="summary-card-count"><%= @scheduling_summary.count %></p>
+          </div>
+          <p class="text-xs text-gray-600">Assigned evaluations awaiting an appointment</p>
+        </div>
+        <%= render 'shared/service_wait_summary', summary: @scheduling_summary,
+                                                  oldest_path: @scheduling_summary.oldest && evaluators_evaluation_path(@scheduling_summary.oldest.record),
+                                                  average_label: t('service_dashboard.average_to_schedule'), sample_key: 'service_dashboard.recorded_schedules' %>
+        <div class="summary-card-actions">
+          <%= link_to t('service_dashboard.actions.schedule_evaluation'), '#needs-scheduling-heading',
+                      class: 'btn btn-outline', aria: { label: t('service_dashboard.actions.schedule_evaluation_aria') } %>
+        </div>
+      </li>
+
+      <li class="card summary-card summary-card-compact">
+        <div class="summary-card-content">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="summary-card-title"><%= t('service_dashboard.actions.evaluation_report') %></h3>
+            <p class="summary-card-count"><%= @scheduled_summary.count %></p>
+          </div>
+        </div>
+        <%= render 'shared/service_wait_summary', summary: @scheduled_summary,
+                                                  oldest_path: @scheduled_summary.oldest && evaluators_evaluation_path(@scheduled_summary.oldest.record),
+                                                  average_label: t('service_dashboard.average_to_visit'), sample_key: 'service_dashboard.recorded_visits' %>
+        <div class="summary-card-actions">
+          <% if current_user.admin? %>
+            <%= link_to 'My scheduled', '#my-upcoming-evaluations-table-heading',
+                        class: 'btn btn-outline', aria: { label: 'My scheduled evaluations assigned to me' } %>
+            <%= link_to t('service_dashboard.actions.evaluation_report'), evaluators_evaluations_path(status: 'scheduled'),
+                        class: 'btn btn-outline', aria: { label: t('service_dashboard.actions.all_evaluation_reports_aria') } %>
+          <% else %>
+            <%= link_to t('service_dashboard.actions.evaluation_report'), '#upcoming-evaluations-heading',
+                        class: 'btn btn-outline', aria: { label: t('service_dashboard.actions.evaluation_report_aria') } %>
+          <% end %>
+        </div>
+      </li>
+
+      <li class="card summary-card summary-card-compact">
+        <div class="summary-card-content">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="summary-card-title"><%= t('service_dashboard.actions.followup') %></h3>
+            <p class="summary-card-count"><%= @followup_evaluations.count %></p>
+          </div>
+          <p class="text-xs text-gray-600"><%= t('service_dashboard.followup_help') %></p>
+        </div>
+        <div class="summary-card-actions">
+          <%= link_to 'View follow up', evaluators_evaluations_path(status: 'needs_followup'),
+                      class: 'btn btn-outline', aria: { label: 'View follow up evaluations' } %>
+        </div>
+      </li>
+    </ul>
+  </section>
 
   <% if current_user.admin? %>
-    <div id="my-upcoming-evaluations-section" class="card p-6 mb-8">
-      <div class="flex justify-between items-center mb-4">
-        <h2 id="my-upcoming-evaluations-table-heading" tabindex="-1"
-            class="text-xl font-semibold">My Upcoming Evaluations</h2>
-        <%= link_to 'View My Scheduled', evaluators_evaluations_path(scope: 'mine', status: 'scheduled'),
-                    class: 'text-primary-600 hover:text-primary-800',
-                    aria: { label: 'View My Scheduled evaluations assigned to me' } %>
-      </div>
-
-      <% if @my_scheduled_evaluations_display.any? %>
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200" aria-labelledby="my-upcoming-evaluations-table-heading">
-            <thead class="bg-gray-50">
-              <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Constituent</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              <% @my_scheduled_evaluations_display.each do |evaluation| %>
-                <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <%= evaluation.evaluation_date.strftime("%B %d, %Y at %I:%M %p") %>
+    <section id="needs-evaluator-section" class="card p-4 mb-6" aria-labelledby="needs-evaluator-heading" tabindex="-1">
+      <h2 id="needs-evaluator-heading" class="text-lg font-semibold mb-4"><%= t('evaluator_workflow.dashboard.assign_evaluator') %></h2>
+      <% if @unassigned_evaluation_requests.any? %>
+        <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="needs-evaluator-heading" tabindex="0">
+          <table class="min-w-full divide-y divide-gray-200" aria-labelledby="needs-evaluator-heading">
+            <thead class="bg-gray-50"><tr>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('evaluator_workflow.dashboard.waiting_since') %></th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('evaluator_workflow.dashboard.constituent') %></th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider"><%= t('evaluator_workflow.dashboard.actions') %></th>
+            </tr></thead>
+            <tbody class="divide-y divide-gray-200">
+              <% @unassigned_evaluation_requests.each do |application| %>
+                <tr id="evaluation-request-<%= application.id %>" tabindex="-1">
+                  <td class="px-4 py-3 text-sm">
+                    <%= if @evaluation_request_dates[application.id]
+                          l(@evaluation_request_dates.fetch(application.id).to_date,
+                            format: :long)
+                        else
+                          t('evaluator_workflow.dashboard.date_unavailable')
+                        end %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <%= evaluation.constituent.full_name %>
-                    <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
-                      <span class="sr-only">Status: </span><%= evaluation.status.titleize %>
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <%= link_to "View Details", evaluators_evaluation_path(evaluation),
-                        class: 'btn btn-primary btn-sm',
-                        aria: { label: "View details for #{evaluation.constituent.full_name}" } %>
+                  <td class="px-4 py-3 text-sm"><%= application.user.full_name %> — <%= service_dashboard_disabilities(application) %></td>
+                  <td class="px-4 py-3 text-sm">
+                    <% if !application.service_window_active? %>
+                      <p class="text-sm text-gray-600"><%= t('evaluator_workflow.dashboard.assignment_window_ended') %></p>
+                    <% elsif @assignable_evaluators.empty? %>
+                      <p class="text-sm text-gray-600"><%= t('evaluator_workflow.dashboard.no_assignable_evaluators') %></p>
+                    <% else %>
+                      <%= form_with url: assign_evaluator_admin_application_path(application), method: :post, local: true,
+                                    class: 'flex min-w-56 flex-col gap-2 sm:flex-row sm:items-center' do %>
+                        <%= hidden_field_tag :return_context, 'evaluation_dashboard' %>
+                        <%= label_tag "evaluator_id_#{application.id}", t('evaluator_workflow.dashboard.select_evaluator_for', name: application.user.full_name),
+                                      class: 'sr-only' %>
+                        <%= select_tag :evaluator_id,
+                                       options_from_collection_for_select(@assignable_evaluators, :id, method(:practitioner_assignment_option_label)),
+                                       id: "evaluator_id_#{application.id}", include_blank: t('evaluator_workflow.dashboard.select_evaluator'), required: true,
+                                       class: 'form-input w-full min-w-0 text-sm sm:w-72' %>
+                        <%= submit_tag(
+                              t('evaluator_workflow.dashboard.assign_evaluator'),
+                              class: 'btn btn-primary btn-sm',
+                              aria: { label: t('evaluator_workflow.dashboard.assign_evaluator_for', name: application.user.full_name) }
+                            ) %>
+                      <% end %>
+                    <% end %>
                   </td>
                 </tr>
               <% end %>
@@ -148,45 +157,47 @@
           </table>
         </div>
       <% else %>
-        <p class="text-gray-500 text-center py-4">No upcoming evaluations are assigned to you.</p>
+        <p class="text-gray-600"><%= t('evaluator_workflow.dashboard.empty_unassigned') %></p>
       <% end %>
-    </div>
+    </section>
   <% end %>
 
-  <div id="upcoming-evaluations-section" class="card p-6 mb-8">
-    <div class="flex justify-between items-center mb-4">
-      <h2 id="upcoming-evaluations-heading" tabindex="-1" class="text-xl font-semibold">Upcoming Evaluations</h2>
-      <%= link_to "View All", evaluators_evaluations_path(status: "scheduled"), class: 'text-primary-600 hover:text-primary-800' %>
+  <div id="needs-scheduling-section" class="card p-4 mb-6">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h2 id="needs-scheduling-heading" tabindex="-1" class="text-lg font-semibold text-gray-900"><%= t('service_dashboard.actions.schedule_evaluation') %></h2>
+      <%= link_to 'View All', evaluators_evaluations_path(status: 'requested'),
+                  class: 'text-primary-700 underline', aria: { label: 'View all evaluations awaiting scheduling' } %>
     </div>
 
-    <% if @upcoming_evaluations.any? %>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
+    <% if @requested_evaluations_display.any? %>
+      <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="needs-scheduling-heading" tabindex="0">
+        <table class="min-w-full divide-y divide-gray-200" aria-labelledby="needs-scheduling-heading">
           <thead class="bg-gray-50">
             <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date/Time</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Constituent</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Requested Date</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Constituent</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Status</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
-            <% @upcoming_evaluations.each do |evaluation| %>
+            <% @requested_evaluations_display.each do |evaluation| %>
               <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <%= evaluation.evaluation_date.strftime("%B %d, %Y at %I:%M %p") %>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  <%= evaluation.created_at.strftime('%B %d, %Y') %>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                   <%= evaluation.constituent.full_name %>
-                  <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
+                  <p class="text-sm text-gray-600">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
+                <td class="px-4 py-3 whitespace-nowrap">
                   <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
-                    <%= evaluation.status.titleize %>
+                    Needs Scheduling
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <%= link_to "View Details", evaluators_evaluation_path(evaluation), class: 'text-primary-600 hover:text-primary-900' %>
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                  <%= link_to 'View/Schedule', evaluators_evaluation_path(evaluation),
+                              class: 'btn btn-primary btn-sm', aria: { label: "View/Schedule evaluation for #{evaluation.constituent.full_name}" } %>
                 </td>
               </tr>
             <% end %>
@@ -194,45 +205,145 @@
         </table>
       </div>
     <% else %>
-      <p class="text-gray-500 text-center py-4">No upcoming evaluations scheduled.</p>
+      <p class="text-gray-600 text-center py-4">No evaluations currently awaiting scheduling.</p>
     <% end %>
   </div>
 
-  <div id="followup-evaluations-section" class="card p-6 mb-8">
-      <div class="flex justify-between items-center mb-4">
-        <h2 id="followup-evaluations-heading" class="text-xl font-semibold">Needs Follow-up</h2>
-        <%= link_to 'View All', evaluators_evaluations_path(status: 'needs_followup'), class: 'text-primary-600 hover:text-primary-800' %>
+  <% if current_user.admin? %>
+    <div id="my-upcoming-evaluations-section" class="card p-4 mb-6">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 id="my-upcoming-evaluations-table-heading" tabindex="-1"
+            class="text-lg font-semibold text-gray-900">My Upcoming Evaluations</h2>
+        <%= link_to 'View My Scheduled', evaluators_evaluations_path(scope: 'mine', status: 'scheduled'),
+                    class: 'text-primary-700 underline',
+                    aria: { label: 'View My Scheduled evaluations assigned to me' } %>
+      </div>
+
+      <% if @my_scheduled_evaluations_display.any? %>
+        <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="my-upcoming-evaluations-table-heading" tabindex="0">
+          <table class="min-w-full divide-y divide-gray-200" aria-labelledby="my-upcoming-evaluations-table-heading">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Date/Time</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Constituent</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Status</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <% @my_scheduled_evaluations_display.each do |evaluation| %>
+                <tr>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                    <%= evaluation.evaluation_date.strftime('%B %d, %Y at %I:%M %p') %>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                    <%= evaluation.constituent.full_name %>
+                    <p class="text-sm text-gray-600">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap">
+                    <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
+                      <span class="sr-only">Status: </span><%= evaluation.status.titleize %>
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                    <%= link_to 'View Details', evaluators_evaluation_path(evaluation),
+                                class: 'btn btn-primary btn-sm',
+                                aria: { label: "View details for #{evaluation.constituent.full_name}" } %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="text-gray-600 text-center py-4">No upcoming evaluations are assigned to you.</p>
+      <% end %>
+    </div>
+  <% end %>
+
+  <div id="upcoming-evaluations-section" class="card p-4 mb-6">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h2 id="upcoming-evaluations-heading" tabindex="-1" class="text-lg font-semibold text-gray-900">Upcoming Evaluations</h2>
+      <%= link_to 'View All', evaluators_evaluations_path(status: 'scheduled'),
+                  class: 'text-primary-700 underline', aria: { label: 'View all scheduled evaluations' } %>
+    </div>
+
+    <% if @upcoming_evaluations.any? %>
+      <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="upcoming-evaluations-heading" tabindex="0">
+        <table class="min-w-full divide-y divide-gray-200" aria-labelledby="upcoming-evaluations-heading">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Date/Time</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Constituent</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Status</th>
+              <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <% @upcoming_evaluations.each do |evaluation| %>
+              <tr>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  <%= evaluation.evaluation_date.strftime('%B %d, %Y at %I:%M %p') %>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  <%= evaluation.constituent.full_name %>
+                  <p class="text-sm text-gray-600">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
+                    <%= evaluation.status.titleize %>
+                  </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                  <%= link_to 'View Details', evaluators_evaluation_path(evaluation),
+                              class: 'btn btn-primary btn-sm', aria: { label: "View Details for #{evaluation.constituent.full_name}" } %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <p class="text-gray-600 text-center py-4">No upcoming evaluations scheduled.</p>
+    <% end %>
+  </div>
+
+  <div id="followup-evaluations-section" class="card p-4 mb-6">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 id="followup-evaluations-heading" class="text-lg font-semibold text-gray-900">Needs Follow-up</h2>
+        <%= link_to 'View All', evaluators_evaluations_path(status: 'needs_followup'),
+                    class: 'text-primary-700 underline', aria: { label: 'View all evaluations needing follow-up' } %>
       </div>
 
       <% if @followup_evaluations_display.any? %>
-        <div class="overflow-x-auto">
+        <div class="relative max-w-full overflow-x-auto" role="region" aria-labelledby="followup-evaluations-heading" tabindex="0">
           <table class="min-w-full divide-y divide-gray-200" aria-labelledby="followup-evaluations-heading">
             <thead class="bg-gray-50">
               <tr>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
                   Scheduled Date/Time
                 </th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Constituent</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Constituent</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Status</th>
+                <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <% @followup_evaluations_display.each do |evaluation| %>
                 <tr>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= evaluation.evaluation_date&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not scheduled' %>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <%= evaluation.constituent.full_name %>
-                    <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
+                    <p class="text-sm text-gray-600">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
+                  <td class="px-4 py-3 whitespace-nowrap">
                     <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
                       <%= evaluation.status.titleize %>
                     </span>
                   </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                     <%= link_to 'View/Reschedule', evaluators_evaluation_path(evaluation),
                                 class: 'btn btn-primary btn-sm',
                                 aria: { label: "View/Reschedule evaluation for #{evaluation.constituent.full_name}" } %>
@@ -243,15 +354,16 @@
           </table>
         </div>
       <% else %>
-        <p class="text-gray-500 text-center py-4"><%= t('evaluators.evaluations.followup.empty') %></p>
+        <p class="text-gray-600 text-center py-4"><%= t('evaluators.evaluations.followup.empty') %></p>
       <% end %>
   </div>
 
-  <div class="card p-6">
-    <div class="flex justify-between items-center mb-4">
+  <div class="card p-4">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <h2 id="recent-completed-heading" tabindex="-1"
-          class="text-xl font-semibold">Recent Completed Evaluations</h2>
-      <%= link_to "View All", evaluators_evaluations_path(status: "completed"), class: 'text-primary-600 hover:text-primary-800' %>
+          class="text-lg font-semibold text-gray-900">Recent Completed Evaluations</h2>
+      <%= link_to 'View All', evaluators_evaluations_path(status: 'completed'),
+                  class: 'text-primary-700 underline', aria: { label: 'View all completed evaluations' } %>
     </div>
 
     <% if @recent_evaluations.any? %>
@@ -261,24 +373,25 @@
             <div class="flex justify-between items-start">
               <div>
                 <p class="font-medium"><%= evaluation.constituent.full_name %></p>
-                <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
-                <p class="text-sm text-gray-500 mb-1">
+                <p class="text-sm text-gray-600">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
+                <p class="text-sm text-gray-600 mb-1">
                   <%= t('evaluators.evaluations.dates.report_submitted_at') %>:
                   <%= evaluation.report_submitted_at&.strftime('%B %d, %Y') || t('evaluators.evaluations.dates.not_recorded') %>
                 </p>
                 <%= admin_fulfillment_badge(evaluation.application) %>
               </div>
-              <%= link_to "View", evaluators_evaluation_path(evaluation), class: 'text-primary-600 hover:text-primary-900' %>
+              <%= link_to 'View', evaluators_evaluation_path(evaluation),
+                          class: 'text-primary-700 underline', aria: { label: "View completed evaluation for #{evaluation.constituent.full_name}" } %>
             </div>
           </div>
         <% end %>
       </div>
     <% else %>
-      <p class="text-gray-500 text-center py-4">No completed evaluations yet.</p>
+      <p class="text-gray-600 text-center py-4">No completed evaluations yet.</p>
     <% end %>
   </div>
 
-  <div class="mt-8">
-    <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Recent Activity", show_subject: true %>
+  <div class="mt-6">
+    <%= render 'shared/activity_history', activity_logs: @activity_logs, title: 'Recent Activity', show_subject: true %>
   </div>
 </div>

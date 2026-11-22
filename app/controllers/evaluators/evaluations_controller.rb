@@ -161,8 +161,13 @@ module Evaluators
       @can_manage_evaluation = assigned_evaluator?
       @contact_context = ::Applications::ContactContext.new(application: @evaluation.application)
       @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
-      @available_products = Product.order(:name).to_a
-      @recommendation_products = @available_products.reject(&:archived?)
+      @evaluation.recommended_products.load
+      values = @evaluation_form_values.fetch(:submit_report, {})
+      trial_ids = values.fetch(:products_tried_inputs, {}).keys | @evaluation.products_tried.map { |trial| trial['product_id'].to_s }
+      selected_ids = values.fetch(:recommended_product_ids, [])
+      @available_products = Product.model_confirmed.or(Product.where(id: trial_ids)).ordered_by_name.to_a
+      @tried_product_names = @available_products.to_h { |product| [product.id.to_s, product.name] }
+      @recommendation_products = Product.available.or(Product.where(id: selected_ids)).ordered_by_name.to_a
     end
 
     def render_lifecycle_failure(action, form_values, message)
@@ -189,10 +194,11 @@ module Evaluators
     end
 
     def set_evaluation
+      id = params.expect(:id)
       @evaluation = if current_user.admin?
-                      Evaluation.find(params[:id])
+                      Evaluation.find(id)
                     else
-                      current_user.assigned_evaluations.find(params[:id])
+                      current_user.assigned_evaluations.find(id)
                     end
     rescue ActiveRecord::RecordNotFound
       redirect_to evaluators_evaluations_path, alert: 'Evaluation not found.'

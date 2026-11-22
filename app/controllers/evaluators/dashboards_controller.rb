@@ -23,6 +23,10 @@ module Evaluators
       end
 
       load_display_data
+      scope = current_user.admin? ? Evaluation.all : current_user.assigned_evaluations
+      summaries = ServiceDashboardSummary.new(scope, timings: ServiceDashboardSummary::EVALUATION).call
+      @scheduling_summary = summaries.fetch(:requested)
+      @scheduled_summary = summaries.fetch(:scheduled)
       load_recent_activity
     end
 
@@ -32,15 +36,37 @@ module Evaluators
       # Admins see every evaluation.
       @requested_evaluations = Evaluation.requested_sessions
       @scheduled_evaluations = Evaluation.active
-      @completed_evaluations = Evaluation.completed_sessions
       @followup_evaluations = Evaluation.needing_followup
+      load_evaluator_requests
+    end
+
+    def load_evaluator_requests
+      completed = Evaluation.where(status: :completed).select(:application_id)
+      equipment = Application.status_approved.fulfillment_type_equipment.where.not(id: completed).to_a
+      Application.preload_equipment_fulfillment(equipment, include_display_details: false)
+      equipment.select! { |application| application.equipment_fulfillment_stage.stage == :needs_evaluator }
+      requested = Application.with_pending_evaluation_request.where.not(id: completed).to_a
+      pending_request_dates = requested.to_h { |application| [application.id, application.evaluation_requested_at] }
+      @unassigned_evaluation_requests = (equipment + requested).uniq(&:id)
+      @evaluation_request_dates = @unassigned_evaluation_requests.to_h do |application|
+        [application.id, pending_request_dates.fetch(application.id, application.needs_evaluator_since)]
+      end
+      @unassigned_evaluation_requests.sort_by! do |application|
+        [@evaluation_request_dates[application.id]&.to_f || Float::INFINITY, application.id]
+      end
+      @oldest_evaluation_request = @unassigned_evaluation_requests.find { |application| @evaluation_request_dates[application.id] }
+      ActiveRecord::Associations::Preloader.new(records: @unassigned_evaluation_requests, associations: :user).call
+      @assignable_evaluators = if @unassigned_evaluation_requests.any?
+                                 User.assignable_for(:can_evaluate).order(:last_name, :first_name, :id).to_a
+                               else
+                                 []
+                               end
     end
 
     def load_evaluator_data
       # Evaluators see only their own evaluations.
       @requested_evaluations = current_user.assigned_evaluations.requested_sessions
       @scheduled_evaluations = current_user.assigned_evaluations.active
-      @completed_evaluations = current_user.assigned_evaluations.completed_sessions
       @followup_evaluations = current_user.assigned_evaluations.needing_followup
     end
 
@@ -58,7 +84,7 @@ module Evaluators
                               .includes(:constituent, :evaluator).order(evaluation_date: :asc).limit(5)
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.assigned_evaluations.completed_sessions)
                             .includes(:constituent, :evaluator, :application).by_report_submission.limit(5).to_a
-      Application.preload_equipment_fulfillment(@recent_evaluations.map(&:application))
+      Application.preload_equipment_fulfillment(@recent_evaluations.map(&:application), include_display_details: false)
 
       load_admin_display_data if current_user.admin?
     end

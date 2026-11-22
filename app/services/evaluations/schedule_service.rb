@@ -62,6 +62,7 @@ module Evaluations
         actor: @actor,
         auditable: @evaluation,
         metadata: {
+          operation_id: SecureRandom.uuid,
           evaluation_id: @evaluation.id,
           application_id: @evaluation.application_id,
           evaluation_date: @evaluation.evaluation_date&.iso8601,

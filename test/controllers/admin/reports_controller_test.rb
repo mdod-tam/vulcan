@@ -125,15 +125,15 @@ module Admin
       end
     end
 
-    test 'equipment by type defaults to current fiscal year and counts actual ordered device units' do
+    test 'equipment by type defaults to current fiscal year and counts actual outbound device shipments' do
       travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
         tablet = create(:product, name: 'FY Tablet', device_types: ['Tablet'])
         phone = create(:product, name: 'FY Phone', device_types: ['Smartphone'])
-        multi_type = create(:product, name: 'FY Combo', device_types: ['Tablet', 'Smartphone'])
+        multi_type = create(:product, name: 'FY Combo', device_types: %w[Tablet Smartphone])
 
-        create_po_sent_equipment_application(product: multi_type, po_sent_at: Time.zone.local(2026, 6, 10, 12, 0, 0))
-        create_po_sent_equipment_application(product: tablet, po_sent_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
-        create_po_sent_equipment_application(product: phone, po_sent_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
+        create_shipped_equipment_application(product: multi_type, shipped_at: Time.zone.local(2026, 6, 10, 12, 0, 0))
+        create_shipped_equipment_application(product: tablet, shipped_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
+        create_shipped_equipment_application(product: phone, shipped_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
 
         get admin_reports_path
         assert_response :success
@@ -148,11 +148,11 @@ module Admin
       travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
         tablet = create(:product, name: 'Quarter Tablet', device_types: ['Tablet'])
         phone = create(:product, name: 'Quarter Phone', device_types: ['Smartphone'])
-        multi_type = create(:product, name: 'Quarter Combo', device_types: ['Tablet', 'Smartphone'])
+        multi_type = create(:product, name: 'Quarter Combo', device_types: %w[Tablet Smartphone])
 
-        create_po_sent_equipment_application(product: multi_type, po_sent_at: Time.zone.local(2026, 6, 10, 12, 0, 0))
-        create_po_sent_equipment_application(product: tablet, po_sent_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
-        create_po_sent_equipment_application(product: phone, po_sent_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
+        create_shipped_equipment_application(product: multi_type, shipped_at: Time.zone.local(2026, 6, 10, 12, 0, 0))
+        create_shipped_equipment_application(product: tablet, shipped_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
+        create_shipped_equipment_application(product: phone, shipped_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
 
         get admin_reports_path(equipment_period: 'current_month')
         assert_response :success
@@ -306,41 +306,17 @@ module Admin
       assert_equal voucher_count.to_s, row.css('td')[1].text.strip if voucher_count
     end
 
-    def create_po_sent_equipment_application(product:, po_sent_at:)
+    def create_shipped_equipment_application(product:, shipped_at:)
       application = create_reviewed_application(user: create(:constituent))
       application.update!(fulfillment_type: :equipment)
-      vendor = create(:vendor)
-      order = PurchaseOrder.create!(vendor: vendor, number: "REPORT-#{application.id}", sent_at: po_sent_at.to_date)
-      EquipmentItem.create!(application: application, product: product, purchase_order: order)
+      order = create(:purchase_order, number: "REPORT-#{application.id}", sent_at: shipped_at.to_date - 1.day)
+      create(:equipment_item, application: application, product: product, purchase_order: order,
+                              shipped_at: shipped_at.to_date, tracking_number: "REPORT-#{application.id}")
       application
     end
 
     def create_reviewed_application(user:)
-      application = create(:application, skip_proofs: true, user: user, status: :in_progress)
-      application.income_proof.attach(
-        io: StringIO.new('income proof content'),
-        filename: 'income.pdf',
-        content_type: 'application/pdf'
-      )
-      application.residency_proof.attach(
-        io: StringIO.new('residency proof content'),
-        filename: 'residency.pdf',
-        content_type: 'application/pdf'
-      )
-      application.id_proof.attach(
-        io: StringIO.new('id proof content'),
-        filename: 'id.pdf',
-        content_type: 'application/pdf'
-      )
-      application.update_columns(
-        status: Application.statuses[:approved],
-        income_proof_status: Application.income_proof_statuses[:approved],
-        residency_proof_status: Application.residency_proof_statuses[:approved],
-        id_proof_status: Application.id_proof_statuses[:approved],
-        disability_certification_status: Application.disability_certification_statuses[:approved],
-        updated_at: Time.current
-      )
-      application.reload
+      create(:application, :approved, :with_all_proofs, user: user)
     end
   end
 end

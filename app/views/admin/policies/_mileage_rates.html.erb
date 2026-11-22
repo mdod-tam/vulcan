@@ -1,0 +1,41 @@
+<%# locals: (rates:, new_rate:, events:, error: nil) -%>
+<section id="mileage-rates" class="card p-6 space-y-4" aria-labelledby="mileage-rates-title">
+  <h2 id="mileage-rates-title" class="text-lg font-semibold text-gray-900">Mileage reimbursement rates</h2>
+  <p class="text-sm text-gray-700">
+    We use the rate in effect on the actual date of service.
+  </p>
+  <p id="mileage-rate-input-help" class="text-sm text-gray-700">
+    Enter dates as MM/DD/YYYY and dollars per mile with up to three decimal places. Leave unknown rates unset.
+  </p>
+  <% if error.present? %>
+    <p id="mileage-rates-error" class="rounded border border-danger-300 bg-danger-50 p-3 text-danger-800" role="alert"><%= error %></p>
+  <% end %>
+  <% if rates.any? %>
+    <ul class="space-y-3" aria-label="Mileage rates by effective date">
+      <% rates.each do |rate| %>
+        <li class="rounded-md border border-gray-200 p-4">
+          <%= render 'admin/policies/mileage_rate_form', rate: rate, error_id: error.present? ? 'mileage-rates-error' : nil %>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p class="text-sm text-gray-600">No mileage rates have been set.</p>
+  <% end %>
+  <div class="border-t pt-4">
+    <h3 class="mb-3 font-medium">Add a rate</h3>
+    <%= render 'admin/policies/mileage_rate_form', rate: new_rate, error_id: error.present? ? 'mileage-rates-error' : nil %>
+  </div>
+  <% if events.any? %>
+    <details class="border-t pt-3">
+      <summary class="cursor-pointer rounded font-medium text-primary-700 underline">Recent mileage rate changes</summary>
+      <ul class="mt-2 divide-y divide-gray-200">
+        <% events.each do |event| %>
+          <li class="py-2 text-sm">
+            <p><%= mileage_rate_change_description(event) %> — <%= event.user.full_name %></p>
+            <time datetime="<%= event.created_at.iso8601 %>" class="text-gray-600"><%= l(event.created_at, format: :long) %></time>
+          </li>
+        <% end %>
+      </ul>
+    </details>
+  <% end %>
+</section>

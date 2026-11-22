@@ -11,6 +11,7 @@ module FplPolicyHelpers
       { key: 'fpl_6_person', value: 43_150 },
       { key: 'fpl_7_person', value: 48_650 },
       { key: 'fpl_8_person', value: 54_150 },
+      { key: 'fpl_additional_person', value: 5_500 },
       { key: 'fpl_modifier_percentage', value: 400 },
       { key: 'proof_submission_rate_limit_web', value: 10 },
       { key: 'proof_submission_rate_limit_email', value: 5 },

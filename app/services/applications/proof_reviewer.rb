@@ -83,7 +83,7 @@ module Applications
     end
 
     def validate_reviewability!
-      if @proof_type_key == 'income' && !@application.income_proof_required?
+      if @proof_type_key == 'income' && !@application.income_proof_review_applicable?
         raise ProofReview::DecisionConflict, 'Income proof review is not applicable for this application'
       end
       return if @application.proof_type_reviewable?(@proof_type_key)

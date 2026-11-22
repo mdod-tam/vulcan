@@ -85,7 +85,6 @@ es:
     password_access_link: Establecer o restablecer su contraseña
     support_html: '¿Todavía necesita ayuda? Comuníquese con el equipo MAT en %{email}.'
     introduction: Ingrese su correo para recibir un enlace y terminar de crear su cuenta.
-    email_help: Elegirá su contraseña después de confirmar el correo. Este paso no inicia sesión.
     invalid_email: Ingrese una dirección de correo válida.
     send_link: Enviar enlace de verificación
     sending: Enviando…

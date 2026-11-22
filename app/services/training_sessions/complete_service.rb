@@ -19,7 +19,10 @@ module TrainingSessions
           product_trained_on_id: @params[:product_trained_on_id], duration_hours: @params[:duration_hours]
         }
         attributes[:internal_notes] = @params[:internal_notes] if @params.key?(:internal_notes)
-        @training_session.update!(attributes)
+        @training_session.assign_attributes(attributes)
+        snapshot_funding!
+        @training_session.save!
+        link_equipment!
         AuditEventService.log(
           actor: @actor, action: 'training_completed', auditable: @training_session,
           metadata: { application_id: @training_session.application_id, training_session_id: @training_session.id,
@@ -37,6 +40,27 @@ module TrainingSessions
       failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
     rescue OperationError => e
       failure(e.message, { training_session: @training_session })
+    end
+
+    private
+
+    def snapshot_funding!
+      Icanconnect::ServiceFunding.snapshot!(@training_session, service_date: @training_session.completed_at)
+    rescue Date::Error => e
+      raise OperationError, e.message
+    end
+
+    def link_equipment!
+      ids = Array(@params[:equipment_item_ids]).compact_blank.map(&:to_i).uniq
+      return if ids.empty?
+
+      items = @training_session.application.equipment_items.active.where(id: ids).order(:id).lock.to_a
+      raise OperationError, 'Select active equipment that belongs to this training beneficiary' unless items.size == ids.size
+      raise OperationError, 'Include the product trained on among the linked equipment' unless items.any? do |item|
+        item.product_id == @training_session.product_trained_on_id
+      end
+
+      items.each { |item| @training_session.training_session_equipment_items.create!(equipment_item: item) }
     end
   end
 end

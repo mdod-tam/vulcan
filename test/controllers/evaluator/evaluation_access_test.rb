@@ -52,7 +52,7 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
     assert_response :success
     assert_select "a[href='#{admin_application_path(@application)}']", text: 'View Full Application Details'
-    assert_includes response.body, 'Mark Evaluation as Completed'
+    assert_includes response.body, 'Complete evaluation report'
 
     get application_details_evaluators_evaluation_path(@evaluation)
     assert_redirected_to admin_application_path(@application)

@@ -11,6 +11,7 @@ import {
 } from "../../utils/submit_gate_state";
 
 export default class extends Controller {
+  static values = { incompleteMessage: String };
   static targets = [
     "submitButton", "rejectionButton", "status", "applicantLocale", "languagePreferenceNotice",
     "rejectionFirstName", "rejectionLastName", "rejectionRecipientId", "rejectionEmail",
@@ -97,7 +98,7 @@ export default class extends Controller {
       const message = uploadBlocker?.validationMessage || (guardianSelectionBlocks
         ? "Select or create a guardian before submitting this dependent's application."
         : (disable
-          ? `Complete all required confirmations before submitting.${requirements.length ? " Still needed:" : ""}`
+          ? `${this.incompleteMessageValue}${requirements.length ? " Still needed:" : ""}`
           : "Paper application is ready to submit."));
       this._renderSubmitStatus(message, requirements);
     }

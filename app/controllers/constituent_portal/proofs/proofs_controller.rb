@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Lets a constituent replace a rejected proof with a cleared upload.
+# Lets a constituent submit an eligible missing or rejected proof with a cleared upload.
 # ProofAttachmentService attaches the proof, as it does for paper intake.
 module ConstituentPortal
   module Proofs
@@ -47,7 +47,6 @@ module ConstituentPortal
         handle_application_not_found(application_id) if @application.nil?
       end
 
-      # rubocop:disable Naming/PredicateMethod
       def redirect_if_missing_application_id(application_id)
         return false if application_id.present?
 
@@ -55,7 +54,6 @@ module ConstituentPortal
         redirect_to constituent_portal_dashboard_path, alert: t('constituent_portal.proofs.upload.not_found')
         true
       end
-      # rubocop:enable Naming/PredicateMethod
 
       def find_user_application(application_id)
         Application.accessible_by(current_user).find_by(id: application_id)
@@ -98,6 +96,12 @@ module ConstituentPortal
         result = ProofAttachmentService.attach_proof(build_attachment_params(is_resubmitting))
 
         return if result[:success]
+
+        if result[:error].is_a?(ProofAttachmentService::IncomeUpdateUnavailable)
+          redirect_to constituent_portal_application_path(@application),
+                      alert: t('applications.proof_resubmission.messages.no_longer_needed'), status: :see_other
+          return
+        end
 
         Rails.logger.error "Failed to attach proof for application #{@application.id}: #{result[:error]&.class&.name}"
         raise "Failed to attach proof: #{result[:error]&.message}"

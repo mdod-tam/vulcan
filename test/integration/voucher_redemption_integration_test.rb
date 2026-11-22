@@ -48,7 +48,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     )
 
     @product1 = Product.create!(
-      name: 'Integration Test Product 1',
+      name: 'Integration Test Product 1', category: 'devices', model_confirmed: true, eligible_disability_groups: ['deaf'],
       manufacturer: 'Integration Test Manufacturer',
       model_number: "ITP-1-#{SecureRandom.hex(4)}",
       device_types: ['Smartphone'],
@@ -57,7 +57,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     )
 
     @product2 = Product.create!(
-      name: 'Integration Test Product 2',
+      name: 'Integration Test Product 2', category: 'devices', model_confirmed: true, eligible_disability_groups: ['deaf'],
       manufacturer: 'Integration Test Manufacturer',
       model_number: "ITP-2-#{SecureRandom.hex(4)}",
       device_types: ['Tablet'],

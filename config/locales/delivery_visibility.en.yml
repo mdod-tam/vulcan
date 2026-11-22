@@ -61,6 +61,9 @@ en:
       sms_submitted: Text message submitted
       docuseal: DocuSeal invitation requested
       letter_blocked: Letter blocked — awaiting cancellation
+    suppression_statuses:
+      missing_recipient: Not sent — no email address
+      delivery_identity_changed: Not sent — details changed
     descriptions:
       queued: The message is waiting for its delivery channel.
       accepted: Postmark accepted the email. Delivery to the receiving server has
@@ -86,6 +89,7 @@ en:
       letter_blocked: The letter is blocked by delivery controls and has not yet been
         canceled in the print queue.
     reasons:
+      missing_recipient: No usable email address is recorded. Follow up using the application’s contact information.
       trainer_coverage_changed: This message was not sent because the recipient is no longer the assigned trainer.
       assignment_superseded: This message was not sent because the assignment it announced has since changed.
       all_disabled: All communications are switched off.

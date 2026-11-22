@@ -40,5 +40,22 @@ module EmailTemplates
         assert_no_match(/%[<{]\w+[>}]s?/, body)
       end
     end
+
+    test 'proof request previews and test sends receive a localized explanation for the required variable' do
+      name = 'application_notifications_proof_requested'
+      EmailTemplate.where(name: name, format: :text).destroy_all
+      %w[en es].each do |locale|
+        load Rails.root.join("db/seeds/email_templates/#{name}#{'_es' if locale == 'es'}.rb")
+        template = EmailTemplate.find_with_locale(name: name, format: :text, locale: locale)
+        sample = SampleData.for_template(template, locale: locale)
+        _subject, body = template.render(**sample.symbolize_keys)
+        expected = I18n.t('applications.proof_resubmission.request_explanation.pending',
+                          proof: I18n.t('secure_proof_forms.proof_types.income', locale: locale), locale: locale)
+        assert_equal expected, sample['request_explanation']
+        assert_includes body, expected
+        assert_not_includes body, 'Sample Request Explanation'
+        assert_not_includes body, '%<request_explanation>s'
+      end
+    end
   end
 end

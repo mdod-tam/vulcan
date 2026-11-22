@@ -172,6 +172,57 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     take_evidence_screenshot('application-dependent-refused-pending-review', full: true, html: true)
   end
 
+  test 'a guardian can correct refused income and submit the same dependent application with its cleared documents' do
+    FeatureFlag.disable!(:vouchers_enabled)
+    system_test_sign_in(@user)
+    visit new_constituent_portal_application_path(user_id: @dependent.id)
+    assert_text "New Application for #{@dependent.full_name}"
+    page.execute_script(<<~JS)
+      const form = document.querySelector('form[data-controller~="autosave"]');
+      form.dataset.controller = form.dataset.controller.split(' ')
+        .filter((name) => name !== 'autosave').join(' ');
+    JS
+    fill_complete_application_form
+    attach_online_application_documents(:id_proof)
+    assert_selector 'input[name="submit_application"]:enabled'
+
+    policy = Policy.find_by!(key: 'fpl_3_person')
+    policy.update!(value: 10_000, updated_by: create(:admin))
+    find('input[name="submit_application"]').click
+
+    assert_selector '#error-summary', text: I18n.t('activemodel.errors.models.application_form.attributes.annual_income.income_above_limit')
+    assert_text "This application is for #{@dependent.full_name}"
+    assert_selector "input[name='application[user_id]'][value='#{@dependent.id}']", visible: :all
+    %w[income residency id].each do |type|
+      assert_selector "input[type='hidden'][name='application[#{type}_proof]'], " \
+                      "input[name='application[#{type}_proof_signed_id]']", visible: :all
+    end
+    take_evidence_screenshot('guardian-income-retry-restores-dependent', html: true)
+    find_by_id('application_income_proof').scroll_to(:top)
+    take_evidence_screenshot('guardian-income-retry-retains-proofs', html: true)
+
+    guardian_disabilities = @user.reload.attributes.slice(*Users::Constituent::DISABILITY_FLAGS.map(&:to_s))
+    assert_not @dependent.reload.vision_disability
+    check 'Vision'
+    wait_until(time: 10) { @dependent.reload.vision_disability }
+    draft = Application.find_by!(user: @dependent, managing_guardian: @user, status: :draft)
+    assert_not Application.exists?(user: @user)
+    assert_equal guardian_disabilities, @user.reload.attributes.slice(*guardian_disabilities.keys)
+
+    fill_in 'application_annual_income', with: '0'
+    find_field('application_annual_income').send_keys(:tab)
+    find('input[name="submit_application"]:enabled').click
+    assert_text 'Application submitted successfully!'
+    submitted = Application.find_by!(user: @dependent, managing_guardian: @user)
+    assert_predicate submitted, :status_in_progress?
+    assert_equal 0, submitted.annual_income
+    assert_equal draft.id, submitted.id
+    assert_equal guardian_disabilities, @user.reload.attributes.slice(*guardian_disabilities.keys)
+    assert submitted.income_proof.attached? && submitted.residency_proof.attached? && submitted.id_proof.attached?
+    assert_not Application.exists?(user: @user)
+    take_evidence_screenshot('guardian-income-retry-submitted', full: true, html: true)
+  end
+
   test 'a refused submission resumes its autosaved dependent draft and preserves a usable save retry' do
     Current.set(user: @user) { @dependent.update!(physical_address_1: '12 Original Dependent Road') }
     guardian_address = @user.physical_address_1

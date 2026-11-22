@@ -119,7 +119,7 @@ class SmsVerificationAttempt < ApplicationRecord
   def self.lock_destination!(service_sid, destination)
     key = Digest::SHA256.digest("sms-verification:#{service_sid}:#{destination}").unpack1('q>')
     bind = ActiveRecord::Relation::QueryAttribute.new('lock_key', key, ActiveRecord::Type::Integer.new(limit: 8))
-    connection.exec_query('SELECT pg_advisory_xact_lock($1)', 'SMS destination lock', [bind])
+    connection.exec_query('SELECT pg_advisory_xact_lock($1)::text', 'SMS destination lock', [bind])
   end
   private_class_method :lock_destination!
 end

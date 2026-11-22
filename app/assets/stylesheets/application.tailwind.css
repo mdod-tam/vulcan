@@ -46,6 +46,38 @@
 }
 
 @layer components {
+  .compact-notifications .notification-row {
+    @apply px-2 py-1;
+  }
+
+  .compact-notifications .notification-content {
+    @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3;
+  }
+
+  .compact-notifications .notification-summary {
+    @apply contents;
+  }
+
+  .compact-notifications .notification-summary > p {
+    @apply col-start-1 row-start-1;
+  }
+
+  .compact-notifications .notification-summary > form {
+    @apply col-start-2 row-start-1 row-span-2;
+  }
+
+  .compact-notifications .notification-timestamp {
+    @apply col-start-1 row-start-2 mt-0;
+  }
+
+  .compact-notifications .notification-content > :not(.notification-summary):not(.notification-timestamp) {
+    @apply col-span-full;
+  }
+
+  .compact-notifications [data-delivery-status] > .badge {
+    @apply hidden;
+  }
+
   /* Buttons: .btn plus one variant, and .btn-sm for a compact size. */
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-md border border-transparent px-4 py-2 text-sm font-medium shadow-elevation-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50;
@@ -146,6 +178,67 @@
   /* Surfaces. Add padding and spacing with utilities. */
   .card {
     @apply rounded-lg bg-white shadow-elevation-2;
+  }
+
+  .summary-card {
+    @apply flex min-w-0 flex-col border border-gray-200 shadow-elevation-1;
+  }
+
+  .summary-card-content {
+    @apply block p-4;
+  }
+
+  .summary-card-title {
+    @apply text-lg font-semibold text-gray-900;
+  }
+
+  .summary-card-count {
+    @apply mt-2 text-3xl font-semibold text-primary-700;
+  }
+
+  .summary-card-details {
+    @apply border-t border-gray-200 p-4 text-sm;
+  }
+
+  .summary-card-actions {
+    @apply mt-auto flex flex-wrap items-center gap-2 border-t border-gray-200 p-4;
+  }
+
+  .summary-card-compact .summary-card-content {
+    @apply px-3 py-1.5;
+  }
+
+  .summary-card-compact .summary-card-title {
+    @apply text-sm leading-5;
+  }
+
+  .summary-card-compact .summary-card-count {
+    @apply m-0 text-2xl leading-7;
+  }
+
+  .summary-card-compact .summary-card-details {
+    @apply px-3 py-1.5 leading-5;
+  }
+
+  .summary-card-compact .summary-card-actions {
+    @apply px-3 py-1.5;
+  }
+
+  .admin-record-table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+
+  .admin-record-table :is(th, td) {
+    @apply border-b border-gray-200 px-2.5 py-2 align-top sm:px-3;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-record-table thead {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  .admin-record-table tbody th {
+    @apply font-medium text-gray-900;
   }
 
   /* Form controls. Focus styling comes from the base layer. */

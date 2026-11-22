@@ -12,6 +12,13 @@ module Applications
       review_proof: 'Review proof', review_certification: 'Review certification',
       review_application: 'Review application', open_application: 'Open application'
     }.freeze
+    DIRECT_SCOPE_FILTERS = {
+      'active' => :active,
+      'awaiting_proofs' => :awaiting_proofs,
+      'proofs_needing_review' => :awaiting_proof_review,
+      'cert_requests_needed' => :certifications_needing_request,
+      'awaiting_training' => :approved_awaiting_training
+    }.freeze
 
     class << self
       def sort_column(params = {})
@@ -117,6 +124,13 @@ module Applications
         .then { |result| apply_conditional_search_filter(result) }
         .then { |result| apply_guardian_dependent_text_searches(result) }
         .then { |result| apply_guardian_relationship_filters(result) }
+        .then { |result| apply_program_filters(result) }
+    end
+
+    def apply_program_filters(result)
+      group = params[:program_group].to_s
+      result = result.where('program_disability_groups @> ARRAY[?]::text[]', group) if Product::PROGRAM_GROUPS.key?(group)
+      result
     end
 
     def apply_conditional_status_filter(result)
@@ -148,9 +162,10 @@ module Applications
     end
 
     def apply_status_filter(scope, filter)
+      scope_name = DIRECT_SCOPE_FILTERS[filter]
+      return scope.public_send(scope_name) if scope_name
+
       case filter
-      when 'active'
-        scope.active
       when 'draft'
         scope.where(status: :draft)
       when 'in_progress'
@@ -159,12 +174,14 @@ module Applications
         scope.where(status: :approved)
       when 'rejected'
         scope.where(status: :rejected)
-      when 'proofs_needing_review'
-        scope.with_proofs_needing_review
       when 'awaiting_disability_certification'
         scope.where(status: :awaiting_dcf)
       when 'disability_certs_to_review'
-        scope.where(status: :in_progress, disability_certification_status: :received)
+        scope.merge(Application.staff_review_queue).where(disability_certification_status: :received)
+      when 'certifications_needing_review'
+        scope.merge(Application.certifications_needing_review)
+      when 'certifications_awaiting_provider'
+        scope.merge(Application.certifications_awaiting_provider)
       when 'pending_provider_info'
         scope.pending_provider_info
       when 'training_requests'

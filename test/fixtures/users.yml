@@ -48,6 +48,22 @@ confirmed_user2:
   state: MD
   zip_code: 20785
 
+awaiting_dcf_constituent:
+  type: Users::Constituent
+  email: awaiting.certification@example.com
+  first_name: Robin
+  last_name: Taylor
+  password_digest: <%= User.digest('password1234') %>
+  email_verified: true
+  hearing_disability: true
+  date_of_birth: <%= 46.years.ago.to_date %>
+  status: active
+  phone: 202-555-0198
+  physical_address_1: 4800 Maryland Avenue
+  city: Landover
+  state: MD
+  zip_code: 20785
+
 unconfirmed_user:
   type: Users::Constituent
   email: unconfirmed@example.com

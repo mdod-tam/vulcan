@@ -1,0 +1,34 @@
+<%# locals: (items:, audit_records:, return_context:) -%>
+<section id="purchase-order-device-records" aria-labelledby="purchase-order-devices-title" class="space-y-4">
+  <h2 id="purchase-order-devices-title" class="text-xl font-semibold">Device tracking and records</h2>
+  <p class="text-sm text-gray-600">Open a device to check its tracking details or make a correction. Shipping addresses are in the supplier order list above.</p>
+  <% items.each do |item| %>
+    <article id="equipment-item-<%= item.id %>" class="rounded border border-gray-300 p-4 space-y-3">
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 class="font-semibold">Device #<%= item.id %> — <%= equipment_catalog_label(item.product) %></h3>
+        <%= equipment_queue_badge(item) %>
+      </div>
+      <% if item.direct_vendor? && item.queue_status == 'awaiting_shipment' %>
+        <%= link_to 'Enter shipping info', new_admin_equipment_shipment_path(item_ids: [item.id], return_context: return_context.merge(tab: 'ordered')),
+                    class: 'btn btn-outline', aria: { label: "Enter shipping info for device ##{item.id}" } %>
+      <% end %>
+      <details class="space-y-3">
+        <summary class="cursor-pointer text-primary-700 underline" aria-label="View tracking and actions for device #<%= item.id %>">View tracking and actions</summary>
+        <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          <div><dt class="font-medium">Application</dt><dd><%= equipment_item_context_link(item, return_context: return_context) %></dd></div>
+          <div><dt class="font-medium">Funding</dt><dd><%= equipment_funding_label(item) %></dd></div>
+          <% if item.serial_number? %><div><dt class="font-medium">Serial number</dt><dd class="break-all"><%= item.serial_number %></dd></div><% end %>
+          <% if item.imei? %><div><dt class="font-medium">IMEI</dt><dd class="break-all"><%= item.imei %></dd></div><% end %>
+          <div><dt class="font-medium">Date shipped</dt><dd><%= accessible_date_value(item.shipped_at) || 'Not recorded' %></dd></div>
+          <div><dt class="font-medium">Date received by recipient</dt><dd><%= accessible_date_value(item.delivered_on) || 'Not recorded' %></dd></div>
+          <div><dt class="font-medium">Tracking number</dt><dd class="break-all"><%= item.tracking_number.presence || 'Not recorded' %> <%= equipment_tracking_link(item) %></dd></div>
+          <% if item.stock? %><div><dt class="font-medium">Received into stock</dt><dd><%= accessible_date_value(item.stock_received_on) || 'Not recorded' %></dd></div><% end %>
+          <% if item.installed_on? %><div><dt class="font-medium">Installation date</dt><dd><%= accessible_date_value(item.installed_on) %></dd></div><% end %>
+        </dl>
+        <%= render 'admin/equipment_items/actions', item: item, return_context: return_context %>
+        <%= render 'admin/equipment_items/history', events: item.events.sort_by(&:created_at).reverse, audit_records: audit_records %>
+      </details>
+    </article>
+  <% end %>
+  <% if items.empty? %><p class="text-sm text-gray-600">No devices are recorded on this PO.</p><% end %>
+</section>

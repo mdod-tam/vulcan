@@ -41,6 +41,58 @@ class ApplicationFormTest < ActiveSupport::TestCase
     assert_equal '50000.50', form_for(application: { annual_income: '$50,000.50' }).annual_income
   end
 
+  test 'final income submission accepts zero and exact configured limits for households eight through ten' do
+    [8, 9, 10].each do |size|
+      threshold = IncomeThresholdCalculationService.call(size).data.fetch(:threshold)
+      assert submission_form(income: threshold.to_s('F'), size: size).valid?
+      excessive = submission_form(income: (threshold + BigDecimal('0.01')).to_s('F'), size: size)
+      assert_not excessive.valid?
+      assert excessive.errors.of_kind?(:annual_income, :income_above_limit)
+    end
+    assert submission_form(income: '0').valid?
+  end
+
+  test 'final income submission refuses malformed amounts and household values without changing their meaning' do
+    ['-1', 'not 12 dollars', 'NaN', 'Infinity', '1,2', '10.005'].each do |value|
+      form = submission_form(income: value)
+      assert_equal value, form.annual_income
+      assert_not form.valid?, value
+      assert form.errors.of_kind?(:annual_income, :invalid_amount), value
+    end
+    ['2.5', '2 people', '0', '-1', ''].each do |value|
+      form = submission_form(income: '0', size: value)
+      assert_not form.valid?, value
+      assert form.errors.of_kind?(:household_size, :positive_integer), value
+    end
+  end
+
+  test 'income errors use the form locale and explain a missing policy without submitting' do
+    form = submission_form(income: '999999')
+    form.locale = 'es'
+    assert_not form.valid?
+    assert_includes form.errors[:annual_income], I18n.t('activemodel.errors.models.application_form.attributes.annual_income.income_above_limit', locale: :es)
+
+    Policy.find_by!(key: 'fpl_2_person').destroy!
+    form = submission_form(income: '0')
+    form.locale = 'es'
+    assert_not form.valid?
+    assert_includes form.errors[:base], I18n.t('activemodel.errors.models.application_form.attributes.base.income_check_unavailable', locale: :es)
+  end
+
+  test 'drafts remain resumable and persisted income requirements survive a global flag change' do
+    draft = form_for(application: { annual_income: '999999', household_size: '2' }, save_draft: 'Save')
+    assert draft.valid?
+    persisted = create(:application, :draft, user: @user, income_proof_required: true)
+    FeatureFlag.enable!(:vouchers_enabled)
+    form = submission_form(income: '999999')
+    form.application = persisted
+    assert_not form.valid?
+    assert form.errors.of_kind?(:annual_income, :income_above_limit)
+
+    persisted.income_proof_required = false
+    assert form.valid?, form.errors.full_messages.to_sentence
+  end
+
   test 'the top-level guardian address checkbox takes precedence over the nested one' do
     assert_equal false, form_for(application: { use_guardian_address: '1' }, use_guardian_address: '0').use_guardian_address
     assert_equal true, form_for(application: { use_guardian_address: '1' }).use_guardian_address
@@ -87,6 +139,12 @@ class ApplicationFormTest < ActiveSupport::TestCase
   end
 
   private
+
+  def submission_form(income:, size: 2)
+    form_for(application: { annual_income: income, household_size: size, hearing_disability: true,
+                            certifying_professional_attributes: { name: 'Dr. A', phone: '2025550123', email: 'a@example.com' } },
+             submit_application: 'Submit Application')
+  end
 
   def form_for(application:, **top_level)
     ApplicationForm.new(current_user: @user, params: ActionController::Parameters.new(application: application, **top_level))

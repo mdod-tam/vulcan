@@ -26,6 +26,7 @@ module Applications
           operation_id = SecureRandom.uuid
           existing = reusable_evaluation
           evaluation = existing ? reset_evaluation(existing, evaluator, operation_id) : create_evaluation(evaluator, operation_id)
+          application.update!(report_wait_started_at: Time.current)
 
           AuditEventService.log(
             actor: locked_actor,

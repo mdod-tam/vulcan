@@ -114,4 +114,33 @@ describe("RecommendationOutcomeController", () => {
     expect(form.querySelector("#tried").checked).toBe(true)
     expect(new FormData(form).get("evaluation[products_tried_inputs][12][reaction]")).toBe("Dissatisfied")
   })
+  test("catalog discovery follows explicit groups without dropping checked rows", async () => {
+    await restore()
+    form.insertAdjacentHTML("beforeend", `
+      <style>.flex { display: flex; } .hidden { display: none; }</style>
+      <input type="checkbox" value="deaf" checked data-recommendation-outcome-target="group">
+      <input type="checkbox" value="deafblind" data-recommendation-outcome-target="group">
+      <input type="search" data-recommendation-outcome-target="search" data-action="input->recommendation-outcome#filter">
+      <input type="checkbox" data-recommendation-outcome-target="showAll">
+      <div id="deaf-model" class="flex" data-recommendation-outcome-target="productRow" data-product-groups="deaf" data-product-search="apple phone"><input type="checkbox"></div>
+      <div id="braille-model" class="flex" data-recommendation-outcome-target="productRow" data-product-groups="deafblind" data-product-search="braille display"><input type="checkbox"></div>
+    `)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const controller = application.getControllerForElementAndIdentifier(form, "recommendation-outcome")
+    controller.filter()
+    expect(form.querySelector("#deaf-model").hidden).toBe(false)
+    expect(form.querySelector("#braille-model").hidden).toBe(true)
+    expect(form.querySelector("#braille-model")).not.toBeVisible()
+    change(form.querySelector('[data-recommendation-outcome-target="showAll"]'), true)
+    expect(form.querySelector("#braille-model").hidden).toBe(false)
+    expect(form.querySelector("#braille-model")).toBeVisible()
+    change(form.querySelector("#braille-model input"), true)
+    change(form.querySelector('[data-recommendation-outcome-target="showAll"]'), false)
+    expect(form.querySelector("#braille-model").hidden).toBe(false)
+    change(form.querySelector("#braille-model input"), false)
+    expect(form.querySelector("#braille-model").hidden).toBe(true)
+    change(form.querySelector('[data-recommendation-outcome-target="group"][value="deafblind"]'), true)
+    expect(form.querySelector("#braille-model").hidden).toBe(false)
+  })
+
 })

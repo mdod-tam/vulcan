@@ -14,13 +14,15 @@ class IncomeValidationController extends Controller {
   static outlets = ["flash"]
   static values = {
     fplThresholds: Object,  // Server-rendered base FPL amounts by household size.
-    modifier: Number // Policy percentage of base FPL.
+    modifier: Number,
+    additionalPerson: Number,
+    messages: Object,
+    locale: { type: String, default: "en" }
   }
 
   connect() {
     // Reuse this bound listener during disconnect.
     this._validate = this.validateIncomeThreshold.bind(this)
-
     this.setupEventListeners()
 
     // Currency formatting can change the raw value after the input event.
@@ -36,7 +38,8 @@ class IncomeValidationController extends Controller {
     this.element.dataset.fplLoaded = "true"
     this.element.classList.add("fpl-data-loaded")
     this.dispatch("fpl-data-loaded")
-    this.toggleIncomeRequirement()
+    // Sibling submit controllers must connect before receiving the initial validation state.
+    queueMicrotask(() => this.toggleIncomeRequirement())
   }
 
   disconnect() {
@@ -82,7 +85,7 @@ class IncomeValidationController extends Controller {
 
 
   validateIncomeThreshold() {
-    if (this.incomeActionDefersReview()) {
+    if (this.incomeActionDefersReview() || (this.hasNoIncomeProvidedTarget && this.noIncomeProvidedTarget.checked)) {
       this.clearValidationState()
       return
     }
@@ -90,12 +93,20 @@ class IncomeValidationController extends Controller {
     const size = this.getHouseholdSize()
     const income = this.getAnnualIncome()
 
-    if (size < 1 || income < 1) {
+    if (size < 1 || income === null || income < 0) {
       this.clearValidationState()
       return
     }
 
     const threshold = this.calculateThresholdForSize(size)
+    if (!Number.isFinite(threshold)) {
+      this.resetIncomeFieldsContainerStyle()
+      this.annualIncomeTarget.setCustomValidity(this.messagesValue.unavailable)
+      if (this.hasWarningContainerTarget) this.showWarning(this.warningContainerTarget, null)
+      this.dispatch("validated", { detail: { exceedsThreshold: false, unavailable: true, income, householdSize: size } })
+      return
+    }
+    this.annualIncomeTarget.setCustomValidity("")
     const exceedsThreshold = (income - threshold) > 0.0001
 
 
@@ -114,7 +125,8 @@ class IncomeValidationController extends Controller {
   getHouseholdSize() {
     if (this.hasHouseholdSizeTarget) {
       const target = this.householdSizeTarget
-      return parseInt(target.value, 10) || 0
+      const size = Number(target.value)
+      return Number.isInteger(size) ? size : 0
     }
     return 0
   }
@@ -122,37 +134,23 @@ class IncomeValidationController extends Controller {
   getAnnualIncome() {
     if (this.hasAnnualIncomeTarget) {
       const target = this.annualIncomeTarget
-      const value = target.value
+      const value = target.value.trim()
       const rawValue = target.dataset.rawValue
       const inputType = (target.getAttribute('type') || '').toLowerCase()
       const hasNonNumericChars = /[^0-9.\-]/.test(value)
 
       // Text inputs can contain currency formatting, so prefer their raw value.
-      if (rawValue && (inputType === 'text' || hasNonNumericChars)) {
-        return parseFloat(rawValue) || 0
-      }
-
-      // A number input can change before its cached raw value updates.
-      const parsed = parseFloat(value)
-      if (!Number.isNaN(parsed)) return parsed
-      return parseFloat((value || '').replace(/[^\d.-]/g, '')) || 0
+      const numericValue = rawValue && (inputType === 'text' || hasNonNumericChars) ? rawValue : value
+      if (numericValue === '') return null
+      const amount = Number(numericValue)
+      return Number.isFinite(amount) ? amount : null
     }
-    return 0
+    return null
   }
 
   calculateThresholdForSize(householdSize) {
-    const fallbackFpl = {
-      1: 15650, 2: 21150, 3: 26650, 4: 32150,
-      5: 37650, 6: 43150, 7: 48650, 8: 54150
-    }
-
-    const baseFplBySize = Object.keys(this.fplThresholdsValue).length > 0 ? this.fplThresholdsValue : fallbackFpl
-
-    const modifierPercent = (typeof this.modifierValue === 'number' && !Number.isNaN(this.modifierValue))
-      ? this.modifierValue
-      : 400
-
-    return calculateThresholdUtil({ baseFplBySize, modifierPercent, householdSize })
+    return calculateThresholdUtil({ baseFplBySize: this.fplThresholdsValue, modifierPercent: this.modifierValue,
+                                    additionalPerson: this.additionalPersonValue, householdSize })
   }
 
   updateValidationUI(exceedsThreshold, threshold) {
@@ -172,7 +170,22 @@ class IncomeValidationController extends Controller {
   }
 
   showWarning(target, threshold) {
-    target.innerHTML = this.buildWarningHTML(threshold)
+    const warning = document.createElement('div')
+    warning.className = 'bg-danger-600 border-2 border-danger-700 text-white font-bold p-4 rounded-md'
+    if (threshold === null) {
+      warning.textContent = this.messagesValue.unavailable
+    } else {
+      const title = document.createElement('h3')
+      title.className = 'font-bold text-lg'
+      title.textContent = this.messagesValue.title
+      const limit = document.createElement('p')
+      const formattedThreshold = threshold.toLocaleString(this.localeValue, { style: 'currency', currency: 'USD' })
+      limit.textContent = this.messagesValue.limit.replace('%{threshold}', formattedThreshold)
+      const explanation = document.createElement('p')
+      explanation.textContent = this.messagesValue.ineligible
+      warning.append(title, limit, explanation)
+    }
+    target.replaceChildren(warning)
     setVisible(target, true)
     // The hidden attribute controls visibility without CSS.
     try { target.removeAttribute('hidden') } catch (_) {}
@@ -186,24 +199,8 @@ class IncomeValidationController extends Controller {
     target.removeAttribute("role")
   }
 
-  buildWarningHTML(threshold) {
-    const formattedThreshold = threshold.toLocaleString('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })
-
-    return `
-      <div class="bg-danger-600 border-2 border-danger-700 text-white font-bold p-4 rounded-md">
-        <h3 class="font-bold text-lg">Income Exceeds Threshold</h3>
-        <p>Your annual income exceeds the maximum threshold of ${formattedThreshold} for your household size.</p>
-        <p>Applications with income above the threshold are not eligible for this program.</p>
-      </div>
-    `
-  }
-
   clearValidationState() {
+    if (this.hasAnnualIncomeTarget) this.annualIncomeTarget.setCustomValidity("")
     if (this.hasWarningContainerTarget) {
       this.hideWarning(this.warningContainerTarget)
     }
@@ -257,7 +254,10 @@ class IncomeValidationController extends Controller {
   }
 
   toggleIncomeRequirement() {
-    if (!this.hasNoIncomeProvidedTarget || !this.hasIncomeFieldsContainerTarget) return
+    if (!this.hasNoIncomeProvidedTarget || !this.hasIncomeFieldsContainerTarget) {
+      this.validateIncomeThreshold()
+      return
+    }
 
     const incomeMissing = this.noIncomeProvidedTarget.checked
     const detailsRequired = this.incomeActionRequiresDetails() && !incomeMissing
@@ -287,6 +287,7 @@ class IncomeValidationController extends Controller {
       this.hasHouseholdSizeTarget ? this.householdSizeTarget : null,
       this.hasAnnualIncomeTarget ? this.annualIncomeTarget : null
     ].filter(Boolean).forEach((target) => {
+      this.element.querySelector(`label[for="${target.id}"]`)?.classList.toggle('required-label', required)
       if (required) {
         target.setAttribute('required', 'required')
         target.setAttribute('aria-required', 'true')

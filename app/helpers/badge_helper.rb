@@ -30,7 +30,9 @@ module BadgeHelper
     },
     equipment: {
       needs_catalog_product: :warning, needs_action: :warning, needs_ordering: :warning, po_sent: :info,
-      ordered: :info, shipped: :success
+      ordered: :info, shipped: :success, needs_evaluator: :warning, awaiting_report: :info,
+      needs_fulfillment: :warning, awaiting_bid_award: :warning, ready_to_send_po: :warning,
+      awaiting_shipment: :info, awaiting_delivery: :info, shipment_recorded: :success, no_equipment: :neutral
     },
     training_session: {
       requested: :warning, scheduled: :info, confirmed: :info, rescheduled: :info, completed: :success,

@@ -20,22 +20,22 @@ module Evaluators
       invalid_time = 1.day.from_now.strftime('%Y-%m-%dT%H:%M')
       within '#complete-evaluation-form' do
         select 'Outside-specialist consultation', from: 'Assessment source'
-        fill_in 'Assessment/Consultation Date/Time', with: invalid_time
-        fill_in 'Working Notes', with: 'Recommendations supplied in the outside specialist written consultation.'
+        fill_in 'Assessment or consultation date and time', with: invalid_time
+        fill_in 'Report internal notes', with: 'Recommendations supplied in the outside specialist written consultation.'
         replace_product_selection('products_tried_inputs')
         replace_product_selection('recommended_product_ids', product)
         assert_selector '#complete_evaluation_location:not([required])[aria-required="false"]'
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
 
       assert_single_action_error('submit-report-errors')
       within '#complete-evaluation-form' do
         assert_selector :select, 'Assessment source', selected: 'Outside-specialist consultation'
-        assert_field 'Assessment/Consultation Date/Time', with: invalid_time
-        assert_field 'Working Notes', with: 'Recommendations supplied in the outside specialist written consultation.'
+        assert_field 'Assessment or consultation date and time', with: invalid_time
+        assert_field 'Report internal notes', with: 'Recommendations supplied in the outside specialist written consultation.'
         assert_selector "input[name='evaluation[recommended_product_ids][]'][value='#{product.id}']:checked"
         assert_no_selector "input[name^='evaluation[products_tried_inputs]'][type='checkbox']:checked"
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
       assert_equal 'requested', evaluation.reload.status
@@ -47,24 +47,24 @@ module Evaluators
       within '#complete-evaluation-form' do
         replace_product_selection('recommended_product_ids')
         assert_selector '#complete_evaluation_recommendation_notes[required][aria-required="true"]'
-        fill_in 'Non-catalog products and recommendation details', with: 'Restored consultation context for an external model.'
-        assert_field 'Non-catalog products and recommendation details', with: 'Restored consultation context for an external model.'
+        fill_in 'Recommendation details', with: 'Restored consultation context for an external model.'
+        assert_field 'Recommendation details', with: 'Restored consultation context for an external model.'
         replace_product_selection('recommended_product_ids', product)
         assert_selector '#complete_evaluation_recommendation_notes:not([required])[aria-required="false"]'
-        fill_in 'Non-catalog products and recommendation details', with: ''
+        fill_in 'Recommendation details', with: ''
         replace_product_selection('products_tried_inputs', product, reaction: 'Neutral')
         assert_selector "#trial-#{product.id}:checked"
         assert_selector :select, "trial-#{product.id}-reaction", selected: 'Neutral'
         replace_product_selection('products_tried_inputs')
         fill_in 'Other Attendees', with: 'Specialist consultation interpreter'
         fill_in 'Other Attendees', with: ''
-        fill_in 'Assessment/Consultation Date/Time', with: actual_time
-        fill_in 'Working Notes', with: 'Corrected written specialist recommendation and consultation context.'
+        fill_in 'Assessment or consultation date and time', with: actual_time
+        fill_in 'Report internal notes', with: 'Corrected written specialist recommendation and consultation context.'
         replace_product_selection('recommended_product_ids', replacement)
       end
       take_screenshot('outside-specialist-corrected-inputs', html: true, full: true)
       within '#complete-evaluation-form' do
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
 
       assert_text 'Evaluation submitted successfully.'
@@ -94,12 +94,12 @@ module Evaluators
 
       within '#complete-evaluation-form' do
         select 'Outside-specialist consultation', from: 'Assessment source'
-        fill_in 'Assessment/Consultation Date/Time', with: 1.day.from_now.strftime('%Y-%m-%dT%H:%M')
+        fill_in 'Assessment or consultation date and time', with: 1.day.from_now.strftime('%Y-%m-%dT%H:%M')
         fill_in 'Location', with: ''
-        fill_in 'Working Notes', with: 'Outside specialist written consultation context.'
+        fill_in 'Report internal notes', with: 'Outside specialist written consultation context.'
         replace_product_selection('recommended_product_ids', product)
         replace_product_selection('products_tried_inputs')
-        click_button 'Mark as Completed'
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
 
@@ -107,8 +107,8 @@ module Evaluators
         select 'Direct assessment', from: 'Assessment source'
         assert_selector '#complete_evaluation_location[required][aria-required="true"]'
         fill_in 'Location', with: 'Assessment office'
-        fill_in 'Assessment/Consultation Date/Time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
-        click_button 'Mark as Completed'
+        fill_in 'Assessment or consultation date and time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
+        click_button 'Submit completed report'
       end
       assert_single_action_error('submit-report-errors')
       assert_selector '#submit-report-errors', text: "Products tried can't be blank"
@@ -128,8 +128,8 @@ module Evaluators
         select 'Outside-specialist consultation', from: 'Assessment source'
         fill_in 'Location', with: ''
         assert_selector '#complete_evaluation_location:not([required])[aria-required="false"]'
-        assert_field 'Working Notes', with: 'Outside specialist written consultation context.'
-        click_button 'Mark as Completed'
+        assert_field 'Report internal notes', with: 'Outside specialist written consultation context.'
+        click_button 'Submit completed report'
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'outside_specialist', evaluation.reload.assessment_source

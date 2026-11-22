@@ -1,0 +1,22 @@
+<%# locals: (summary:, oldest_path:, average_label:, sample_key:) -%>
+<div class="summary-card-details">
+  <% if summary.oldest %>
+    <p>
+      <span class="text-gray-600"><%= t("service_dashboard.waiting_since.#{summary.oldest.clock}") %>:</span>
+      <%= t('service_dashboard.days', count: summary.oldest.days, value: summary.oldest.days) %>
+    </p>
+    <%= link_to oldest_path, class: 'block text-primary-700 underline' do %>
+      <%= summary.oldest.application.user.full_name %> — <%= service_dashboard_disabilities(summary.oldest.application) %>
+    <% end %>
+    <p class="text-xs text-gray-600"><%= service_dashboard_practitioner_label(summary.oldest) %></p>
+  <% elsif summary.count.positive? %>
+    <p><%= t('service_dashboard.wait_not_recorded') %></p>
+  <% end %>
+  <p class="text-xs text-gray-600"><%= average_label %>: <%= service_dashboard_average(summary.average_days) %></p>
+  <% if summary.sample_count.positive? %>
+    <p class="text-xs text-gray-600"><%= t(sample_key, count: summary.sample_count) %></p>
+  <% end %>
+  <% if summary.unknown_dates.positive? %>
+    <p class="text-xs text-gray-600"><%= t('service_dashboard.unknown_dates', count: summary.unknown_dates) %></p>
+  <% end %>
+</div>

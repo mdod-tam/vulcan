@@ -1,0 +1,69 @@
+<%# locals: (form:, item:, products:, return_context:, reason:) -%>
+<div>
+  <%= form.label :product_id, 'Device model', class: 'form-label' %>
+  <%= form.select :product_id, equipment_catalog_options(products), {}, class: 'form-input mt-1' %>
+</div>
+<p>Purchase order:
+  <% if item.purchase_order %>
+    <%= link_to item.purchase_order.number, admin_purchase_order_path(item.purchase_order, return_context: return_context), class: 'underline text-primary-700' %>.
+  <% else %>None recorded.<% end %>
+  Assign purchase orders through a bid award.
+</p>
+<% if item.application %>
+  <div>
+    <%= form.label :disability_setup_group, 'Setup for this recipient', class: 'form-label' %>
+    <%= form.select :disability_setup_group, Product::PROGRAM_GROUPS.map { |key, label| [label, key] }, { include_blank: 'Setup needed' }, class: 'form-input mt-1' %>
+  </div>
+  <fieldset class="grid gap-4 sm:grid-cols-2">
+    <legend class="font-medium">Shipping address for this device</legend>
+    <% EquipmentShipping::FIELDS.each do |field| %>
+      <div>
+        <%= form.label field, class: 'form-label' %>
+        <%= form.text_field field, class: 'form-input mt-1' %>
+      </div>
+    <% end %>
+  </fieldset>
+<% end %>
+<% if item.stock? && item.portal_visible? && !item.shipped_at? %>
+  <p class="rounded bg-yellow-50 p-3">Releasing this reservation changes what the constituent sees.</p>
+<% end %>
+<% if item.stock? %>
+  <div>
+    <%= form.label :stock_received_on, 'Verified stock receipt date', class: 'form-label' %>
+    <%= form.text_field :stock_received_on,
+                        typed_date_field_options(value: typed_date_input_value(item, :stock_received_on), class: 'form-input', autocomplete: 'off') %>
+    <p class="form-hint">Before correcting a receipt, resolve any stock reservation or shipment. The original purchase stays in the history.</p>
+  </div>
+<% end %>
+<div class="grid gap-4 sm:grid-cols-2">
+  <div>
+    <%= form.label :shipped_at, 'Date shipped', class: 'form-label' %>
+    <%= form.text_field :shipped_at,
+                        typed_date_field_options(value: typed_date_input_value(item, :shipped_at), class: 'form-input mt-1',
+                                                 'aria-invalid': item.errors[:shipped_at].any?,
+                                                 'aria-describedby': ('equipment-ship-date-error' if item.errors[:shipped_at].any?)) %>
+    <% if item.errors[:shipped_at].any? %>
+      <p id="equipment-ship-date-error" class="text-sm text-danger-700"><%= item.errors.full_messages_for(:shipped_at).to_sentence %></p>
+    <% end %>
+  </div>
+  <div>
+    <%= form.label :tracking_number, class: 'form-label' %>
+    <%= form.text_field :tracking_number, maxlength: 128, autocomplete: 'off', class: 'form-input mt-1' %>
+  </div>
+  <div>
+    <%= form.label :carrier, class: 'form-label' %>
+    <%= form.select :carrier, EquipmentItem::CARRIERS.invert, { include_blank: 'Not recorded' }, class: 'form-input mt-1' %>
+  </div>
+  <div>
+    <%= form.label :serial_number, class: 'form-label' %>
+    <%= form.text_field :serial_number, maxlength: 128, autocomplete: 'off', class: 'form-input mt-1' %>
+  </div>
+  <div>
+    <%= form.label :imei, 'IMEI (15 digits)', class: 'form-label' %>
+    <%= form.text_field :imei, inputmode: 'numeric', autocomplete: 'off', class: 'form-input mt-1' %>
+  </div>
+</div>
+<div>
+  <%= label_tag :reason, 'Correction reason', class: 'form-label' %>
+  <%= text_area_tag :reason, reason, required: true, rows: 2, class: 'form-input mt-1' %>
+</div>

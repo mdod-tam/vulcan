@@ -1,0 +1,51 @@
+<div id="equipment-profile-review" class="max-w-5xl mx-auto p-6 space-y-4">
+  <h1 class="text-2xl font-bold">Reserve stock for dispatch</h1>
+  <p>Check quantities, disability groups and addresses before reserving these devices. When they ship, open Enter shipping info to record the date and tracking number.</p>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors %>
+<% if @profile_review_refreshed %>
+  <p role="status" tabindex="-1" data-controller="error-summary" class="rounded bg-primary-50 p-3">The shipping address and device setup have been refreshed. Review them before saving.</p>
+<% end %>
+  <%= form_with url: admin_stock_allocations_path, scope: :allocation, class: 'space-y-4' do |form| %>
+    <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
+  <% @application_versions.each do |id, version| %><%= hidden_field_tag "application_versions[#{id}]", version %><% end %>
+    <% @needs.each do |need| %>
+      <% attempted = @need_rows&.find { |row| row['id'].to_s == need.id.to_s } # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <fieldset class="border rounded p-4">
+        <legend><%= need.application.user.full_name %> · <%= equipment_catalog_label(need.product) %></legend>
+        <p class="whitespace-pre-line"><%= need.application.shipping_label %></p>
+        <p>Device setup: <%= Product::PROGRAM_GROUPS[need.disability_setup_group] || 'Setup needed' %></p>
+        <%= hidden_field_tag 'allocation[needs][][id]', need.id, id: nil %>
+        <%= hidden_field_tag 'allocation[needs][][lock_version]', attempted ? attempted['lock_version'] : need.lock_version, id: nil %>
+        <%= label_tag "allocate-#{need.id}", 'Quantity' %>
+        <%= number_field_tag 'allocation[needs][][quantity]', @quantities[need.id.to_s] || need.available_quantity,
+                             min: 1, step: 1, autocomplete: 'off', id: "allocate-#{need.id}", class: 'form-input' %>
+      </fieldset>
+    <% end %>
+    <% @items.each do |item| %>
+      <% attempted = @item_rows&.find { |row| row['id'].to_s == item.id.to_s } # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <p>Use stock to replace device #<%= item.id %> for <%= item.application.user.full_name %> with one <%= equipment_catalog_label(item.product) %></p>
+      <p class="whitespace-pre-line"><%= item.shipping_label %></p>
+      <p>Required setup: <%= Product::PROGRAM_GROUPS[item.disability_setup_group] || 'Setup needed' %></p>
+      <%= hidden_field_tag 'allocation[items][][id]', item.id, id: nil %>
+      <%= hidden_field_tag 'allocation[items][][lock_version]', attempted&.dig('lock_version') || item.lock_version, id: nil %>
+    <% end %>
+    <% if @items.any? { |item| item.funding_source == 'icanconnect' } %>
+      <div class="rounded border border-warning-300 bg-warning-50 p-4 space-y-2">
+        <p id="mat-stock-funding-help">This replaces the selected iCanConnect-funded devices with MAT stock. These stock devices keep MAT funding and will not appear in iCanConnect equipment filing.</p>
+        <div>
+          <%= form.check_box :confirm_mat_funding, checked: params.dig(:allocation, :confirm_mat_funding) == '1', required: true,
+                                                   aria: { describedby: 'mat-stock-funding-help' } %>
+          <%= form.label :confirm_mat_funding, 'I understand these stock devices use MAT funding.' %>
+        </div>
+      </div>
+    <% end %>
+    <label>
+      <%= form.check_box :confirm_discontinued, checked: params.dig(:allocation, :confirm_discontinued) == '1' %>
+      I approve using these discontinued models from program stock for the selected requests.
+    </label>
+    <p>The oldest stock of each model is reserved first. Nothing is reserved unless all requested quantities are available.</p>
+    <%= button_tag 'Refresh address and setup (keep changes)', name: :refresh_profiles, value: '1', formnovalidate: true, class: 'btn btn-outline' %>
+  <%= form.submit 'Reserve', class: 'btn btn-primary' %>
+  <% end %>
+  <%= link_to 'Back to equipment queue', equipment_return_path(@return_context), class: 'text-primary-700 underline' %>
+</div>

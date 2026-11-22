@@ -1,30 +1,24 @@
-<%= form_with url: bulk_update_admin_policies_path, method: :patch do |form| %>
+<%= form_with url: bulk_update_admin_policies_path, method: :patch, data: { turbo_frame: '_top' } do |form| %>
   <div class="p-6">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Federal Poverty Level (FPL) Settings</h2>
-    
+
     <div class="bg-warning-50 border-l-4 border-warning-400 p-4 mb-6">
       <p class="text-sm text-warning-700">
-        These values should be updated annually when new Federal Poverty Level guidelines are released, 
+        These values should be updated annually when new Federal Poverty Level guidelines are released,
         typically in January or February.
       </p>
     </div>
 
     <div class="mb-6">
-      <% modifier_policy = @policies.find_by(key: 'fpl_modifier_percentage') %>
-      <%= render "create_missing_policy", policy: modifier_policy, key: 'fpl_modifier_percentage', default_value: 400 %>
-      <% if modifier_policy %>
-        <div class="flex items-center space-x-4">
-          <%= hidden_field_tag "policies[][id]", modifier_policy.id %>
-          <label for="policies_<%= modifier_policy.id %>_value" class="form-label">
+      <% if @modifier_policy %>
+        <div class="flex flex-wrap items-center gap-4">
+          <%= hidden_field_tag 'policies[][id]', @modifier_policy.id, id: nil %>
+          <label for="policies_<%= @modifier_policy.id %>_value" class="form-label">
             FPL Modifier Percentage
           </label>
           <div class="relative rounded-md shadow-elevation-1 w-32">
-            <%= number_field_tag "policies[][value]",
-                modifier_policy.value,
-                class: "form-input pr-8",
-                required: true,
-                min: 100,
-                step: 100 %>
+            <%= number_field_tag 'policies[][value]', @modifier_policy.value, id: "policies_#{@modifier_policy.id}_value", autocomplete: 'off', class: 'form-input pr-8',
+                                                                              required: true, min: 100, step: 100 %>
             <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
               <span class="text-gray-500 sm:text-sm">%</span>
             </div>
@@ -44,38 +38,36 @@
               Base FPL Amount
             </th>
             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Calculated Threshold (<%= modifier_policy&.value %>%)
+              Calculated Threshold (<%= @modifier_policy&.value %>%)
             </th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <% (1..8).each do |size| %>
-            <% policy_key = "fpl_#{size}_person" %>
-            <% policy = @policies.find_by(key: policy_key) %>
-            <% default_value = 15000 + (size - 1) * 5000 %>
+          <% @fpl_policy_rows.each do |size, _, policy| %>
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                 <%= size %> <%= 'Person'.pluralize(size) %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <%= render "create_missing_policy", policy: policy, key: policy_key, default_value: default_value %>
                 <% if policy %>
-                  <%= hidden_field_tag "policies[][id]", policy.id %>
+                  <%= hidden_field_tag 'policies[][id]', policy.id, id: nil %>
+                  <%= label_tag "policies_#{policy.id}_value", "Base FPL for #{size} #{'person'.pluralize(size)}", class: 'sr-only' %>
                   <div class="relative rounded-md shadow-elevation-1 w-48">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span class="text-gray-500 sm:text-sm">$</span>
                     </div>
-                    <%= number_field_tag "policies[][value]",
-                        policy.value,
-                        class: "form-input pl-7",
-                        required: true,
-                        min: 0 %>
+                    <%= number_field_tag 'policies[][value]',
+                                         policy.value,
+                                         id: "policies_#{policy.id}_value", autocomplete: 'off',
+                                         class: 'form-input pl-7',
+                                         required: true,
+                                         min: 0 %>
                   </div>
                 <% end %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                <% if policy && modifier_policy %>
-                  <%= number_to_currency(policy.value * modifier_policy.value / 100) %>
+                <% if policy && @modifier_policy %>
+                  <%= number_to_currency(policy.value * @modifier_policy.value / 100) %>
                 <% else %>
                   <span class="text-gray-500">Not available</span>
                 <% end %>
@@ -85,11 +77,24 @@
         </tbody>
       </table>
     </div>
+    <div class="mt-4">
+      <% if @additional_person_policy %>
+        <%= hidden_field_tag 'policies[][id]', @additional_person_policy.id, id: nil %>
+        <%= label_tag "policies_#{@additional_person_policy.id}_value",
+                      "Base FPL added for each person above #{IncomeThresholdCalculationService::TABLE_HOUSEHOLD_SIZE}", class: 'form-label' %>
+        <div class="relative rounded-md w-48">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500" aria-hidden="true">$</span>
+          <%= number_field_tag 'policies[][value]', @additional_person_policy.value,
+                               id: "policies_#{@additional_person_policy.id}_value", min: 1, required: true,
+                               autocomplete: 'off', class: 'form-input pl-7' %>
+        </div>
+      <% end %>
+    </div>
   </div>
 
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Proof Submission Rate Limits</h2>
-    
+
     <div class="bg-info-50 border-l-4 border-info-400 p-4 mb-6">
       <p class="text-sm text-info-700">
         Configure how many proof submissions are allowed within a time period.
@@ -99,20 +104,12 @@
 
     <div class="grid grid-cols-1 gap-6">
       <div>
-        <% period_policy = @policies.find_by(key: 'proof_submission_rate_period') %>
-        <%= render "create_missing_policy", policy: period_policy, key: 'proof_submission_rate_period', default_value: 1 %>
-        <%= render "rate_limit_input", 
-            policy: period_policy,
-            label: "Time Window (hours)" %>
+        <%= render 'admin/policies/rate_limit_input', policy: @period_policy, label: 'Time Window (hours)' %>
       </div>
 
       <div class="grid grid-cols-1 gap-6">
         <div>
-          <% web_policy = @policies.find_by(key: 'proof_submission_rate_limit_web') %>
-          <%= render "create_missing_policy", policy: web_policy, key: 'proof_submission_rate_limit_web', default_value: 5 %>
-          <%= render "rate_limit_input", 
-              policy: web_policy,
-              label: "Portal Submissions" %>
+          <%= render 'admin/policies/rate_limit_input', policy: @web_policy, label: 'Portal Submissions' %>
         </div>
       </div>
     </div>
@@ -120,7 +117,7 @@
 
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Voucher Policies</h2>
-    
+
     <div class="bg-info-50 border-l-4 border-info-400 p-4 mb-6">
       <p class="text-sm text-info-700">
         Configure the voucher values for each disability type and other voucher-related settings.
@@ -140,26 +137,25 @@
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <% ['hearing', 'vision', 'speech', 'mobility', 'cognition'].each do |disability_type| %>
-            <% policy_key = "voucher_value_#{disability_type}_disability" %>
-            <% policy = @policies.find_by(key: policy_key) %>
+          <% @voucher_disability_rows.each do |disability_type, _, policy| %>
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                 <%= disability_type.titleize %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <%= render "create_missing_policy", policy: policy, key: policy_key, default_value: 500 %>
                 <% if policy %>
-                  <%= hidden_field_tag "policies[][id]", policy.id %>
+                  <%= hidden_field_tag 'policies[][id]', policy.id, id: nil %>
+                  <%= label_tag "policies_#{policy.id}_value", "#{disability_type.titleize} voucher value", class: 'sr-only' %>
                   <div class="relative rounded-md shadow-elevation-1 w-48">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span class="text-gray-500 sm:text-sm">$</span>
                     </div>
-                    <%= number_field_tag "policies[][value]",
-                        policy.value,
-                        class: "form-input pl-7",
-                        required: true,
-                        min: 0 %>
+                    <%= number_field_tag 'policies[][value]',
+                                         policy.value,
+                                         id: "policies_#{policy.id}_value", autocomplete: 'off',
+                                         class: 'form-input pl-7',
+                                         required: true,
+                                         min: 0 %>
                   </div>
                 <% end %>
               </td>
@@ -184,23 +180,22 @@
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
-            <% ['voucher_validity_period_months', 'voucher_minimum_redemption_amount'].each do |key| %>
-              <% policy = @policies.find_by(key: key) %>
-              <% default_value = key == 'voucher_validity_period_months' ? 6 : 10 %>
+            <% @voucher_setting_rows.each do |key, policy| %>
               <tr>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   <%= key.gsub('voucher_', '').humanize %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <%= render "create_missing_policy", policy: policy, key: key, default_value: default_value %>
                   <% if policy %>
-                    <%= hidden_field_tag "policies[][id]", policy.id %>
+                    <%= hidden_field_tag 'policies[][id]', policy.id, id: nil %>
+                    <%= label_tag "policies_#{policy.id}_value", key.delete_prefix('voucher_').humanize, class: 'sr-only' %>
                     <div class="relative rounded-md shadow-elevation-1 w-48">
-                      <%= number_field_tag "policies[][value]",
-                          policy.value,
-                          class: "form-input",
-                          required: true,
-                          min: 0 %>
+                      <%= number_field_tag 'policies[][value]',
+                                           policy.value,
+                                           id: "policies_#{policy.id}_value", autocomplete: 'off',
+                                           class: 'form-input',
+                                           required: true,
+                                           min: 0 %>
                     </div>
                   <% end %>
                 </td>
@@ -212,49 +207,40 @@
     </div>
   </div>
 
-  <div class="p-6 border-t border-gray-200">
-    <h2 class="text-lg font-medium text-gray-900 mb-4">Other System Policies</h2>
-    
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Policy Name
-            </th>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Value
-            </th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          <% @policies
-              .reject { |p| p.key.start_with?('fpl_') }
-              .reject { |p| p.key.start_with?('proof_submission_rate_') }
-              .reject { |p| p.key.start_with?('voucher_') }
-              .each do |policy| %>
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                <%= policy.key.humanize %>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <%= hidden_field_tag "policies[][id]", policy.id %>
-                <%= number_field_tag "policies[][value]",
-                    policy.value,
-                    class: "form-input w-32",
-                    required: true,
-                    min: 0 %>
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
+  <section class="p-6 border-t border-gray-200" aria-labelledby="other-system-policies-title">
+    <h2 id="other-system-policies-title" class="text-lg font-medium text-gray-900 mb-4">Other System Policies</h2>
+
+    <div class="divide-y divide-gray-200">
+      <% @policies
+           .reject { |p| p.key.start_with?('fpl_') }
+           .reject { |p| p.key.start_with?('proof_submission_rate_') }
+           .reject { |p| p.key.start_with?('voucher_') }
+           .each do |policy| %>
+        <% details = system_policy_details(policy.key) # rubocop:disable Lint/UselessAssignment -- Used by the following ERB output tags. %>
+        <div class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:gap-6">
+          <div class="min-w-0 text-sm text-gray-900">
+            <%= label_tag "policies_#{policy.id}_value", details[:label], class: 'block font-medium' %>
+            <p id="policy_<%= policy.id %>_description" class="mt-1 max-w-2xl text-gray-600"><%= details[:description] %></p>
+          </div>
+          <div>
+            <%= hidden_field_tag 'policies[][id]', policy.id, id: nil %>
+            <%= number_field_tag 'policies[][value]',
+                                 policy.value,
+                                 id: "policies_#{policy.id}_value", autocomplete: 'off',
+                                 aria: { describedby: "policy_#{policy.id}_description policy_#{policy.id}_unit" },
+                                 class: 'form-input w-32',
+                                 required: true,
+                                 min: 0 %>
+            <p id="policy_<%= policy.id %>_unit" class="mt-1 text-sm text-gray-600"><%= details[:unit] %></p>
+          </div>
+        </div>
+      <% end %>
     </div>
-  </div>
+  </section>
 
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Recent Policy Changes</h2>
-    
+
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
@@ -280,7 +266,7 @@
           <% @recent_changes.each do |change| %>
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <%= change.created_at.strftime("%B %d, %Y %I:%M %p") %>
+                <%= change.created_at.strftime('%B %d, %Y %I:%M %p') %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm font-medium text-gray-900">
@@ -313,8 +299,8 @@
 
     <div class="mt-4 text-right">
       <%= link_to changes_admin_policies_path,
-          data: { turbo_frame: "policies" },
-          class: "text-sm text-primary-600 hover:text-primary-500" do %>
+                  data: { turbo_frame: 'policies' },
+                  class: 'text-sm text-primary-600 hover:text-primary-500' do %>
         View Full Change History
         <span aria-hidden="true"> &rarr;</span>
       <% end %>
@@ -322,11 +308,11 @@
   </div>
 
   <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
-    <%= link_to "Cancel",
-        admin_applications_path,
-        class: "btn btn-outline" %>
-        
-    <%= form.submit "Update Policies",
-        class: "btn btn-primary" %>
+    <%= link_to 'Cancel',
+                admin_dashboard_path,
+                class: 'btn btn-outline', data: { turbo_frame: '_top' } %>
+
+    <%= form.submit 'Update Policies',
+                    class: 'btn btn-primary' %>
   </div>
 <% end %>

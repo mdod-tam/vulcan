@@ -6,6 +6,7 @@ require 'action_dispatch/testing/test_process'
 module Applications
   class PaperApplicationServiceTest < ActiveSupport::TestCase
     include PaperIdentityConfirmationHelper
+    include IcanconnectTestSupport
 
     include ActionDispatch::TestProcess::FixtureFile
 
@@ -656,6 +657,105 @@ module Applications
 
       assert service.errors.any? { |e| e.include?('Income exceeds') || e.include?('threshold') },
              'Expected error message about income threshold'
+    end
+
+    test 'paper income checks retain cents and accept a documented zero income' do
+      threshold = IncomeThresholdCalculationService.call(2).data.fetch(:threshold)
+      excessive = confirmed_paper_service({
+                                            constituent: @constituent_params, application: @application_params.merge(annual_income: (threshold + BigDecimal('0.01')).to_s('F')),
+                                            income_proof_action: 'accept', income_proof: uploaded_pdf
+                                          })
+      assert_no_difference 'Application.count' do
+        assert_not excessive.create
+      end
+      assert_includes excessive.errors, 'Income exceeds the maximum threshold for the household size.'
+
+      zero = confirmed_paper_service({
+                                       constituent: @constituent_params, application: @application_params.merge(annual_income: '0'),
+                                       income_proof_action: 'accept', income_proof: uploaded_pdf
+                                     })
+      assert zero.create, zero.errors.to_sentence
+      assert_equal 0, zero.application.annual_income
+      assert zero.application.income_proof_status_approved?
+    end
+
+    test 'paper acceptance starts ICC income verification from its actual proof decision and keeps later invoice edits historical' do
+      verified_on = Date.current
+      start_icanconnect!(on: verified_on)
+      application = nil
+      expense = nil
+      travel_to verified_on.in_time_zone.noon do
+        params = {
+          constituent: @constituent_params.merge(vision_disability: '1'), application: @application_params,
+          income_proof_action: 'accept', income_proof: uploaded_pdf,
+          residency_proof_action: 'accept', residency_proof: uploaded_pdf('residency_proof.pdf'),
+          id_proof_action: 'accept', id_proof: uploaded_pdf('id_proof.pdf'),
+          disability_certification_action: 'accept', disability_certification: uploaded_pdf('disability_certification_valid.pdf')
+        }
+        service = confirmed_paper_service(params)
+        assert service.create, service.errors.to_sentence
+        application = service.application.reload
+        assert application.status_approved?
+        review = application.proof_reviews.proof_type_income.status_approved.sole
+        assert_equal application.income_proof.blob.id, review.reviewed_blob_id
+        assert_equal @admin, review.admin
+        assert review.submission_method_paper?
+        assert_equal Time.current, review.reviewed_at
+        assert_equal Time.current, application.income_last_verified_at
+        assert_equal 3, application.proof_reviews.where(proof_type: %i[income residency id], status: :approved).count
+        assert_equal 0, Notification.where(action: 'proof_approved', notifiable: application).count
+        _order, unit = icc_order_with_unit(application:)
+        assert_not application.icanconnect_income_review_due?
+        expense = ApplicationServiceExpense.create!(application: application, equipment_item: unit, category: 'travel',
+                                                    service_date: verified_on, amount: '25.50')
+      end
+
+      travel_to (verified_on + 1.day).in_time_zone.noon do
+        assert_nothing_raised { Icanconnect::Funding.validate!(application, source: 'icanconnect', on: verified_on) }
+        Icanconnect::FilingWriter.new(actor: @admin).update_evidence!(record: expense, attributes: { vendor_invoice_number: 'LATER-INVOICE', amount: '26.50' },
+                                                                      lock_version: expense.lock_version)
+        assert_equal 'LATER-INVOICE', expense.reload.vendor_invoice_number
+        assert_equal BigDecimal('26.50'), expense.amount
+      end
+      travel_to verified_on.next_year.in_time_zone.noon do
+        assert application.icanconnect_income_review_due?
+        assert application.status_approved?
+      end
+    end
+
+    test 'paper accepted benefit evidence ignores hidden numeric fields without dropping income proof review' do
+      service = confirmed_paper_service({
+                                          constituent: @constituent_params, application: @application_params.merge(annual_income: '999999'),
+                                          no_income_information: '1', income_proof_action: 'accept', income_proof: uploaded_pdf
+                                        })
+      assert service.create, service.errors.to_sentence
+      assert service.application.income_proof_required?
+      assert service.application.income_proof_status_approved?
+      assert service.application.income_proof.attached?
+      assert_nil service.application.annual_income
+      assert_nil service.application.household_size
+    end
+
+    test 'paper income rejects invalid and negative amounts and explains policy failure' do
+      ['not an amount', '-0.01', '1,2', '10.005'].each do |amount|
+        service = confirmed_paper_service({
+                                            constituent: @constituent_params, application: @application_params.merge(annual_income: amount),
+                                            income_proof_action: 'accept', income_proof: uploaded_pdf
+                                          })
+        assert_no_difference 'Application.count' do
+          assert_not service.create
+        end
+        assert_includes service.errors, 'Enter annual income as zero or a positive amount.'
+      end
+      Policy.find_by!(key: 'fpl_2_person').destroy!
+      service = confirmed_paper_service({
+                                          constituent: @constituent_params, application: @application_params,
+                                          income_proof_action: 'accept', income_proof: uploaded_pdf
+                                        })
+      assert_no_difference 'Application.count' do
+        assert_not service.create
+      end
+      assert_includes service.errors, 'Income thresholds could not be checked. Please try again later.'
     end
 
     test 'failed create after user creation rolls back the new user' do

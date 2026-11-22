@@ -20,9 +20,8 @@ module ConstituentPortal
       assert_redirected_to constituent_portal_product_path(@product)
     end
 
-    test 'devices and details agree on voucher evidence while user catalog membership grants nothing' do
+    test 'devices and details agree on voucher evidence and exclude unrelated catalog rows' do
       unrelated = create(:product, name: 'Catalog membership only')
-      @user.products << unrelated
       get constituent_portal_products_path
       assert_response :success
       assert_select 'a[href=?]', constituent_portal_product_path(@product), text: /Known historical model/
@@ -55,6 +54,33 @@ module ConstituentPortal
       create(:guardian_relationship, guardian_user: other_guardian, dependent_user: dependent)
       managed.update!(managing_guardian: other_guardian)
       get constituent_portal_product_path(managed_product)
+      assert_response :not_found
+    end
+
+    test 'guardian-only dashboard index and details share access to in-progress guidance' do
+      guardian = create(:constituent)
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+      application = create(:application, :approved, :with_all_proofs, user: dependent, managing_guardian: guardian)
+      product = create(:product, name: 'Pending managed exact model')
+      create(:product_resource, product:, title: 'Pending device guide')
+      create(:equipment_item, application:, product:)
+      hidden = create(:product, name: 'Unsent managed model')
+      create(:equipment_item, application:, product: hidden, purchase_order: create(:purchase_order, sent_at: nil))
+      sign_in_for_integration_test(guardian)
+
+      get constituent_portal_dashboard_path
+      assert_response :success
+      assert_select '#my-equipment-heading', text: 'My equipment & help'
+      assert_select 'h3', text: "Devices for #{dependent.full_name}"
+      assert_includes response.body, 'Order in progress'
+      assert_not_includes response.body, hidden.name
+      get constituent_portal_products_path
+      assert_select 'li', text: /Order in progress.*1 unit/m
+      get constituent_portal_product_path(product)
+      assert_response :success
+      assert_includes response.body, 'Pending device guide'
+      get constituent_portal_product_path(hidden)
       assert_response :not_found
     end
 

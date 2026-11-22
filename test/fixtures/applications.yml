@@ -276,7 +276,7 @@ submitted_status_application:
   submission_method: web
 
 awaiting_dcf_application:
-  user: confirmed_user2
+  user: awaiting_dcf_constituent
   status: awaiting_dcf
   application_date: <%= Time.current - 10.days %>
   household_size: 3

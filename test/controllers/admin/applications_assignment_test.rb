@@ -157,6 +157,88 @@ module Admin
       assert_equal trainer.id, other_application.reload.assigned_trainer_id
     end
 
+    test 'dashboard trainer assignment uses the normal writer and returns to its queue' do
+      trainer = create(:trainer)
+      @application.update!(training_requested_at: Time.current)
+
+      assert_difference ['TrainingSession.count', "Event.where(action: 'trainer_assigned').count"], 1 do
+        post assign_trainer_admin_application_path(@application), params: { trainer_id: trainer.id, return_context: 'training_dashboard' }
+      end
+
+      assert_redirected_to trainers_dashboard_path(anchor: 'needs-trainer-section')
+      assert_equal trainer.id, @application.reload.assigned_trainer_id
+      session = @application.training_sessions.sole
+      assert_equal trainer.id, session.trainer_id
+      assert_predicate session, :status_requested?
+      assert_equal @admin.id, @application.events.find_by!(action: 'trainer_assigned').user_id
+      assert_equal I18n.t('admin.applications.assign_trainer.trainer_assign_pass'), flash[:notice]
+    end
+
+    test 'dashboard assignment failures return safely without changing coverage' do
+      trainer = create(:trainer)
+      @application.update!(application_date: (Policy.waiting_period_years + 1).years.ago.to_date)
+
+      assert_no_difference ['TrainingSession.count', 'Notification.count', "Event.where(action: 'trainer_assigned').count"] do
+        post assign_trainer_admin_application_path(@application), params: { trainer_id: trainer.id, return_context: 'training_dashboard' }
+      end
+
+      assert_redirected_to trainers_dashboard_path(anchor: 'needs-trainer-section')
+      assert_match(/service window/i, flash[:alert])
+      assert_nil @application.reload.assigned_trainer_id
+
+      post assign_trainer_admin_application_path(@application), params: { trainer_id: '', return_context: 'https://example.org/elsewhere' }
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'Select an active trainer.', flash[:alert]
+    end
+
+    test 'dashboard evaluator assignment uses the canonical writer and returns to its queue' do
+      evaluator = create(:evaluator)
+
+      assert_difference ['Evaluation.count', "Event.where(action: 'evaluator_assigned').count"], 1 do
+        post assign_evaluator_admin_application_path(@application), params: { evaluator_id: evaluator.id, return_context: 'evaluation_dashboard' }
+      end
+
+      assert_redirected_to evaluators_dashboard_path(anchor: 'needs-evaluator-section')
+      evaluation = @application.evaluations.sole
+      assert_equal evaluator.id, evaluation.evaluator_id
+      assert_predicate evaluation, :status_requested?
+      assert_equal @admin.id, @application.events.find_by!(action: 'evaluator_assigned').user_id
+      assert_equal I18n.t('admin.applications.assign_evaluator.eval_assign_pass'), flash[:notice]
+    end
+
+    test 'dashboard evaluator assignment failures and unknown return contexts keep fixed safe destinations' do
+      evaluator = create(:evaluator)
+      @application.update!(application_date: (Policy.waiting_period_years + 1).years.ago.to_date)
+
+      assert_no_difference ['Evaluation.count', 'Notification.count', "Event.where(action: 'evaluator_assigned').count"] do
+        assert_no_enqueued_emails do
+          post assign_evaluator_admin_application_path(@application), params: { evaluator_id: evaluator.id, return_context: 'evaluation_dashboard' }
+        end
+      end
+      assert_redirected_to evaluators_dashboard_path(anchor: 'needs-evaluator-section')
+      assert_match(/service window/i, flash[:alert])
+
+      @application.update!(application_date: Date.current)
+      post assign_evaluator_admin_application_path(@application), params: { evaluator_id: '', return_context: 'evaluation_dashboard' }
+      assert_redirected_to evaluators_dashboard_path(anchor: 'needs-evaluator-section')
+      assert_equal 'Select an active evaluator.', flash[:alert]
+
+      post assign_evaluator_admin_application_path(@application), params: { evaluator_id: '', return_context: 'https://example.org/elsewhere' }
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'Select an active evaluator.', flash[:alert]
+    end
+
+    test 'evaluator dashboard context does not grant assignment permission to an evaluator' do
+      evaluator = create(:evaluator)
+      sign_in_for_integration_test(evaluator, bypass_mfa_enrollment: true)
+
+      assert_no_difference ['Evaluation.count', "Event.where(action: 'evaluator_assigned').count"] do
+        post assign_evaluator_admin_application_path(@application), params: { evaluator_id: evaluator.id, return_context: 'evaluation_dashboard' }
+      end
+
+      assert_redirected_to root_path
+    end
+
     test 'trainer assignment post is blocked when completed training quota is exhausted' do
       Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
       Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)

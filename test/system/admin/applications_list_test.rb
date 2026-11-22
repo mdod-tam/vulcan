@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module Admin
   class ApplicationsListSystemTest < ApplicationSystemTestCase
+    include SystemTestEvidence
+
     setup do
       FeatureFlag.disable!(:vouchers_enabled)
       ensure_system_audit_actor!
@@ -152,7 +154,7 @@ module Admin
       browser&.network&.intercept(pattern: 'about:blank')
     end
 
-    test 'choosing a status leaves the Dashboard shortcut queue and keeps the other filters' do
+    test 'choosing a status leaves the review task queue and keeps the other filters' do
       received = create(:application, :in_progress,
                         disability_certification_status: :received,
                         user: create(:constituent, last_name: 'QueueChange'), created_at: 2.days.ago)
@@ -161,14 +163,16 @@ module Admin
                         disability_certification_status: :requested,
                         user: create(:constituent, last_name: 'QueueChange'), created_at: 2.days.ago)
       sign_in(@admin, bypass_mfa_enrollment: true)
-      find('#common-tasks a[href*="filter=disability_certs_to_review"]').click
+      visit admin_applications_path(view: 'review')
+      find('#common-tasks a[href*="filter=certifications_needing_review"]').click
+      within('nav[aria-label="Certification review filters"]') { click_link 'Received documents' }
       assert_selector "#application_#{received.id}"
       assert_no_selector "#application_#{awaiting.id}"
       fill_in 'q', with: 'QueueChange'
       assert_selector 'input#q[value="QueueChange"]'
       select 'Last 30 days', from: 'date_range'
       assert_selector 'input[name="filter"][value="disability_certs_to_review"]', visible: :all
-      take_screenshot('dashboard-shortcut-before-status-change', html: true, full: true)
+      take_screenshot('review-task-before-status-change', html: true, full: true)
 
       select 'Awaiting certification', from: 'status'
 
@@ -180,14 +184,14 @@ module Admin
       query = Rack::Utils.parse_nested_query(URI.parse(page.current_url).query)
       assert_nil query['filter']
       assert_equal 'awaiting_dcf', query['status']
-      take_screenshot('dashboard-shortcut-after-status-change', html: true, full: true)
+      take_screenshot('review-task-after-status-change', html: true, full: true)
     end
 
     test 'Dashboard enters the approved pipeline and date filters update cards and the actionable list together' do
       older = approved_application('Old backlog', days: 150)
       recent = approved_application('Recent backlog', days: 10)
       no_equipment = approved_application('Training requested', days: 40)
-      no_equipment.update!(equipment_needs_initialized_at: 20.days.ago, training_requested_at: 5.days.ago)
+      no_equipment.update!(equipment_needs_initialized_at: 20.days.ago, equipment_needs_decided_at: 20.days.ago, training_requested_at: 5.days.ago)
       voucher_application = approved_application('Expired voucher', days: 250)
       voucher_application.update!(fulfillment_type: :voucher)
       create(:voucher, application: voucher_application, issued_at: Policy.voucher_validity_period.ago - 8.days, remaining_value: 180)
@@ -200,26 +204,32 @@ module Admin
       fill_in 'q', with: 'PipelinePolish'
       assert_selector "#application_#{older.id}"
       assert_selector "#application_#{recent.id}"
-      assert_selector '[data-pipeline-stage="evaluator"]', text: '2'
-      assert_selector '[data-pipeline-stage="tracking"]', text: 'Awaiting shipment'
-      assert_selector '[data-pipeline-stage="recorded"]', text: 'Shipment recorded'
-      assert_selector "#application_#{tracking_only.id}", text: '0 shipped'
+      assert_selector '[data-pipeline-stage="needs_evaluator"]', text: '2'
+      assert_selector '[data-pipeline-stage="awaiting_shipment"]', text: 'Enter shipping info'
+      assert_selector '[data-pipeline-stage="awaiting_delivery"]', text: 'Awaiting delivery'
+      assert_selector '[data-pipeline-stage="shipment_recorded"]', text: 'View shipment history'
+      assert_selector "#application_#{tracking_only.id}", text: '0 of 1 unit shipped'
       assert_no_selector '[data-pipeline-stage="voucher_expired"]'
+      assert_selector '[data-pipeline-stage]', count: 8
       take_screenshot('approved-pipeline-equipment', html: true, full: true)
+      page.current_window.resize_to(390, 844)
+      assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=, 390
+      take_screenshot('approved-pipeline-stages-narrow', html: true, full: true)
+      page.current_window.resize_to(1200, 800)
 
       select 'Last 30 days', from: 'date_range'
       assert_no_selector "#application_#{older.id}"
       assert_selector "#application_#{recent.id}"
-      assert_selector '[data-pipeline-stage="evaluator"]', text: '1'
-      find('[data-pipeline-stage="evaluator"]').click
-      assert_selector '[data-pipeline-stage="evaluator"][aria-current="page"]'
+      assert_selector '[data-pipeline-stage="needs_evaluator"]', text: '1'
+      find('[data-pipeline-stage="needs_evaluator"]').click
+      assert_selector '[data-pipeline-stage="needs_evaluator"][aria-current="page"]'
       take_screenshot('approved-pipeline-date-and-stage', html: true, full: true)
 
       select 'All time', from: 'date_range'
       within('nav[aria-label="Approved application groups"]') { find('a', text: /Vouchers/).click }
       find('[data-pipeline-stage="voucher_expired"]').click
       assert_selector "#application_#{voucher_application.id}", text: '$180.00'
-      assert_no_selector '[data-pipeline-stage="evaluator"]'
+      assert_no_selector '[data-pipeline-stage="needs_evaluator"]'
       take_screenshot('approved-pipeline-expired-value', html: true, full: true)
 
       within('nav[aria-label="Approved application groups"]') { find('a', text: /No equipment needed/).click }
@@ -227,8 +237,77 @@ module Admin
       assert_no_selector '[data-pipeline-stage="voucher_expired"]'
       take_screenshot('approved-pipeline-training-only', html: true, full: true)
       select 'Last 30 days', from: 'date_range'
-      assert_text 'No applications match these filters.'
+      assert_text 'No applications in this fulfillment group.'
       take_screenshot('approved-pipeline-empty-filter', html: true, full: true)
+    end
+
+    test 'fulfillment card names the device family and the next bid action' do
+      application = create(:application, :approved, :with_all_proofs,
+                           user: create(:constituent, first_name: 'Samuel', last_name: 'Reed'),
+                           fulfillment_type: :equipment, equipment_needs_initialized_at: 1.day.ago)
+      product = create(:product, name: 'Apple iPhone 18 Pro Max', manufacturer: 'Apple', model_number: 'iPhone 18 Pro Max 512GB Pipeline Blue')
+      need = create(:equipment_need, application: application, product: product,
+                                     disability_setup_group: nil, unfulfilled_since: 1.day.ago)
+      card_selector = 'article:has([data-pipeline-stage="needs_fulfillment"])'
+      pipeline_path = admin_applications_path(view: 'pipeline', group: 'equipment', q: 'Reed')
+      equipment_path = admin_equipment_index_path(tab: 'needs_ordering', application_id: application.id)
+      sign_in(@admin, bypass_mfa_enrollment: true)
+      page.current_window.resize_to(1200, 800)
+      visit pipeline_path
+
+      within(card_selector) do
+        assert_link 'Samuel Reed — iPhone', href: equipment_path
+        assert_text 'Next: Prepare bid'
+        assert_selector 'p', text: 'Average wait: 1 day', exact_text: true
+        assert_no_text '1 days'
+        assert_no_text 'Apple'
+        assert_no_text '18 Pro Max'
+        assert_no_text 'Review equipment'
+      end
+      within("#application_#{application.id}") do
+        assert_link 'Prepare bid', href: equipment_path
+        assert_no_link 'Review equipment'
+      end
+      take_screenshot('approved-pipeline-fulfillment-device', html: true, full: true)
+      take_evidence_screenshot('approved-pipeline-fulfillment-card', html: true, selector: card_selector)
+
+      page.current_window.resize_to(390, 844)
+      assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=, 390
+      assert_selector card_selector, text: 'Samuel Reed — iPhone'
+      take_screenshot('approved-pipeline-fulfillment-device-narrow', html: true, full: true)
+      within(card_selector) { click_link 'Samuel Reed — iPhone' }
+      assert_current_path equipment_path
+      assert_selector 'h1', text: 'Needs bid number'
+      assert_text product.name
+      assert_text 'Samuel Reed'
+
+      need.update!(disability_setup_group: 'deaf')
+      page.current_window.resize_to(1200, 800)
+      visit pipeline_path
+      within(card_selector) do
+        assert_text 'Needs bid number'
+        assert_link 'Samuel Reed — iPhone', href: equipment_path
+      end
+      within("#application_#{application.id}") { assert_link 'Enter bid number', href: equipment_path }
+      take_evidence_screenshot('approved-pipeline-fulfillment-ready-card', html: true, selector: card_selector)
+
+      unselected = create(:application, :approved, :with_all_proofs,
+                          user: create(:constituent, first_name: 'Robin', last_name: 'CatalogChoice'),
+                          fulfillment_type: :equipment, equipment_needs_initialized_at: 1.day.ago)
+      visit admin_applications_path(view: 'pipeline', group: 'equipment', q: 'CatalogChoice')
+      within("#application_#{unselected.id}") { click_link 'Choose equipment for bid' }
+      assert_current_path edit_admin_application_equipment_needs_path(unselected), ignore_query: true
+      select product.catalog_label, from: 'Catalog model'
+      fill_in 'Reason for adjustment', with: 'Choose the device for the bid.'
+      take_screenshot('approved-pipeline-unselected-device-editor', html: true, full: true)
+      click_button 'Save purchasing needs'
+      assert_current_path admin_equipment_index_path(tab: 'needs_ordering', application_id: unselected.id)
+      assert_text 'Purchasing needs updated.'
+      assert_text product.name
+      assert_text 'Robin CatalogChoice'
+      take_screenshot('approved-pipeline-selected-device-queue', html: true, full: true)
+    ensure
+      page.current_window.resize_to(1200, 800)
     end
 
     private

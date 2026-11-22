@@ -1,0 +1,29 @@
+<%# locals: (item:, candidates:, return_context:) -%>
+<% if item.stock? && item.application_id? && !item.shipped_at? && !item.withdrawn_at? %>
+<section class="border rounded p-4 space-y-4">
+    <h2 class="text-xl font-semibold">Stock reservation</h2>
+    <p>Releasing returns this device to stock. Swapping reserves another device of the same model. Each device keeps its identifiers and purchase history.</p>
+<%= form_with url: admin_stock_allocation_path(item), method: :patch, class: 'space-y-3' do |form| %>
+<% return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
+<%= hidden_field_tag :expected_version, item.lock_version %>
+<label>
+<%= check_box_tag :restore, '1', true %> Keep the request open when returning this device to stock.</label>
+<%= label_tag 'release-reason', 'Release reason', class: 'form-label' %>
+<%= text_field_tag :reason, nil, required: true, autocomplete: 'off', id: 'release-reason', class: 'form-input' %>
+<%= form.submit 'Release stock reservation', class: 'btn btn-outline', data: { turbo_confirm: 'Release this stock reservation?' } %>
+<% end %>
+<% if candidates.any? %>
+<%= form_with url: admin_stock_allocation_path(item), method: :patch, class: 'space-y-3' do |form| %>
+<% return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
+<%= hidden_field_tag :expected_version, item.lock_version %>
+<%= label_tag :replacement_id, 'Replacement device (same model)', class: 'form-label' %>
+<%= select_tag :replacement_id, options_for_select(candidates.map { |unit|
+      ["Device ##{unit.id} · #{unit.serial_number.presence || 'Identifier not recorded'} · #{unit.stock_received_on}", "#{unit.id}:#{unit.lock_version}"]
+    }), required: true, class: 'form-input' %>
+<%= label_tag 'swap-reason', 'Swap reason', class: 'form-label' %>
+<%= text_field_tag :reason, nil, required: true, autocomplete: 'off', id: 'swap-reason', class: 'form-input' %>
+<%= form.submit 'Swap reserved device', class: 'btn btn-outline' %>
+<% end %>
+<% end %>
+</section>
+<% end %>

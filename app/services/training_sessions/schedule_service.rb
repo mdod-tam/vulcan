@@ -19,7 +19,7 @@ module TrainingSessions
         @training_session.update!(attributes)
         AuditEventService.log(
           actor: @actor, action: 'training_scheduled', auditable: @training_session,
-          metadata: { application_id: @training_session.application_id, training_session_id: @training_session.id,
+          metadata: { operation_id: SecureRandom.uuid, application_id: @training_session.application_id, training_session_id: @training_session.id,
                       scheduled_for: @training_session.scheduled_for.iso8601 }
         )
         @notification_outcome = TrainingSessionNotifier.new(

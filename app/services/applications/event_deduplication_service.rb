@@ -73,12 +73,15 @@ module Applications
         [event.recipient_id, metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
       when 'cert_upload_requested'
         metadata['secure_request_form_id'].to_s
+      when 'equipment_shipment_notice'
+        event.id.to_s
       end
     end
 
     def fingerprint_for_event(event)
       metadata = event.metadata.is_a?(Hash) ? event.metadata.stringify_keys : {}
       return metadata['operation_id'].presence || event.id.to_s if event.action.start_with?('equipment_')
+      return metadata['operation_id'].presence || event.id.to_s if event.action.in?(Icanconnect::FINANCIAL_HISTORY_ACTIONS)
       return metadata['operation_id'].presence || event.id.to_s if event.auditable_type == 'Voucher'
 
       case event.action

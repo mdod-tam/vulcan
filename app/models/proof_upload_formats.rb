@@ -24,7 +24,8 @@ module ProofUploadFormats
     proof: { bytes: PROOF_MAX_BYTES, inclusive: true },
     certification: { bytes: 10.megabytes, inclusive: true },
     w9: { bytes: 10.megabytes, inclusive: false },
-    product_resource: { bytes: 10.megabytes, inclusive: true }
+    product_resource: { bytes: 10.megabytes, inclusive: true },
+    financial_evidence: { bytes: 10.megabytes, inclusive: true }
   }.freeze
 
   # Public secure forms refuse near-empty files; other channels set no minimum.
@@ -34,7 +35,7 @@ module ProofUploadFormats
   GENERATED_SOURCES = %w[docuseal].freeze
 
   def self.content_types(purpose = nil)
-    purpose == :product_resource ? ['application/pdf'] : ALLOWED_CONTENT_TYPES
+    %i[product_resource financial_evidence].include?(purpose) ? ['application/pdf'] : ALLOWED_CONTENT_TYPES
   end
 
   def self.allowed_content_types_json(purpose = nil)

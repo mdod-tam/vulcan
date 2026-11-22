@@ -47,9 +47,14 @@ module ProofUploadFormatsHelper
 
   def document_scan_context(model)
     if document_scan_new_context?(model)
-      @document_scan_context ||= params[:document_scan_context].to_s.match?(/\A[0-9a-f-]{36}\z/i) ? params[:document_scan_context] : SecureRandom.uuid
-    elsif controller_path == 'constituent_portal/applications'
+      return @document_scan_context ||= params[:document_scan_context].to_s.match?(/\A[0-9a-f-]{36}\z/i) ? params[:document_scan_context] : SecureRandom.uuid
+    end
+
+    case controller_path
+    when 'constituent_portal/applications'
       "application:#{model.user_id || current_user.id}:#{model.application_date&.year || Date.current.year}"
+    when 'admin/icanconnect/financial_records'
+      "#{controller_path}:#{model.class.name}:#{model.id}:#{model.lock_version}"
     else
       "#{controller_path}:#{(model.respond_to?(:id) && model.id) || params[:application_id] || 'new'}"
     end

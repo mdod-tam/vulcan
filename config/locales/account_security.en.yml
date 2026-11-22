@@ -84,8 +84,6 @@ en:
     password_access_link: Set or reset your password
     support_html: 'Still need help? Contact the MAT Team at %{email}.'
     introduction: Enter your email address to receive a link and finish creating your account.
-    email_help: You will choose your password after confirming your email. This step does not
-      sign you in.
     invalid_email: Enter a valid email address.
     send_link: Send verification link
     sending: Sending…

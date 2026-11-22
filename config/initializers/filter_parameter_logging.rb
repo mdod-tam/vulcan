@@ -63,3 +63,15 @@ Rails.application.config.filter_parameters += [
 # Redact Postmark parameters before request logging, including rejected callbacks.
 Rails.application.config.middleware.insert_before Rails::Rack::Logger, Webhooks::EmailEventsParameterFilter
 Rails.application.config.middleware.insert_before Rails::Rack::Logger, Security::CspReportFilter
+
+Rails.application.config.filter_parameters += %i[shipping_care_of shipping_address_1 shipping_address_2 shipping_city
+                                                 shipping_state shipping_zip_code shipping_instructions]
+
+Rails.application.config.filter_parameters += %i[financial_document vendor_invoice_number
+                                                 annual_income household_size hourly_rate mileage mileage_rate billable_hours
+                                                 unit_cost shipping_cost tax_cost other_cost invoice_total amount
+                                                 correction_reason correction_reference external_reference]
+
+Rails.application.config.filter_parameters += [:search]
+
+Rails.application.config.filter_parameters += %i[program_disability_groups disability_setup_group supplier_setup_group]

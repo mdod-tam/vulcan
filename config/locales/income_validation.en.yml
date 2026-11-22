@@ -1,0 +1,7 @@
+en:
+  applications:
+    income_validation:
+      title: "Income Exceeds Threshold"
+      limit: "The income limit for your household size is %{threshold} per year."
+      ineligible: "Households above this limit are not eligible for this program."
+      unavailable: "We couldn't check the income limit. Please try again later."

@@ -13,7 +13,13 @@ en:
       es: Spanish
     devices:
       heading: Devices
-      description: Devices purchased with program vouchers or shipped by the program, grouped by beneficiary.
+      description: Program equipment and completed voucher purchases, grouped by beneficiary.
+      dashboard_heading: My equipment & help
+      in_progress: Equipment fulfillment in progress
+      in_progress_details: Check here for your devices and instructions as they become available.
+      quantity:
+        one: 1 unit
+        other: "%{count} units"
       shipment_notice: Shipment is recorded by the program; it does not confirm receipt.
       beneficiary: "Devices for %{name}"
       model: "Model: %{number}"
@@ -24,6 +30,8 @@ en:
       sources:
         voucher_purchase: Purchased with voucher
         program_shipment: Shipped by the program
+        order_in_progress: Order in progress
+        stock_preparation: Preparing shipment from stock
     heading_for: "Guides for %{product}"
     external_context: " — %{product}, %{language}, external link, opens in a new tab"
     pdf_context: " — %{product}, %{language}, PDF download, %{size}"

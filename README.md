@@ -146,7 +146,7 @@ bin/rails db:seed
 
 Review the [policy defaults](app/services/baseline/policies.rb) before initializing. Routine policy changes belong in the [policy-management workflow](docs/features/application_workflow_guide.md#program-policies). The general `db:seed` task is the demo seed for development/test; it depends on FactoryBot and clears existing records.
 
-Products come from [products.yml](test/fixtures/products.yml) in the demo seed. There is no standalone product seed task; production products can be entered through the admin product workflow.
+Run `bin/rails db:seed_products` after migrating an initialized environment to refresh the [checked-in product catalog](db/seeds/products.yml). See [equipment catalog rollout](docs/infrastructure/setup_and_maintenance.md#equipment-catalog-rollout) for draft products and first release checks.
 
 ### Initial accounts
 

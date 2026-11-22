@@ -1,9 +1,83 @@
-<div class="max-w-7xl mx-auto px-4 py-6">
-  <h1 class="text-2xl font-bold mb-4">PO <%= @purchase_order.number %></h1>
-  <p><%= @purchase_order.vendor.business_name %> · Date PO sent: <%= accessible_date_value(@purchase_order.sent_at) %> · <%= @purchase_order.shipment_status %></p>
-  <p class="my-4"><%= link_to 'Correct shared purchase order', edit_admin_purchase_order_correction_path(@purchase_order, return_context: @return_context),
-                              class: 'text-primary-700 underline' %> · <%= link_to 'Back to Equipment',
-                                                                                   equipment_return_path(@return_context), class: 'text-primary-700 underline' %></p>
-  <%= render 'admin/applications/equipment_items', items: @purchase_order.equipment_items, audit_records: @equipment_audit_records, return_context: @return_context %>
-  <%= render 'admin/equipment_items/history', events: @history, title: 'Order and device history', audit_records: @equipment_audit_records %>
+<div class="max-w-7xl mx-auto px-4 py-6 space-y-4">
+  <header class="flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0 space-y-2 break-words">
+      <h1 class="text-2xl font-bold">Purchase order <%= @purchase_order.number %></h1>
+      <p>
+        <strong><%= @purchase_order.vendor_name.presence || 'Vendor name needed' %></strong>
+        · <%= @purchase_order.purpose.humanize %> · <%= equipment_funding_label(@purchase_order) %>
+        <% if @purchase_order.sent_at %> · Sent <%= accessible_date_value(@purchase_order.sent_at) %><% end %>
+        · <%= @purchase_order.shipment_status %>
+      </p>
+      <%= link_to 'Correct purchase order details', edit_admin_purchase_order_correction_path(@purchase_order, return_context: @return_context),
+                  class: 'text-primary-700 underline' %>
+      <% if @purchase_order.vendor_name.blank? %>
+        <%= link_to 'Add vendor name', '#costs_vendor_name', class: 'ml-3 text-primary-700 underline' %>
+      <% end %>
+    </div>
+    <nav aria-label="Return navigation" class="flex flex-wrap gap-3">
+      <%= link_to 'Back to Dashboard', admin_dashboard_path, class: 'btn btn-outline' %>
+      <%= link_to 'Back to Purchase Orders', admin_purchase_orders_path, class: 'btn btn-outline' %>
+    </nav>
+  </header>
+  <%= render 'admin/purchase_orders/supplier_list', purchase_order: @purchase_order %>
+  <% missing_shipping_details = @purchase_order.devices_missing_shipping_details # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <% if missing_shipping_details.any? %>
+    <div id="order-shipping-details" class="rounded border border-warning-300 bg-warning-50 p-4">
+      <p>Confirm the shipping address and setup before sending this PO.</p>
+      <ul class="mt-2 list-disc pl-5">
+        <% missing_shipping_details.each do |item| %>
+          <li><%= link_to "Review shipping details for device ##{item.id}", edit_admin_equipment_item_path(item), class: 'text-primary-700 underline' %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% elsif @purchase_order.program_stock? && !@purchase_order.shipping_ready? %>
+    <p class="rounded border border-warning-300 bg-warning-50 p-4">
+      <%= link_to 'Confirm the program receiving address', edit_admin_purchase_order_correction_path(@purchase_order), class: 'text-primary-700 underline' %>
+      before sending this PO.
+    </p>
+  <% end %>
+  <% if @vendor_shipping_form || @vendor_shipping_request %>
+    <%= render 'admin/purchase_orders/vendor_shipping', order: @purchase_order, shipping_request: @vendor_shipping_request, draft: @vendor_shipping_form %>
+  <% end %>
+  <% unless @purchase_order.sent_at %>
+    <%= tag.details id: 'po-sent-date', open: !@vendor_shipping_form, class: 'rounded border border-gray-200 p-4' do %>
+      <summary class="cursor-pointer font-medium text-primary-700"><%= @vendor_shipping_form ? 'Sent outside MAT?' : 'Record PO sent date' %></summary>
+      <%= form_with url: send_order_admin_purchase_order_path(@purchase_order), method: :patch, class: 'mt-3 flex flex-wrap items-end gap-3' do |form| %>
+        <%= hidden_field_tag :expected_version, @purchase_order.lock_version %>
+        <div>
+          <%= label_tag :sent_at, 'Actual PO sent date', class: 'form-label' %>
+          <%= date_field_tag :sent_at, nil, max: Date.current, required: true, autocomplete: 'off', class: 'form-input' %>
+        </div>
+        <%= form.submit 'Mark PO sent', class: 'btn btn-outline' %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <% if @purchase_order.program_stock? %>
+    <h2 class="text-xl font-semibold">Stock receipt</h2>
+    <% if @purchase_order.sent_at && @purchase_order.stock_receipt_counts.outstanding.positive? %>
+      <%= link_to 'Receive into stock', new_admin_purchase_order_stock_receipt_path(@purchase_order), class: 'btn btn-primary' %>
+    <% end %>
+    <% @purchase_order.equipment_items.group_by(&:product).each do |product, items| %>
+      <% counts = @purchase_order.stock_receipt_counts(items) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <p>
+        <%= equipment_catalog_label(product) %>: <%= counts.received %> received
+        · <%= counts.cancelled %> cancelled
+        · <%= counts.outstanding %> outstanding
+      </p>
+    <% end %>
+  <% end %>
+  <%= render 'admin/purchase_orders/device_records',
+             items: @purchase_order.equipment_items, audit_records: @equipment_audit_records, return_context: @return_context %>
+  <section class="rounded border border-gray-200 p-4 space-y-4" aria-labelledby="purchase-order-costs-title">
+    <h2 id="purchase-order-costs-title" class="text-xl font-semibold">Costs and invoice</h2>
+    <%= render 'admin/purchase_order_costs/form', purchase_order: @purchase_order %>
+    <div class="space-y-2 border-t border-gray-200 pt-4">
+      <h3 class="font-semibold">PO invoice and shared charges</h3>
+      <p id="purchase-order-invoice-help" class="text-sm text-gray-600">Enter shipping, tax and any other charges, then upload the invoice.</p>
+      <%= link_to 'Edit PO invoice and charges', edit_admin_icanconnect_financial_record_path("PurchaseOrder:#{@purchase_order.id}"),
+                  class: 'btn btn-outline', aria: { describedby: 'purchase-order-invoice-help' } %>
+    </div>
+  </section>
+  <%= render 'admin/equipment_items/history', events: @history, audit_records: @equipment_audit_records,
+                                              title: 'Order, receipt and device history', expanded: true, history_id: 'purchase-order-history' %>
 </div>

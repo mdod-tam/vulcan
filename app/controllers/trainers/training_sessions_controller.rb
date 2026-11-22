@@ -7,7 +7,7 @@ module Trainers
       schedule_additional: %i[scheduled_for location internal_notes],
       follow_up: %i[scheduled_for location internal_notes reschedule_reason],
       reschedule: %i[scheduled_for location reschedule_reason],
-      complete: %i[completed_at product_trained_on_id duration_hours internal_notes constituent_summary summary_locale],
+      complete: [:completed_at, :product_trained_on_id, :duration_hours, :internal_notes, :constituent_summary, :summary_locale, { equipment_item_ids: [] }],
       cancel: %i[cancellation_reason cancellation_initiator],
       no_show: %i[no_show_notes]
     }.freeze
@@ -122,7 +122,10 @@ module Trainers
       @previous_training_sessions = @training_session.previous_completed_sessions.includes(:trainer, :product_trained_on)
       @evaluation_recommendations = @application.evaluations.completed_sessions.by_report_submission.includes(:recommended_products).first
       @known_products = ::Applications::ProductHistory.new(applications: Application.where(id: @application.id)).products
-      @available_products = @known_products + Product.order(:name, :id).where.not(id: @known_products.map(&:id)).to_a
+      @available_products = @known_products.select(&:model_confirmed?) + Product.model_confirmed.order(:name, :id).where.not(id: @known_products.map(&:id)).to_a
+      if @training_session.status_scheduled? || @training_session.status_confirmed?
+        @completion_equipment_items = @application.equipment_items.active.includes(:product).order(:id).to_a
+      end
       @activity_logs = ::TrainingSessions::AuditLogBuilder.new(@training_session).build
       @training_notifications = Notification.where(notifiable: @training_session).order(created_at: :desc, id: :desc)
       EmailDelivery::Visibility.preload(@training_notifications)

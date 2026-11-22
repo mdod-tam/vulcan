@@ -1,0 +1,20 @@
+<%# locals: (changes:, records:) -%>
+<table class="admin-record-table table-fixed">
+  <caption class="sr-only">Field changes</caption>
+  <thead>
+    <tr>
+      <th scope="col" class="w-[28%]">Field</th>
+      <th scope="col">Before</th>
+      <th scope="col">After</th>
+    </tr>
+  </thead>
+  <tbody>
+    <% changes.each do |field, label, before, after| %>
+      <tr>
+        <th scope="row"><%= label %></th>
+        <td><%= before.present? ? equipment_impact_value(field, before, **records) : 'No value' %></td>
+        <td class="font-medium"><%= after.present? ? equipment_impact_value(field, after, **records) : 'Cleared' %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>

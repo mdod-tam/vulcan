@@ -164,6 +164,9 @@ class ProofReview < ApplicationRecord
 
   # A disability certification rejection has its own flow and does not count toward the limit.
   def counts_toward_rejection_limit?
+    # An income update for later ICC work does not undo the original MAT approval.
+    return false if proof_type_income? && application.status_approved?
+
     status_rejected? && document_type&.counts_toward_rejection_limit
   end
 

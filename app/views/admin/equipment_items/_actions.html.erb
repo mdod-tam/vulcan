@@ -1,0 +1,15 @@
+<%# locals: (item:, return_context:) -%>
+<% unless item.withdrawn_at? %>
+  <div class="grid gap-3 sm:grid-cols-2">
+    <div class="space-y-2">
+      <%= link_to 'Edit price and receipt dates', edit_admin_icanconnect_financial_record_path("EquipmentItem:#{item.id}"),
+                  class: 'btn btn-outline', aria: { describedby: "equipment-item-#{item.id}-finance-help" } %>
+      <p id="equipment-item-<%= item.id %>-finance-help" class="text-sm text-gray-600">Record the price paid and the dates this device was received or installed.</p>
+    </div>
+    <div class="space-y-2">
+      <%= link_to 'Correct device or shipping details', edit_admin_equipment_item_path(item, return_context: return_context),
+                  class: 'btn btn-outline', aria: { describedby: "equipment-item-#{item.id}-correction-help" } %>
+      <p id="equipment-item-<%= item.id %>-correction-help" class="text-sm text-gray-600">Correct the model, serial number, IMEI, address or shipment. A reason is required and saved in the history.</p>
+    </div>
+  </div>
+<% end %>

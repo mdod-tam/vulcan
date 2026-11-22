@@ -43,10 +43,12 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select 'html[lang=en]'
     assert_select 'h1', 'Secure Your Account'
+    assert_select 'section[aria-labelledby="choose-2fa-heading"] + section#why-2fa'
   end
 
   test 'TOTP enrollment uses the shared invalid-code feedback' do
     get new_credential_two_factor_authentication_path(type: 'totp')
+    assert_response :success
     secret = session[TwoFactorAuth::SESSION_KEYS[:metadata]].with_indifferent_access.fetch(:secret)
     post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: 'invalid', secret: secret }
     assert_response :unprocessable_content

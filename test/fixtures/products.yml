@@ -1,4 +1,8 @@
 ipad_air:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 101d5087a02c3d05705721fca031eefa481be4f5bc07c34b405bfa6d7506f49c
   name: iPad Air
   manufacturer: Apple
   model_number: iPad-10
@@ -9,6 +13,10 @@ ipad_air:
   device_types: ["Tablet"]
 
 ipad_mini:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: c8eef396109dbc48bb3b54e7b9e5645345fee487f5058cbc0074202289191350
   name: iPad Mini
   manufacturer: Apple
   model_number: iPad-Mini-6
@@ -19,6 +27,10 @@ ipad_mini:
   device_types: ["Tablet"]
 
 ipad_pro:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 73e6c773cf09b2b3a4c31b50855c5571bcf9e1307a2480e6341f232ed8876700
   name: iPad Pro
   manufacturer: Apple
   model_number: iPad-Pro-M4
@@ -29,6 +41,10 @@ ipad_pro:
   device_types: ["Tablet"]
 
 iphone:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 7678d12a54471086382b2453baeb9ff94a7d9ce79e6e5ae5d8c5034ef6cad5bc
   name: iPhone
   manufacturer: Apple
   model_number: iPhone-16
@@ -39,6 +55,10 @@ iphone:
   device_types: ["Smartphone"]
 
 realsam:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 42a69bad6391b29a03fa7ef4e655cf954bbeca119f915961a7a46d6c782e0250
   name: RealSAM
   manufacturer: RealThing
   model_number: V1
@@ -49,6 +69,10 @@ realsam:
   device_types: ["Smartphone"]
 
 pixel:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 882664e885a6025712296067336a32af6d796405e68297779f2618af771e694a
   name: Pixel
   manufacturer: Google
   model_number: Pixel-8
@@ -59,6 +83,10 @@ pixel:
   device_types: ["Smartphone"]
 
 samsung_phone:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 4b28c5a0720ca8028d5c257799d2f7159afb61283c138e7833183a8ca60ea0a4
   name: Galaxy S24
   manufacturer: Samsung
   model_number: SM-S24
@@ -69,6 +97,10 @@ samsung_phone:
   device_types: ["Smartphone"]
 
 blindshell_mini:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 1c41fe51015f133c5afdd1870238ef12a82eae906771a7316db1b3d2815624cb
   name: BlindShell Mini
   manufacturer: BlindShell
   model_number: BS-MINI
@@ -79,6 +111,10 @@ blindshell_mini:
   device_types: ["Smartphone"]
 
 vision2:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 4969447e5e17f923962e76bc79900dfdff0fac0a7a702f904e496bf12e34bea8
   name: Vision 2
   manufacturer: Vision
   model_number: V2
@@ -89,6 +125,10 @@ vision2:
   device_types: ["Smartphone"]
 
 ray_memory:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 1437db17fe5b51d5356362326e1fe6a739414c7ef15ccdf476a63ce367f3766f
   name: RAY Memory Phone
   manufacturer: RAY Mobility
   model_number: RAY-MP
@@ -99,6 +139,10 @@ ray_memory:
   device_types: ["Smartphone", "Memory Aid Device"]
 
 jitterbug_flip:
+  category: alerters_accessories_equipment
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 43ac2c022c309bc0576aab8672ce77a458a0cd3ec9a4a7850ab58b8b2b4b8bf2
   name: Jitter Bug Flip
   manufacturer: Lively
   model_number: JBF
@@ -109,6 +153,10 @@ jitterbug_flip:
   device_types: ["Cellular 911 Alerter"]
 
 jitterbug_smart3:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 24cec8de92b71784ce323602c3edeacc00754bb03361afb48e12fa5428b35859
   name: Jitter Bug Smart 3
   manufacturer: Lively
   model_number: JBS3
@@ -119,6 +167,10 @@ jitterbug_smart3:
   device_types: ["Smartphone", "Cellular 911 Alerter"]
 
 smart_vision3:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: eff16794149b00f355a6db8bb08aab093fc2e7ed9190e7c1cc82c2f7132e0363
   name: Smart Vision 3
   manufacturer: SmartVision
   model_number: SV3
@@ -129,6 +181,10 @@ smart_vision3:
   device_types: ["Smartphone"]
 
 hable_one:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 745e4700f2864fca4a534774cb5f10d6a044bbbe10099b6e8d15cc1843ca83ab
   name: Hable One
   manufacturer: Hable
   model_number: HB1
@@ -139,6 +195,10 @@ hable_one:
   device_types: ["Braille Device"]
 
 guardian_alerts:
+  category: alerters_accessories_equipment
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: c5b053f9587df0354da117faf8a73c4b1eb68cd10f20b59e4711bc9a5de1da7e
   name: Guardian Alerts
   manufacturer: Guardian
   model_number: GA911
@@ -149,6 +209,10 @@ guardian_alerts:
   device_types: ["Cellular 911 Alerter"]
 
 sky_angel:
+  category: alerters_accessories_equipment
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 5c3911628651c58f862a70244e4e130b66b2f54c7bcc2998b7cae8f6fbe966ab
   name: Sky Angel 911
   manufacturer: Sky Angel
   model_number: SA911
@@ -159,6 +223,10 @@ sky_angel:
   device_types: ["Cellular 911 Alerter"]
 
 slinger:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 1f5d595041c241ef151362a6ddc49e7896f07d53ac466e7b0a4c8c60137a9d14
   name: Device Sling Mount
   manufacturer: SlingTech
   model_number: ST-2023
@@ -169,6 +237,10 @@ slinger:
   device_types: ["Hands-free Device"]
 
 square_glow:
+  category: alerters_accessories_equipment
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 9cb4a1ab4ba5e3759ee4783cca1bd15c6b3acaf7fe50c48e842666d397e39de8
   name: SquareGlow
   manufacturer: SquareTech
   model_number: SG-2023
@@ -179,6 +251,10 @@ square_glow:
   device_types: ["Signaler", "Smart Home Device"]
 
 clarity_jv35:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: a02ff41b67b28db9b9d1a8d031057ad37012d1b9c8160b253de0ebded4e69744
   name: JV35
   manufacturer: Clarity
   model_number: JV35
@@ -189,6 +265,10 @@ clarity_jv35:
   device_types: ["Amplified Phone"]
 
 clarity_jv35w:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 8d67566337295e222f1803fb5e98c951a6ac758c854f2f098db7f53aec92d4ef
   name: JV35W
   manufacturer: Clarity
   model_number: JV35W
@@ -199,6 +279,10 @@ clarity_jv35w:
   device_types: ["Amplified Phone"]
 
 csc600:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 25515ccdcb49a844f115c37a315ecc37d663c83fc88405cd46a450f9410af2fc
   name: CSC600
   manufacturer: ClearSound
   model_number: CSC600
@@ -209,6 +293,10 @@ csc600:
   device_types: ["Amplified Phone"]
 
 csc500:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 92da0d2b9ecf6cf51016960e5690c9415cc056a47a8859f1785faf126b0f25f3
   name: CSC500
   manufacturer: ClearSound
   model_number: CSC500
@@ -219,6 +307,10 @@ csc500:
   device_types: ["Amplified Phone"]
 
 clarity_alto:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 7083ed8784178942351eb7245e395d7102e205c45b07be5a3e13ab733637540f
   name: Clarity Alto
   manufacturer: Clarity
   model_number: ALTO
@@ -229,6 +321,10 @@ clarity_alto:
   device_types: ["Amplified Phone"]
 
 clarity_alto_plus:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: e3c1feaa72f2bc851bc5d6e52a31eb3db38f8694dc2fc62e3bc5f17808d3e034
   name: Clarity Alto Plus
   manufacturer: Clarity
   model_number: ALTO-PLUS
@@ -239,6 +335,10 @@ clarity_alto_plus:
   device_types: ["Amplified Phone"]
 
 clearsounds_a1600bt:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: bee50a993e3919e482a4d4eda180d088cd4e1a07227c51d2e3e50941bdd1f9f9
   name: Clearsounds A1600BT
   manufacturer: Clearsounds
   model_number: A1600BT
@@ -249,6 +349,10 @@ clearsounds_a1600bt:
   device_types: ["Amplified Phone"]
 
 touchtalk:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 7451620c119977d21677ec26850b377a937ec7dce8a66294e34138bceac36084
   name: Touchtalk
   manufacturer: TouchCom
   model_number: TT
@@ -259,6 +363,10 @@ touchtalk:
   device_types: ["Speech Device"]
 
 touchtalk_plus:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: 2267a02ee16c64c3f48a4ed22e6616fd1292526b27cc4bf5c4c3644e8cc9453f
   name: Touchtalk Plus
   manufacturer: TouchCom
   model_number: TT-PLUS
@@ -269,6 +377,10 @@ touchtalk_plus:
   device_types: ["Speech Device"]
 
 touchtalk_mini:
+  category: devices
+  eligible_disability_groups: [deaf, deafblind, hard_of_hearing, low_vision_blind, speech, mobility]
+  model_confirmed: true
+  manufacturer_model_identity: e0a637b9730814a192ee5503a4a0947fead4723676371452c8967a5902120d81
   name: Touchtalk Mini
   manufacturer: TouchCom
   model_number: TT-MINI
