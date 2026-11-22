@@ -5,9 +5,14 @@ class TrainingSessionEquipmentItem < ApplicationRecord
   belongs_to :equipment_item
   validates :equipment_item_id, uniqueness: { scope: :training_session_id }
   validate :same_beneficiary_and_service_date
+  validate :equipment_is_active, on: :create
   before_destroy :retain_claimed_link
 
   private
+
+  def equipment_is_active
+    errors.add(:equipment_item, 'has been withdrawn') if equipment_item&.withdrawn_at?
+  end
 
   def same_beneficiary_and_service_date
     return unless training_session && equipment_item

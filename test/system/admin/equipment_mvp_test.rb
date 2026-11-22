@@ -112,7 +112,7 @@ module Admin
       click_link 'Enter PO details for this bid'
       fill_in 'New PO number', with: 'RECOVERED-PO'
       click_button 'Save PO details'
-      assert_text 'PO RECOVERED-PO'
+      assert_selector 'h1', text: 'Purchase order RECOVERED-PO'
       order = PurchaseOrder.find_by!(number: 'RECOVERED-PO')
       assert_equal order.id, bid.reload.purchase_order_id
       assert_equal ['deaf'], order.equipment_items.pluck(:disability_setup_group)
@@ -154,7 +154,7 @@ module Admin
       assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=, 390
       fill_in "line-unit-cost-#{priced_line.id}", with: '$1,234.50'
       click_button 'Save PO details'
-      assert_text 'PO QUOTED-PO'
+      assert_selector 'h1', text: 'Purchase order QUOTED-PO'
       order = PurchaseOrder.find_by!(number: 'QUOTED-PO')
       assert_equal 'Awarded Quote Supplier', order.vendor_name
       assert_equal [BigDecimal('1234.50'), BigDecimal('1234.50')], order.equipment_items.where(product: @product).pluck(:unit_cost)
@@ -433,7 +433,9 @@ module Admin
       assert_link 'Edit PO invoice and charges', href: edit_admin_icanconnect_financial_record_path("PurchaseOrder:#{order.id}")
       assert_no_selector '#supplier-list-text', visible: true
       find('summary', text: 'Copy plain text list of all products in this PO').click
-      assert_field 'Supplier order list', with: /Purchase order VISIBLE-PO.*101 Confirmed Street.*Apartment 7/m
+      supplier_copy = "Purchase order VISIBLE-PO\n\n#{item.product.catalog_label}\nQuantity: 1\nShip to: #{application.user.full_name}\n" \
+                      "Care of Confirmed Guardian\n101 Confirmed Street\nApartment 7\nBaltimore, MD, 21201"
+      assert_field 'Supplier order list', with: supplier_copy
       assert_selector '#supplier-list-text[readonly]'
       assert_no_selector 'th', text: 'Disability setup'
       assert_selector 'table[aria-labelledby="supplier-list-heading"] th[scope=col]', text: 'Ship to'
@@ -446,7 +448,7 @@ module Admin
       plain_text = find_field('Supplier order list')
       plain_text.execute_script("this.scrollIntoView({block: 'center'})")
       plain_text.click
-      assert_field 'Supplier order list', with: /Purchase order VISIBLE-PO.*101 Confirmed Street.*Apartment 7/m
+      assert_field 'Supplier order list', with: supplier_copy
       region = find('[role="region"][aria-labelledby="supplier-list-heading"]')
       assert region.evaluate_script('this.scrollWidth <= this.clientWidth')
       find('summary', text: 'Copy plain text list of all products in this PO').execute_script('this.focus()')
@@ -648,7 +650,7 @@ module Admin
       order = PurchaseOrder.find_by!(number: 'TWO-SETUPS-PO')
       assert_equal 20, order.equipment_items.count
       copy = Equipment::SupplierList.new(purchase_order: order).plain_text
-      assert_includes copy, "\t20\tProgram stock\t"
+      assert_includes copy, "Quantity: 20\nShip to: Program stock\n"
       assert_not_includes copy, 'Deaf'
       take_screenshot('stock-purchase-order-two-setups', html: true, full: true)
       Equipment::Ordering.new(actor: @admin).mark_sent!(order:, sent_at: Date.current, expected_version: order.lock_version)

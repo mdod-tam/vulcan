@@ -57,6 +57,8 @@ An empty environment gets the catalog through bootstrap. For an initialized envi
 
 Compare reported drafts with the confirmed catalog in **Manage Products**. Confirm a retained model only after checking its manufacturer and exact model. Where an existing confirmed model collides with an incoming catalog entry, the refresh rolls back. Review the two records and resolve the duplicate with the catalog owner before retrying. Keep product IDs and records that support past purchases.
 
+Back up initialized databases before the equipment upgrade. The old schema required a vendor account and a sent date for each PO. Roll back the schema on an empty purchasing database. Restore a compatible backup to recover original PO vendor IDs or vendor-to-product links. Use a forward repair to keep POs created after the upgrade.
+
 ### iCanConnect launch
 
 In **System Policies → iCanConnect participation**, enter the program’s start date. Leave the date blank to keep new iCanConnect funding and income outreach off. Once the date arrives, staff can start new iCanConnect work dated on or after the start date. Existing orders, filings, and proof links remain available. The destructive development demo seed sets a past date so staff can try the example workflows.

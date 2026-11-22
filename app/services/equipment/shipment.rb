@@ -103,15 +103,7 @@ module Equipment
       item.assign_attributes(values)
       return if @vendor_request
 
-      %i[serial_number imei].each do |field|
-        next if row[field].blank?
-        if item.public_send(field).present? && item.public_send(field) != row[field]
-          raise Conflict,
-                'A known physical identifier cannot be overwritten at packing. Swap units or use a reviewed correction.'
-        end
-
-        item.public_send("#{field}=", row[field])
-      end
+      Mutation.assign_new_identifiers!(item, row)
       item.setup_confirmed_at = Time.current if item.stock?
     end
   end

@@ -26,15 +26,28 @@ module Icanconnect
     end
 
     def income_last_verified_at(on: Date.current)
-      proof_reviews.proof_type_income.status_approved.where(reviewed_at: ..on.to_date.end_of_day).maximum(:reviewed_at)
+      IncomeReview.last_verified_by_application([id], on:)[id]
+    end
+
+    def self.last_verified_by_application(application_ids, on:)
+      ProofReview.proof_type_income.status_approved.where(application_id: application_ids, reviewed_at: ..on.to_date.end_of_day)
+                 .group(:application_id).maximum(:reviewed_at)
+    end
+
+    def self.due_application_ids(application_ids, on: Date.current)
+      date = on.to_date
+      delivered_ids = EquipmentItem.where(application_id: application_ids, funding_source: 'icanconnect', delivered_on: ..date)
+                                   .distinct.pluck(:application_id)
+      last_verified_at = last_verified_by_application(delivered_ids, on: date)
+
+      delivered_ids.select do |application_id|
+        verified_at = last_verified_at[application_id]
+        verified_at.nil? || verified_at.in_time_zone.to_date.next_year <= date
+      end
     end
 
     def icanconnect_income_review_due?(on: Date.current)
-      date = on.to_date
-      return false unless equipment_items.exists?(funding_source: 'icanconnect', delivered_on: ..date)
-
-      verified_at = income_last_verified_at(on: date)
-      verified_at.nil? || verified_at.in_time_zone.to_date.next_year <= date
+      IncomeReview.due_application_ids([id], on:).any?
     end
 
     def income_proof_update_offered?

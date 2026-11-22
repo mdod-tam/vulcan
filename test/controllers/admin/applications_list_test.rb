@@ -282,7 +282,7 @@ module Admin
       assert_select "tr#application_#{voucher_application.id}", text: /125/
     end
 
-    test 'iCanConnect follow-up counts only approved DeafBlind voucher applicants who need income proof' do
+    test 'initial iCanConnect follow-up counts approved DeafBlind voucher applicants who need income proof' do
       start_icanconnect!(on: nil)
       FeatureFlag.enable!(:vouchers_enabled)
       deafblind = { last_name: 'IncomeFollowUpCohort', hearing_disability: true, vision_disability: true }
@@ -311,6 +311,51 @@ module Admin
       assert_select "#application_#{approved.id}, #application_#{other_group.id}", count: 0
     end
 
+    test 'iCanConnect follow-up shows due renewals in both fulfillment groups' do
+      start_icanconnect!
+      last_name = 'IncomeRenewalCohort'
+      anniversary = Date.current
+      verified_on = anniversary.prev_year
+      voucher = icc_renewal_candidate(last_name, fulfillment_type: :voucher, verified_on:)
+      equipment = icc_renewal_candidate(last_name, fulfillment_type: :equipment, verified_on:)
+      current = icc_renewal_candidate(last_name, fulfillment_type: :equipment, verified_on: verified_on.next_day)
+      filters = { view: 'pipeline', q: last_name }
+      stage = ::Icanconnect::IncomeFollowUp::STAGE
+
+      get admin_applications_path(**filters, group: 'voucher', stage:)
+      assert_response :success
+      assert_select "#application_#{voucher.id} td", text: 'Renewal due'
+      assert_select "#application_#{equipment.id}", count: 0
+
+      get admin_applications_path(**filters, group: 'equipment')
+      assert_response :success
+      assert_select '#icanconnect-income-follow-up-card a' do |links|
+        assert_equal 'equipment', Rack::Utils.parse_query(URI.parse(links.sole['href']).query)['group']
+      end
+
+      get admin_applications_path(**filters, group: 'equipment', stage:)
+      assert_response :success
+      assert_select 'th', text: 'Fulfillment stage'
+      assert_select "#application_#{equipment.id} td", text: 'Renewal due'
+      assert_select "#application_#{equipment.id} a[href=?]", admin_application_path(equipment, anchor: 'income-proof'), text: 'Request income proof'
+      assert_select "#application_#{voucher.id}, #application_#{current.id}", count: 0
+
+      active_form = create(:secure_request_form, application: equipment, kind: :income_proof_resubmission)
+      notification = create(:notification, action: 'proof_resubmission_requested', notifiable: equipment, recipient: equipment.user,
+                                           metadata: { proof_type: 'income', secure_request_form_id: active_form.id })
+      notification.record_delivery_handoff!(channel: :email, state: :submitted)
+
+      get admin_applications_path(**filters, group: 'equipment', stage:)
+      assert_response :success
+      assert_select '#icanconnect-income-follow-up-card', text: /0 to contact · 1 waiting for proof/
+      assert_select "#application_#{equipment.id} a", text: 'View income proof request'
+
+      create(:proof_review, application: equipment, admin: @admin)
+      get admin_applications_path(**filters, group: 'equipment', stage:)
+      assert_response :success
+      assert_select "#application_#{equipment.id}", count: 0
+    end
+
     test 'changing filters in the training queue keeps its representation and bulk session loading' do
       applications = 2.times.map do
         application = create(:application, :approved, :with_all_proofs, user: create(:constituent, last_name: 'PendingTrainingCohort'))
@@ -334,6 +379,21 @@ module Admin
     end
 
     private
+
+    def icc_renewal_candidate(last_name, fulfillment_type:, verified_on:)
+      travel_to verified_on.in_time_zone.noon do
+        if fulfillment_type == :voucher
+          FeatureFlag.enable!(:vouchers_enabled)
+        else
+          FeatureFlag.disable!(:vouchers_enabled)
+        end
+        user = create(:constituent, last_name:, hearing_disability: true, vision_disability: true)
+        application = create(:application, :completed, :with_all_proofs, user:, program_disability_groups: ['deafblind'])
+        create(:proof_review, application:, admin: @admin)
+        icc_order_with_unit(application:)
+        application
+      end
+    end
 
     def listed_ids
       css_select('tr.application-row').map { |row| row['id'].delete_prefix('application_').to_i }

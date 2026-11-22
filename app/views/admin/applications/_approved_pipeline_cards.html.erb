@@ -91,12 +91,12 @@
         </div>
       <% end %>
     </article>
-    <% if @income_follow_up %>
+    <% if @income_follow_up && (@pipeline_group == :voucher || @income_follow_up.any? || @pipeline_stage == Icanconnect::IncomeFollowUp::STAGE) %>
       <% follow_up_stage = Icanconnect::IncomeFollowUp::STAGE # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
-      <% waiting = @income_follow_up.values.compact.size # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <% waiting = @income_follow_up.values.count(&:requested_at) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
       <article id="icanconnect-income-follow-up-card"
                class="card summary-card summary-card-compact <%= 'border-primary-600 bg-primary-50' if @pipeline_stage == follow_up_stage %>">
-        <%= link_to application_list_path(group: :voucher, stage: follow_up_stage),
+        <%= link_to application_list_path(group: @pipeline_group, stage: follow_up_stage),
                     class: 'summary-card-content rounded-t-lg text-primary-700 hover:underline',
                     aria: { current: @pipeline_stage == follow_up_stage ? 'page' : nil },
                     data: { turbo_frame: 'applications_list', turbo_action: 'advance' } do %>

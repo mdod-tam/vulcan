@@ -5,14 +5,15 @@ class VendorNotificationsMailer < ApplicationMailer
 
   def equipment_order(shipping_request, secure_url)
     number = shipping_request.purchase_order.number
-    mail_with_text_body({ to: shipping_request.recipient_email, subject: "MAT purchase order #{number}", message_stream: 'notifications' }, <<~TEXT)
-      Your bid was accepted. Open purchase order #{number} for the items and shipping instructions.
-      After each package ships, use the same link to enter its tracking number.
-
-      #{secure_url}
-
-      For help or a new link, contact #{ProgramContact.support_email}.
-    TEXT
+    @order_url = secure_url
+    @order_intro = "Your bid was accepted for purchase order #{number}."
+    @order_instructions = 'Open the order for the items and shipping instructions. Use the same link to enter tracking after each package ships.'
+    @order_link_label = 'View purchase order and enter tracking'
+    @order_help = "For help or a new link, contact #{ProgramContact.support_email}."
+    mail(to: shipping_request.recipient_email, subject: "MAT purchase order #{number}", message_stream: 'notifications') do |format|
+      format.text { render plain: [@order_intro, @order_instructions, "#{@order_link_label}\n#{@order_url}", @order_help].join("\n\n") }
+      format.html
+    end
   end
 
   def invoice_generated

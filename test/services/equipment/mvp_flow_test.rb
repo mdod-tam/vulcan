@@ -192,6 +192,30 @@ module Equipment
       assert_empty order.equipment_items.where.not(stock_received_on: nil)
     end
 
+    test 'stock receipt preserves recorded identifiers when the fields are blank and rejects replacement' do
+      group = @bidding.create!(number: 'STOCK-IDENTIFIERS', purpose: 'program_stock', stock: [{ product_id: @product.id, quantity: 1 }])
+      order = award(group, number: 'PO-IDENTIFIERS', **shipping)
+      @ordering.mark_sent!(order:, sent_at: Date.current, expected_version: order.lock_version)
+      unit = order.equipment_items.sole
+      Correction.new(actor: @admin).update_item!(item: unit, attributes: { serial_number: 'KNOWN-SERIAL', imei: '123456789012345' },
+                                                 expected_version: unit.lock_version, reason: 'Identifiers provided by vendor')
+      receipt = {
+        order:, received_on: Date.current, expected_version: order.lock_version, item_versions: outstanding_versions(order)
+      }
+      row = { batch: unit.stock_receipt_batch, quantity: 1 }
+
+      assert_no_difference "Event.where(action: 'equipment_stock_received').count" do
+        assert_raises(Conflict) { @receipt.receive!(**receipt, rows: [row.merge(identifiers: [{ serial_number: 'REPLACEMENT' }])]) }
+      end
+      assert_nil unit.reload.stock_received_on
+
+      @receipt.receive!(**receipt, rows: [row.merge(identifiers: [{ serial_number: '', imei: '' }])])
+
+      assert_equal Date.current, unit.reload.stock_received_on
+      assert_equal %w[KNOWN-SERIAL 123456789012345], [unit.serial_number, unit.imei]
+      assert_equal %w[KNOWN-SERIAL 123456789012345], [unit.normalized_serial_number, unit.normalized_imei]
+    end
+
     test 'stock input conversion rejects fractional quantities before reserving or receiving' do
       assert_raises(Conflict) { @receipt.existing!(product: @product, quantity: '1.5', received_on: Date.current, provenance: 'Verified stock') }
       need = create(:equipment_need, application: application_for_equipment, product: @product)

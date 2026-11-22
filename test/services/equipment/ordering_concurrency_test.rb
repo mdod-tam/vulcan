@@ -57,6 +57,20 @@ module Equipment
       assert_equal 1, @second_need.reload.remaining_quantity
     end
 
+    test 'award waits for a concurrent catalog edit and refuses the discontinued model' do
+      group = Bidding.new(actor: @admin).create!(number: @prefix, needs: [need_row(@first_need)])
+      row_versions = group.active_lines.to_h { |line| [line.id.to_s, line.lock_version.to_s] }
+
+      race!(-> { Product.find(@product.id).archive! }, -> { award(group.id, row_versions, 'ARCHIVED') })
+
+      assert_kind_of Conflict, @contender_error
+      assert_match(/no longer available/, @contender_error.message)
+      assert group.reload.open?
+      assert_equal 1, @first_need.reload.remaining_quantity
+      assert_equal 0, EquipmentItem.where(product: @product).count
+      assert_equal 0, Event.where(action: 'equipment_order_recorded', user: @admin).count
+    end
+
     test 'concurrent stock allocation cannot give the last unit to two beneficiaries' do
       stock = StockReceipt.new(actor: @admin).existing!(product: @product, quantity: 1, received_on: Date.current, provenance: 'Verified shelf count').sole
       first_row = need_row(@first_need)

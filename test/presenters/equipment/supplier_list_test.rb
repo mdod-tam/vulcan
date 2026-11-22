@@ -32,13 +32,27 @@ module Equipment
       assert_equal [1, 2], list.rows.map(&:quantity).sort
       assert_equal 3, list.rows.sum(&:quantity)
       assert_equal ['Product model', 'Quantity', 'Recipient', 'Shipping address'], list.headings
-      assert_equal 'Purchase order SUPPLIER-PO', list.plain_text.lines.first.chomp
+      assert_equal <<~TEXT.chomp, list.plain_text
+        Purchase order SUPPLIER-PO
+
+        Example Maker · Model Pro XL
+        Quantity: 2
+        Ship to: Same Name
+        Care of Guardian
+        101 Main Street
+        Unit A
+        Baltimore, MD, 21201
+
+        Example Maker · Model Pro XL
+        Quantity: 1
+        Ship to: Same Name
+        Care of Guardian
+        202 Main Street
+        Unit B
+        Baltimore, MD, 21201
+      TEXT
       assert_not_includes list.plain_text, 'Disability setup'
       assert_not_includes list.plain_text, 'Deaf'
-      assert_includes list.plain_text, '101 Main Street'
-      assert_includes list.plain_text, 'Unit A'
-      assert_includes list.plain_text, 'Care of Guardian'
-      assert_includes list.plain_text, '202 Main Street'
       assert_not_includes list.plain_text, unit.serial_number
       assert_not_includes list.plain_text, unit.imei
 
@@ -70,12 +84,10 @@ module Equipment
       assert_equal 2, list.rows.sole.quantity
       assert_nil list.rows.sole.setup
       assert(list.rows.all? { |row| row.recipient == 'Program stock' })
-      assert_includes list.plain_text, '900 Receiving Road'
-      assert_includes list.plain_text, 'Dock 3'
+      assert_includes list.plain_text, "Quantity: 2\nShip to: Program stock\n900 Receiving Road\nDock 3"
       assert_not_includes list.plain_text, '777 Constituent Street'
       assert_not_includes list.plain_text, application.user.full_name
       assert_not_includes list.plain_text, 'DeafBlind'
-      assert_includes list.plain_text, "\t2\tProgram stock\t"
       assert_equal 'deaf', unit.disability_setup_group
       replacement = order.equipment_items.available_stock.sole
       StockAllocation.new(actor: @admin).swap!(item: unit, replacement_id: replacement.id, expected_version: unit.lock_version,

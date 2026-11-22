@@ -54,8 +54,8 @@ module TrainingSessions
       ids = Array(@params[:equipment_item_ids]).compact_blank.map(&:to_i).uniq
       return if ids.empty?
 
-      items = @training_session.application.equipment_items.where(id: ids).order(:id).lock.to_a
-      raise OperationError, 'Equipment must belong to this training beneficiary' unless items.size == ids.size
+      items = @training_session.application.equipment_items.active.where(id: ids).order(:id).lock.to_a
+      raise OperationError, 'Select active equipment that belongs to this training beneficiary' unless items.size == ids.size
       raise OperationError, 'Include the product trained on among the linked equipment' unless items.any? do |item|
         item.product_id == @training_session.product_trained_on_id
       end

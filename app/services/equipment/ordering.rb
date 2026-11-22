@@ -30,8 +30,11 @@ module Equipment
         previous_bid_ids = order.bid_groups.order(:id).ids
         previous_item_ids = order.equipment_items.ids
         items = EquipmentItem.where(id: lines.filter_map(&:equipment_item_id)).order(:id).lock.index_by(&:id)
+        products = Product.where(id: lines.map(&:product_id)).order(:id).lock('FOR SHARE').index_by(&:id)
         bid_group.update!(purchase_order: order)
-        lines.each { |line| award_line!(line, bid_group, order, needs, items, unit_costs[line.id.to_s]) }
+        lines.each do |line|
+          award_line!(line, order, needs, items, unit_costs[line.id.to_s], product: products.fetch(line.product_id))
+        end
         order.update!(updated_at: Time.current) # Membership participates in the reviewed PO version.
         awarded_lines = lines.map do |line|
           line.attributes.slice(*Bidding::AUDIT_LINE_FIELDS).merge('unit_cost' => unit_costs[line.id.to_s])
@@ -87,16 +90,16 @@ module Equipment
       values.to_h.stringify_keys.transform_values { |value| PurchaseCosts.parse_unit_cost!(value) }
     end
 
-    def award_line!(line, group, order, needs, items, unit_cost)
-      raise Conflict, 'A selected exact model is no longer available.' unless line.product.available?
+    def award_line!(line, order, needs, items, unit_cost, product:)
+      raise Conflict, 'A selected exact model is no longer available.' unless product.available?
 
-      if !group.program_stock? && !line.product.eligible_for?(line.application.program_disability_groups)
+      if !order.program_stock? && !product.eligible_for?(line.application.program_disability_groups)
         raise Conflict, 'Catalog eligibility changed. Review this reserved equipment before award.'
       end
 
-      if group.program_stock?
+      if order.program_stock?
         line.quantity.times do
-          EquipmentItem.create!(product: line.product, purchase_order: order, acquisition_bid_group_line: line,
+          EquipmentItem.create!(product: product, purchase_order: order, acquisition_bid_group_line: line,
                                 fulfillment_source: 'program_stock_po', funding_source: order.funding_source, unit_cost: unit_cost, po_assigned_at: Time.current)
         end
       elsif line.equipment_need_id
@@ -106,7 +109,7 @@ module Equipment
         snapshot = onward_snapshot!(need.application, need.disability_setup_group)
         need.update!(remaining_quantity: need.remaining_quantity - line.quantity)
         line.quantity.times do
-          EquipmentItem.create!(snapshot.merge(application: need.application, product: need.product, source_evaluation: need.source_evaluation,
+          EquipmentItem.create!(snapshot.merge(application: need.application, product: product, source_evaluation: need.source_evaluation,
                                                purchase_order: order, funding_source: order.funding_source, unit_cost: unit_cost, po_assigned_at: Time.current))
         end
       else

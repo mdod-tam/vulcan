@@ -45,17 +45,19 @@ module Equipment
     end
 
     def plain_text
-      return (["Purchase order #{purchase_order.number}", SHIP_TO_HEADINGS.join("\t")] + supplier_values.map { |values| values.join("\t") }).join("\n") if purchase_order
+      return supplier_plain_text if purchase_order
 
       ([summary, headings.join("\t")] + rows.map { |row| table_values(row).join("\t") }).join("\n")
     end
 
     private
 
-    def supplier_values
-      rows.group_by { |row| [row.model, row.recipient, row.address] }.map do |(model, recipient, address), lines|
-        [model, lines.sum(&:quantity), recipient, address.join(' · ')]
+    def supplier_plain_text
+      grouped = rows.group_by { |row| [row.model, row.recipient, row.address] }
+      blocks = grouped.map do |(model, recipient, address), lines|
+        [model, "Quantity: #{lines.sum(&:quantity)}", "Ship to: #{recipient}", *address].join("\n")
       end
+      (["Purchase order #{purchase_order.number}"] + blocks).join("\n\n")
     end
 
     def ship_to_values(row)

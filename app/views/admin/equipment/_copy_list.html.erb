@@ -42,6 +42,7 @@
   <details>
     <summary class="cursor-pointer text-primary-700 underline"><%= summary_label %></summary>
     <label for="<%= id_prefix %>-text" class="mt-3 block font-medium"><%= heading %></label>
-    <textarea id="<%= id_prefix %>-text" class="mt-2 w-full rounded border-gray-400" rows="8" readonly><%= supplier_list.plain_text %></textarea>
+    <textarea id="<%= id_prefix %>-text" class="mt-2 w-full resize-y rounded border-gray-400"
+              rows="<%= supplier_list.purchase_order ? 11 : 8 %>" readonly><%= supplier_list.plain_text %></textarea>
   </details>
 </section>

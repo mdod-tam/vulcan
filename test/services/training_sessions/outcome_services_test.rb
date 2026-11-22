@@ -58,6 +58,19 @@ module TrainingSessions
       assert_equal 'Archived Braille Display', event.reload.metadata['product_trained_on_name']
     end
 
+    test 'completion rejects a device withdrawn since the trainer opened the form' do
+      unit = create(:equipment_item, application: @application, product: @product, purchase_order: nil)
+      unit.update!(withdrawn_at: Time.current)
+
+      assert_no_difference ['TrainingSessionEquipmentItem.count', "Event.where(action: 'training_completed').count"] do
+        result = CompleteService.new(@session, @trainer, completion_params.merge(equipment_item_ids: [unit.id])).call
+        assert_not result.success?
+        assert_match(/Select active equipment/, result.message)
+      end
+      assert @session.reload.status_scheduled?
+      assert_nil @session.report_submitted_at
+    end
+
     test 'an explicitly submitted blank clears optional private notes at completion' do
       result = CompleteService.new(@session, @trainer, completion_params.merge(internal_notes: '')).call
 

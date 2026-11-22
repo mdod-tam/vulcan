@@ -27,7 +27,7 @@ class AddEquipmentBidsAndStock < ActiveRecord::Migration[8.1]
     add_check_constraint :bid_group_lines, 'quantity > 0', name: 'bid_line_positive_quantity'
     add_check_constraint :bid_group_lines, 'NOT (equipment_need_id IS NOT NULL AND equipment_item_id IS NOT NULL)', name: 'bid_line_one_source'
     remove_index :purchase_orders, %i[vendor_id normalized_number], name: 'index_purchase_orders_on_vendor_id_and_normalized_number', unique: true
-    remove_reference :purchase_orders, :vendor, foreign_key: { to_table: :users }
+    remove_reference :purchase_orders, :vendor, null: false, foreign_key: { to_table: :users }
     add_index :purchase_orders, :normalized_number, unique: true, name: 'index_purchase_orders_on_unique_number'
     change_column_null :purchase_orders, :sent_at, true
     add_column :purchase_orders, :purpose, :string, null: false, default: 'direct_to_constituents'

@@ -135,8 +135,14 @@ module VendorPortal
       assert_equal Date.current, @order.reload.sent_at
       mail = ActionMailer::Base.deliveries.last
       assert_equal ['orders@example.test'], mail.to
-      assert_not_includes mail.body.decoded, @first.shipping_address_1
-      URI.parse(mail.body.decoded.lines.find { |line| line.start_with?('http') }.strip).request_uri
+      text = mail.text_part.body.decoded
+      html = Nokogiri::HTML(mail.html_part.body.decoded)
+      link = html.css('a').find { |anchor| anchor.text == 'View purchase order and enter tracking' }
+      assert link
+      assert_includes text, "View purchase order and enter tracking\n#{link['href']}"
+      assert_not_includes text, @first.shipping_address_1
+      assert_not_includes html.text, @first.shipping_address_1
+      URI.parse(link['href']).request_uri
     end
 
     def send_parameters

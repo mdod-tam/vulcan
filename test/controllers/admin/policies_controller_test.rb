@@ -111,14 +111,11 @@ module Admin
       assert_policy_editor('Edit System Policies')
     end
 
-    test 'missing policy creation forms keep their original defaults outside the bulk editor' do
+    test 'missing policy creation forms use baseline defaults outside the bulk editor' do
       setup_fpl_policies
-      defaults = {
-        'fpl_2_person' => Baseline::Policies::DEFAULTS.fetch('fpl_2_person'),
-        'fpl_additional_person' => Baseline::Policies::DEFAULTS.fetch('fpl_additional_person'),
-        'proof_submission_rate_period' => 1, 'proof_submission_rate_limit_web' => 5,
-        'voucher_value_hearing_disability' => 500
-      }
+      defaults = Baseline::Policies::DEFAULTS.slice(
+        'fpl_2_person', 'fpl_additional_person', 'proof_submission_rate_period', 'proof_submission_rate_limit_web', 'voucher_value_hearing_disability'
+      )
       Policy.where(key: defaults.keys).destroy_all
       get admin_policies_path
       assert_response :success

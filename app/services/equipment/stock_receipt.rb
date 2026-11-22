@@ -109,8 +109,8 @@ module Equipment
         raise Conflict, 'Receiving quantities must be whole numbers within the outstanding balance.' unless quantity.between?(0, available.size)
 
         available.first(quantity).each_with_index do |item, index|
-          identifiers = row[:identifiers].fetch(index, {})
-          item.assign_attributes(identifiers.merge(stock_received_on: received_on))
+          Mutation.assign_new_identifiers!(item, row[:identifiers].fetch(index, {}))
+          item.stock_received_on = received_on
           received << item
         end
       end

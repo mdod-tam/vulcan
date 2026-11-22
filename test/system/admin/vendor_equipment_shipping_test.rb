@@ -47,7 +47,8 @@ module Admin
       take_screenshot('po-staff-shipment-empty-identifiers', full: true, html: true)
 
       email = ActionMailer::Base.deliveries.find { |message| message.subject == "MAT purchase order #{order.number}" }
-      path = URI.parse(email.body.decoded.lines.find { |line| line.start_with?('http') }.strip).request_uri
+      link = Nokogiri::HTML(email.html_part.body.decoded).css('a').find { |anchor| anchor.text == 'View purchase order and enter tracking' }
+      path = URI.parse(link['href']).request_uri
       system_test_sign_out
       install_stimulus_error_reporting
       visit path

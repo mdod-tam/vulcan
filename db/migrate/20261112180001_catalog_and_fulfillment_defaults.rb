@@ -17,8 +17,8 @@ class CatalogAndFulfillmentDefaults < ActiveRecord::Migration[8.1]
     end
     add_column :applications, :equipment_needs_decided_at, :datetime
     drop_table :products_users, id: false do |t|
-      t.bigint :product_id
-      t.bigint :user_id
+      t.bigint :product_id, null: false
+      t.bigint :user_id, null: false
       t.index :product_id
       t.index :user_id
     end

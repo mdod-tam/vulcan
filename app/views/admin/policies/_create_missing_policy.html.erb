@@ -20,7 +20,7 @@
       <div class="relative rounded-md shadow-elevation-1">
         <% if key.include?('fpl_modifier_percentage') %>
           <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
-                                        value: default_value || 400,
+                                        value: default_value,
                                         class: 'form-input w-24 pr-8',
                                         required: true,
                                         min: 100,
@@ -33,7 +33,7 @@
             <span class="text-gray-500 sm:text-sm">$</span>
           </div>
           <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
-                                        value: default_value || 15_000,
+                                        value: default_value,
                                         class: 'form-input w-32 pl-7',
                                         required: true,
                                         min: 0 %>
@@ -42,20 +42,20 @@
             <span class="text-gray-500 sm:text-sm">$</span>
           </div>
           <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
-                                        value: default_value || 500,
+                                        value: default_value,
                                         class: 'form-input w-32 pl-7',
                                         required: true,
                                         min: 0 %>
         <% elsif key.include?('rate_limit') %>
           <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
-                                        value: default_value || 5,
+                                        value: default_value,
                                         class: 'form-input w-24',
                                         required: true,
                                         min: 1,
                                         max: 100 %>
         <% elsif key == 'voucher_validity_period_months' %>
           <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
-                                        value: default_value || 6,
+                                        value: default_value,
                                         class: 'form-input w-24',
                                         required: true,
                                         min: 1,
@@ -65,14 +65,14 @@
             <span class="text-gray-500 sm:text-sm">$</span>
           </div>
           <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
-                                        value: default_value || 10,
+                                        value: default_value,
                                         class: 'form-input w-32 pl-7',
                                         required: true,
                                         min: 1,
                                         max: 1000 %>
         <% else %>
           <%= form.number_field :value, id: "missing-policy-#{key}-value", autocomplete: 'off',
-                                        value: default_value || 1,
+                                        value: default_value,
                                         class: 'form-input w-24',
                                         required: true,
                                         min: 0 %>

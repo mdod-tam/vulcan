@@ -48,7 +48,7 @@ module Admin
         get admin_application_path(@unit.application)
         assert_response :success
         assert_select '#audit-logs', text: /Service bill recorded/
-        assert_select '#audit-logs', text: /Amount:.*\$25\.00/m
+        assert_select '#audit-logs dl div', text: /\AAmount\s+\$25\.00\z/
       end
 
       test 'an unreadable service bill date stays as typed on retry and can be corrected before creation' do
@@ -276,6 +276,14 @@ module Admin
         }
         assert_response :unprocessable_content
         assert_equal [@unit.id], session.reload.equipment_item_ids
+
+        withdrawn = create(:equipment_item, application:, product: @unit.product, purchase_order: nil, withdrawn_at: Time.current)
+        patch admin_icanconnect_financial_record_path(key), params: {
+          lock_version: session.lock_version, finance: { hourly_rate: 125, equipment_item_ids: [@unit.id, withdrawn.id] }
+        }
+        assert_response :unprocessable_content
+        assert_equal [@unit.id], session.reload.equipment_item_ids
+        assert_equal 100, session.hourly_rate
       end
 
       test 'mileage uses a saved effective rate and keeps the hourly charge separate' do

@@ -198,7 +198,7 @@ module Admin
 
     def filter_pipeline_rows(rows)
       requested_stage = params.permit(:stage)[:stage]
-      if @pipeline_group == :voucher && ::Icanconnect::Setting.active?
+      if ::Icanconnect::Setting.active?
         @income_follow_up = ::Icanconnect::IncomeFollowUp.requests_by_application(rows.map { |row| row.application.id })
         if requested_stage == ::Icanconnect::IncomeFollowUp::STAGE
           @pipeline_stage = requested_stage
@@ -214,7 +214,7 @@ module Admin
 
     def income_follow_up_rows(rows)
       rows.select { |row| @income_follow_up.key?(row.application.id) }.sort_by do |row|
-        requested_at = @income_follow_up[row.application.id]
+        requested_at = @income_follow_up.fetch(row.application.id).requested_at
         since = requested_at || row.application.current_status_entered_at
         [requested_at ? 1 : 0, since&.to_f || Float::INFINITY, row.application.id]
       end

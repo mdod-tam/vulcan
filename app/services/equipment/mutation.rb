@@ -32,6 +32,18 @@ module Equipment
       Application.where(id: ids).order(:id).lock.to_a
     end
 
+    def assign_new_identifiers!(item, identifiers)
+      %i[serial_number imei].each do |field|
+        value = identifiers[field].to_s.strip.presence
+        next unless value
+
+        current = item.public_send(field)
+        raise Conflict, 'A known physical identifier cannot be overwritten. Use a reviewed correction.' if current.present? && current != value
+
+        item.public_send("#{field}=", value)
+      end
+    end
+
     def profile_versions(applications)
       applications.to_h { |application| [application.id.to_s, application.equipment_profile_version] }
     end
