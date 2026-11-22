@@ -26,7 +26,7 @@ en:
       preparation: "Preparation and coordinating contact"
       evaluation_recommendations: "Latest evaluation recommendations"
       known_products: "Products purchased or shipped"
-      known_products_help: "Use this list to prepare for training. A shipment does not confirm that the constituent received the product. Confirm which product they will use."
+      known_products_help: "Before training, confirm the participant has the device they’ll use."
       no_known_products: "No products have been recorded as purchased or shipped for this application."
       request_pending: "The constituent has requested another training appointment."
       what_happened: "What happened?"

@@ -72,7 +72,7 @@
         <%= hidden_field_tag "return_context[#{key}]", value, id: nil, data: { equipment_selection_target: 'contextField' } %>
       <% end %>
       <% if @context[:tab] == 'needs_ordering' %>
-        <p class="text-sm text-gray-700">The quantity shown leaves out devices already in a bid. “In stock?” shows whether stock covers this request. Stock is shared across constituents; selecting a row doesn’t reserve it.</p>
+        <p class="text-sm text-gray-700">Quantities exclude devices already in a bid.</p>
       <% end %>
       <p role="status" data-equipment-selection-target="summary">0 selected</p>
       <button type="button" data-action="equipment-selection#selectMatching" class="btn btn-outline">Select matching</button>
@@ -90,7 +90,7 @@
         <% end %>
       </div>
       <% if @context[:tab] == 'needs_ordering' %>
-        <p class="text-sm text-gray-700">Use stock lets you check quantities, device setup and shipping addresses first. Choose Reserve for dispatch on the next page to set the devices aside, then open Enter shipping info when they ship.</p>
+        <p class="text-sm text-gray-700">Choose Use stock to review the order. Select Reserve to set devices aside. Enter shipping info when they ship.</p>
       <% end %>
     <% end %>
   <% end %>

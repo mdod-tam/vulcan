@@ -20,7 +20,7 @@
   <section id="buy-stock" class="space-y-3" aria-labelledby="buy-stock-heading">
     <h2 id="buy-stock-heading" class="text-xl font-semibold">Buy devices for stock</h2>
     <p>Enter quantities below, then review and assign a bid number. Use “Add another setup” to buy the same model for more than one disability group.</p>
-    <p id="stock-setup-help">Disability group tells the supplier which setup to prepare. Unassigned means no setup is specified. Stock is shared by model; setup is checked again before shipping to a constituent.</p>
+    <p id="stock-setup-help">Choose a setup for each batch or leave it Unassigned. Share any setup instructions separately with the vendor.</p>
     <%= form_with url: new_admin_bid_group_path, method: :get, class: 'space-y-4' do |form| %>
       <div class="relative overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-600" role="region" aria-label="Stock quantities and purchasing" tabindex="0">
         <table class="w-full min-w-[68rem] table-fixed text-left">

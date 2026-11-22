@@ -16,7 +16,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_select '#recommendation-notes-help', text: /applicant or managing guardian receives this text exactly as written/
+    assert_select '#recommendation-notes-help', text: /\AThe applicant or their guardian will receive this text as written\./
     assert_select '#working-notes-help', text: /internal notes.*not included.*confirmation emails or letters/
     assert_select '#complete_evaluation_recommendation_notes[aria-describedby~="recommendation-notes-help"]'
     assert_select '#working_evaluation_working_notes[aria-describedby~="working-notes-help"]'
@@ -30,7 +30,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '#complete-evaluation-form input[type="radio"]', count: 0
     assert_select '#catalog-recommendations-group:not([hidden]):not([disabled])'
     assert_select '#complete_evaluation_no_suitable_product[type="checkbox"]:not([checked])'
-    assert_select '#recommendation-notes-help strong', text: /receives this text exactly as written.*Put private assessment notes in Report internal notes/
+    assert_select '#recommendation-notes-help strong', text: /Put private notes in Report internal notes\./
     assert_select '#complete-internal-notes-help strong', text: 'Internal notes only.'
     assert_select '#complete-evaluation-form input[type="submit"][data-turbo-submits-with="Submitting report..."]'
     assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s

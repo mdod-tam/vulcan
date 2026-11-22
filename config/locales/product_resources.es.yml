@@ -16,7 +16,7 @@ es:
       description: Equipos del programa y compras completadas con vales, agrupados por beneficiario.
       dashboard_heading: Mis equipos y ayuda
       in_progress: Preparación del equipo en curso
-      in_progress_details: Se está preparando su solicitud de equipo. Los equipos confirmados y sus guías aparecerán aquí cuando estén disponibles.
+      in_progress_details: Consulte aquí sus dispositivos y las instrucciones a medida que estén disponibles.
       quantity:
         one: 1 unidad
         other: "%{count} unidades"

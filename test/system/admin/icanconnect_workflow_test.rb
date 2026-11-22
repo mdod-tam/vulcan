@@ -90,7 +90,7 @@ module Admin
     test 'admin files exact equipment costs and corrects financial evidence' do
       order, unit = icc_order_with_unit
       visit admin_icanconnect_filing_prep_path
-      assert_text '2 of 2 costs have the information needed for filing'
+      assert_text '2 of 2 costs are ready to file'
       assert_text '$150.00'
       assert_text '$15.00'
       assert_text 'Shipping: $10.00'
@@ -104,9 +104,10 @@ module Admin
       assert unit.reload.icc_claimed?
       assert_not order.reload.icc_claimed?
       assert_no_selector "input[aria-label='Select Device ##{unit.id}']"
-      select 'Period activity, including filed costs', from: 'View'
+      select 'All costs for this period', from: 'View'
       click_button 'Review period'
       assert_text 'FEDERAL-TEST'
+      assert_text '1 of 2 costs are ready to file'
       take_screenshot('icc-filing-activity', html: true, full: true)
 
       visit edit_admin_icanconnect_financial_record_path("EquipmentItem:#{unit.id}")
@@ -210,7 +211,7 @@ module Admin
 
     test 'empty filing period has no filing action' do
       visit admin_icanconnect_filing_prep_path
-      assert_text 'No unclaimed expenses match these dates'
+      assert_text 'No costs match these filters. Choose All costs for this period to see filed costs.'
       assert_no_button 'Mark selected costs as filed'
       take_screenshot('icc-empty-filing', html: true, full: true)
     end

@@ -43,7 +43,7 @@
                        aria: action_form_field_aria(:submit_report, :assessment_source, describedby: 'assessment-source-help', form_errors: @evaluation_form_errors),
                        data: { recommendation_outcome_target: 'source', action: 'recommendation-outcome#update' } %>
           <p id="assessment-source-help" class="form-hint">
-            For a consultation with an outside specialist, enter the consultation date and describe the source and context in Report internal notes. Include product trials only when you know what was tried. For a direct assessment, schedule an appointment first.
+            Add internal staff-facing notes to document the constituent's experience during the evaluation. Only list products the applicant tried.
           </p>
           <%= render 'shared/field_errors', action: :submit_report, attribute: :assessment_source, form_errors: @evaluation_form_errors %>
         </div>
@@ -104,7 +104,7 @@
 
       <fieldset id="program-groups-group" class="rounded border border-gray-300 p-4" tabindex="-1">
         <legend class="form-label">Program eligibility groups</legend>
-        <p class="form-hint">Confirm each program group the applicant qualifies for. Browsing products from another group does not confirm eligibility.</p>
+        <p class="form-hint">Select each group the applicant qualifies for.</p>
         <%= hidden_field_tag 'evaluation[program_disability_groups][]', '', id: nil %>
         <div class="grid gap-3 sm:grid-cols-2">
           <% (Product::PROGRAM_GROUPS.keys | Array(confirmed_groups)).each do |group| %>
@@ -120,7 +120,7 @@
 
       <details class="rounded border border-gray-300 p-4">
         <summary class="font-medium">Default equipment shipping address</summary>
-        <p class="form-hint mt-2">Confirm where the equipment should be sent, including any apartment or unit number. The suggested address may belong to a guardian. You can submit this report now and confirm the address later during equipment review.</p>
+        <p class="form-hint mt-2">Check the shipping address, including the apartment or unit number. The suggested address may be the guardian’s. You can submit the report and confirm the address later.</p>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
           <% EquipmentShipping::FIELDS.each do |field| %>
             <div>
@@ -195,7 +195,7 @@
             Show all active products
           </label>
         </div>
-        <p class="form-hint">Products are shown for the selected program groups. To recommend a product from another group, confirm that the applicant also qualifies for that group.</p>
+        <p class="form-hint">You may select another group if the applicant qualifies.</p>
         <div class="mt-2 space-y-3">
           <% recommendation_products.group_by(&:category).each do |category, products| %>
             <details open class="rounded border border-gray-300 p-3">

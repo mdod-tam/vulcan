@@ -16,7 +16,7 @@ en:
       description: Program equipment and completed voucher purchases, grouped by beneficiary.
       dashboard_heading: My equipment & help
       in_progress: Equipment fulfillment in progress
-      in_progress_details: Your equipment request is being prepared. Confirmed equipment and guidance will appear here when available.
+      in_progress_details: Check here for your devices and instructions as they become available.
       quantity:
         one: 1 unit
         other: "%{count} units"

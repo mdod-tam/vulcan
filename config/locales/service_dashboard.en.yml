@@ -10,7 +10,6 @@ en:
       evaluation_report: "Enter evaluation report"
       evaluation_report_aria: "Enter evaluation report for a scheduled visit"
       all_evaluation_reports_aria: "Enter evaluation report for a scheduled visit with any evaluator"
-      evaluation_report_help: "Enter the report after the visit; future visits are included."
       followup: "Review follow-up"
     days:
       one: "%{value} day"

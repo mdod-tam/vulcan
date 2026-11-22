@@ -20,7 +20,6 @@ es:
       view_requested_aria: "Programar capacitación para las solicitudes asignadas"
       scheduled: "Registrar informe de capacitación"
       scheduled_count_suffix: " sesiones programadas"
-      upcoming_help: "Registre el informe después de la visita; se incluyen las visitas futuras."
       assigned_to_you: "%{count} asignadas a usted"
       my_scheduled: "Mis sesiones programadas"
       view_scheduled: "Registrar informe de capacitación"

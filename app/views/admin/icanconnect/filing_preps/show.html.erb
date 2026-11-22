@@ -1,6 +1,6 @@
 <div class="max-w-7xl mx-auto space-y-6 p-4">
   <%= render 'admin/shared/index_header', title: 'iCanConnect filing preparation', applications_link: false %>
-  <p>Review data and prepare iCanConnect filings here. Check the data and add any missing costs. Share the worksheet and supporting documents with your iCanConnect contact.</p>
+  <p>Review costs and fill in missing details before sharing.</p>
   <% if @error %>
     <p role="alert" class="text-danger-700"><%= @error %></p>
   <% end %>
@@ -19,7 +19,7 @@
     <div>
       <%= form.label :view, class: 'form-label' %>
       <%= form.select :view,
-                      [['Unclaimed expenses', 'unclaimed'], ['Period activity, including filed costs', 'activity']], { selected: @view }, class: 'form-input' %>
+                      [['Costs not yet filed', 'unclaimed'], ['All costs for this period', 'activity']], { selected: @view }, class: 'form-input' %>
     </div>
     <div>
       <%= form.label :category, class: 'form-label' %>
@@ -33,14 +33,13 @@
     <p class="card p-6">Choose a valid date range to review costs.</p>
   <% elsif @prep.rows.empty? %>
     <p class="card p-6">
-      <% if @view == 'activity' %>
-        No ICC activity matches these dates and this category.
-      <% else %>
-        No unclaimed expenses match these dates and this category. Choose Period activity to include costs already filed.
+      No costs match these filters.
+      <% if @view != 'activity' %>
+        Choose All costs for this period to see filed costs.
       <% end %>
     </p>
   <% else %>
-    <p><%= @prep.rows.count(&:ready?) %> of <%= @prep.rows.size %> costs have the information needed for filing. Costs with missing information are shown below.</p>
+    <p><%= @prep.rows.count { |row| row.ready? && !row.claimed? } %> of <%= @prep.rows.size %> costs are ready to file.</p>
     <dl class="flex flex-wrap gap-6" aria-label="Costs by category">
       <% @prep.category_totals.each do |category, total| %>
         <div>

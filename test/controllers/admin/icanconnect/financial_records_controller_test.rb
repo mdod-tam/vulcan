@@ -392,7 +392,8 @@ module Admin
         key = "EquipmentItem:#{@unit.id}"
         get edit_admin_icanconnect_financial_record_path(key)
         assert_response :success
-        assert_select '#financial-correction-help', count: 1, text: /This PO’s charges have been filed using its device receipt dates/
+        assert_select '#financial-correction-help', count: 1,
+                                                    text: 'To change the receipt date or price, give a reason and a claim or support ticket reference.'
         assert_select 'textarea[name="correction_reason"][aria-describedby=financial-correction-help]:not([required])'
         assert_select 'input[name="correction_reference"][aria-describedby~="financial-correction-reference-help"]:not([required])'
         [Date.current.strftime('%m/%d/%Y'), ''].each do |attempted|

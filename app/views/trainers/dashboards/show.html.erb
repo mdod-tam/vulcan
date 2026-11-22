@@ -85,10 +85,9 @@
             <h3 id="card-scheduled" class="summary-card-title"><%= t('trainer_workflow.dashboard.scheduled') %></h3>
             <p class="summary-card-count"><%= @scheduled_summary.count %><span class="sr-only"><%= t('trainer_workflow.dashboard.scheduled_count_suffix') %></span></p>
           </div>
-          <p class="text-xs text-gray-600">
-            <%= t('trainer_workflow.dashboard.upcoming_help') %>
-            <% if current_user.admin? %> · <%= t('trainer_workflow.dashboard.assigned_to_you', count: @my_scheduled_sessions_count) %><% end %>
-          </p>
+          <% if current_user.admin? %>
+            <p class="text-xs text-gray-600"><%= t('trainer_workflow.dashboard.assigned_to_you', count: @my_scheduled_sessions_count) %></p>
+          <% end %>
         </div>
         <%= render 'shared/service_wait_summary', summary: @scheduled_summary,
                                                   oldest_path: training_dashboard_entry_path(@scheduled_summary.oldest, request_sessions: @pending_request_sessions),

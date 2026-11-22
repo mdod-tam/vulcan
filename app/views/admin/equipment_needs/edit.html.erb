@@ -7,7 +7,7 @@
       <%= link_to 'Back to Application', admin_application_path(@application, anchor: 'equipment'), class: 'btn btn-outline' %>
     <% end %>
   </div>
-  <p id="equipment-needs-help" class="text-sm text-gray-600 mb-4">Enter how many new devices are still needed. Set a quantity to zero to remove a model. To replace it, set the old model to zero and add the replacement. Edit previously ordered devices on their own pages.</p>
+  <p id="equipment-needs-help" class="text-sm text-gray-600 mb-4">Enter how many devices you still need. Set a model’s quantity to 0 to remove it.</p>
   <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'equipment-needs-errors',
                                             review_path: edit_admin_application_equipment_needs_path(@application, return_context: @return_context) %>
   <%= render 'admin/applications/equipment_recommendations', application: @application, heading_level: 2 %>
