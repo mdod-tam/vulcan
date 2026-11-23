@@ -34,6 +34,9 @@ module Admin
       assert_response :see_other
       head download_batch_admin_print_queue_index_path, params: { letter_ids: @letters.map(&:id) }
       assert_response :see_other
+      head batch_admin_print_queue_index_path(ids: @letters.map(&:id).join(','))
+      assert_response :success
+      assert_empty response.body
       assert(@letters.all? { |item| item.reload.released_at.nil? })
     end
 
@@ -58,6 +61,11 @@ module Admin
       get response.headers.fetch('Content-Location')
       assert_select 'h1', text: 'Print batch'
       assert_equal @letters.map { |letter| letter.id.to_s }.sort, css_select('input[name="letter_ids[]"][checked]').pluck('value').sort
+
+      selected, skipped = @letters
+      get batch_admin_print_queue_index_path(ids: @letters.map(&:id).join(','), skipped: skipped.id)
+      assert_select "#letter-#{selected.id}[checked]"
+      assert_select "#letter-#{skipped.id}[checked]", count: 0
     end
 
     test 'a refused batch preserves selection and releases nothing' do
@@ -119,13 +127,17 @@ module Admin
 
     test 'an address change blocks mail handoff but preserves the record of printing' do
       letter = issue_paper_proof(paper_application).print_queue_items.sole
-      post release_admin_print_queue_path(letter)
+      other_letter = @letters.first
+      ids = [letter.id, other_letter.id]
+      post download_batch_admin_print_queue_index_path, params: { letter_ids: ids }
       letter.constituent.update!(physical_address_1: '76 New Street')
 
       get batch_admin_print_queue_index_path(ids: letter.id)
       assert_select "#mail_warning_print_queue_item_#{letter.id}", text: /Do not mail/
-      post mark_in_outgoing_mail_admin_print_queue_index_path, params: { letter_ids: [letter.id], ids: letter.id.to_s }
+      post mark_in_outgoing_mail_admin_print_queue_index_path, params: { letter_ids: [letter.id], ids: ids.join(',') }
       assert_response :unprocessable_content
+      assert_select "#letter-#{letter.id}[checked]"
+      assert_select "#letter-#{other_letter.id}[checked]", count: 0
       assert_nil letter.reload.mail_handoff_at
       assert_nil letter.printed_at
 

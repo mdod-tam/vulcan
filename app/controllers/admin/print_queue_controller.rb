@@ -30,6 +30,7 @@ module Admin
 
     def batch
       load_batch
+      @selected_letter_ids = @batch_letters.map { |letter| letter.id.to_s } - params[:skipped].to_s.split(',')
     end
 
     def mark_in_outgoing_mail
@@ -136,11 +137,6 @@ module Admin
       @batch_letters = PrintQueueItem.where(id: batch_ids.split(',')).where.not(released_at: nil)
                                      .includes(:constituent, :application, :secure_request_form, :admin, :mail_handoff_by).order(:id).to_a
       @mail_refusals = mail_refusals(@batch_letters)
-      @selected_letter_ids = if request.get?
-                               @batch_letters.map { |letter| letter.id.to_s } - params[:skipped].to_s.split(',')
-                             else
-                               selected_ids
-                             end
     end
 
     def mail_refusals(letters)
@@ -186,6 +182,7 @@ module Admin
         load_detail
       elsif batch_ids.present?
         load_batch
+        @selected_letter_ids = selected_ids
       else
         load_queue
       end
