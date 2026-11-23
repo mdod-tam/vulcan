@@ -57,7 +57,7 @@ class DeliveryStatusPresenter
     return text("reasons.#{reason}", default: text('reasons.suppressed')) if status == 'suppressed'
     return text('never_tracked') if status == 'unknown' && !attempt
 
-    text("descriptions.#{status}")
+    text("descriptions.#{status}", default: nil)
   end
 
   def masked_destination

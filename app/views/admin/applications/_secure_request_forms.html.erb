@@ -5,7 +5,7 @@
 <% provider_info_missing = @application.missing_required_provider_info? %>
 <% if provider_info_missing %>
   <% if @provider_info_served_ids.any? %>
-    <p class="mb-4 text-sm text-gray-700">A paper request is already open for the recipients listed below. Use Replace paper request to issue another copy.</p>
+    <p class="mb-4 text-sm text-gray-700">Paper request open. Use <strong>Replace paper request</strong> to queue another letter.</p>
   <% end %>
   <%= render 'secure_request_recipient_form',
              application: @application,
@@ -49,24 +49,13 @@
             </td>
             <td class="px-3 py-3 text-gray-700"><%= secure_request_masked_contact(secure_request_form) %></td>
             <td class="px-3 py-3 text-gray-700"><%= secure_request_channel_label(secure_request_form) %></td>
-            <td class="px-3 py-3 text-gray-700"><span><%= secure_request_status_label(secure_request_form) %></span>
-                <%= delivery_visibility(secure_request_form) %></td>
+            <td class="px-3 py-3 text-gray-700"><%= secure_request_row_status(secure_request_form) %></td>
             <td class="px-3 py-3 text-gray-700"><%= l(secure_request_form.sent_at, format: :short) %></td>
-            <td class="px-3 py-3 text-gray-700"><%= secure_request_form.recipient_channel_letter? ? 'Paper response' : l(secure_request_form.expires_at, format: :short) %></td>
+            <td class="px-3 py-3 text-gray-700"><%= secure_request_form.recipient_channel_letter? ? 'No link' : l(secure_request_form.expires_at, format: :short) %></td>
             <td class="px-3 py-3 text-right">
               <div class="inline-flex items-center gap-2">
                 <% if secure_request_form.operator_revocable? %>
-                  <%= button_to t('admin.applications.secure_request_forms.table.revoke'),
-                                admin_application_secure_request_form_revocation_path(@application, secure_request_form),
-                                method: :post,
-                                form: { class: "inline",
-                                        data: {
-                                          turbo_confirm: t('admin.applications.secure_request_forms.table.revoke_confirm'),
-                                          turbo_frame: '_top'
-                                        } },
-                                'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.revoke'),
-                                                                           secure_request_form, recipient: row_recipient),
-                                class: "btn btn-danger-outline btn-sm" %>
+                  <%= secure_request_close_button(@application, secure_request_form, recipient: row_recipient) %>
                   <% if active_batch_count > 1 %>
                     <%= button_to t('admin.applications.secure_request_forms.table.revoke_batch'),
                                   admin_application_secure_request_form_batch_revocations_path(@application),

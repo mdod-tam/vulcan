@@ -38,7 +38,8 @@
     <div class="notification-summary flex justify-between">
       <p class="text-sm font-medium text-gray-900 <%= notification.read_at.nil? ? 'font-semibold' : '' %>">
         <% if current_user.admin? && notification.action == Notification::PAPER_REJECTION_LETTER_ACTION %>
-          <%= link_to 'Income rejection letter', admin_paper_rejection_letter_path(notification), class: 'text-primary-700 underline' %>
+          <%= link_to(['Income rejection letter', notification.notifiable&.full_name.presence].compact.join(' for '),
+                      admin_paper_rejection_letter_path(notification), class: 'text-primary-700 underline') %>
         <% else %>
           <%= notification.message(current_user, locale: I18n.locale) %>
         <% end %>

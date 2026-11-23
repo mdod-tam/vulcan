@@ -48,11 +48,11 @@ module Admin
       return 'Discard the unused copy and cancel this letter?' if letter.downloaded_copy_to_resolve?
 
       message = if letter.released_at?
-                  'Cancel this unprinted letter? Discard unused copies. Downloaded PDFs cannot be recalled.'
+                  'Cancel this unprinted letter? Discard unused copies.'
                 else
-                  'Cancel this letter before printing?'
+                  'Cancel this letter?'
                 end
-      message += ' This also closes the linked request.' if letter.secure_request_form&.postal_request_open?
+      message += ' This also closes the request.' if letter.secure_request_form&.postal_request_open?
       message
     end
 
@@ -62,10 +62,38 @@ module Admin
       t('admin.applications.secure_request_forms.table.resend')
     end
 
-    def secure_request_replacement_confirmation(form)
-      return 'Replace this paper request? Confirm printing first if a copy was printed. Discard unused downloads.' if form.recipient_channel_letter?
+    def secure_request_replacement_confirmation(form, letter: nil)
+      return t('admin.applications.secure_request_forms.table.resend_confirm') unless form.recipient_channel_letter?
 
-      t('admin.applications.secure_request_forms.table.resend_confirm')
+      letter ||= form.print_queue_items.max_by(&:id)
+      return 'Replace this paper request?' unless letter&.released_at? && letter.pending?
+
+      'Replace this paper request? Mark the old letter as printed if you printed it. Discard unused copies.'
+    end
+
+    def secure_request_close_button(application, form, recipient:, proof_type: nil)
+      if form.recipient_channel_letter?
+        label = 'Close paper request'
+        confirmation = paper_request_close_confirmation(form.print_queue_items.max_by(&:id))
+      else
+        table = proof_type ? 'proof_secure_request_forms' : 'secure_request_forms'
+        label = t("admin.applications.#{table}.table.revoke")
+        confirmation = t("admin.applications.#{table}.table.revoke_confirm", proof_type: proof_type)
+      end
+
+      button_to label, admin_application_secure_request_form_revocation_path(application, form),
+                method: :post, class: 'btn btn-danger-outline btn-sm',
+                form: { class: 'inline', data: { turbo_confirm: confirmation, turbo_frame: '_top' } },
+                aria: { label: secure_link_row_action_label(label, form, recipient: recipient) }
+    end
+
+    private
+
+    def paper_request_close_confirmation(letter)
+      return 'Close this paper request? Its letter will be canceled if it hasn’t been downloaded.' unless letter&.released_at?
+      return 'Close this paper request? Discard any unused copy.' if letter.pending?
+
+      'Close this paper request?'
     end
   end
 end

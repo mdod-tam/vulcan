@@ -16,7 +16,6 @@ module Admin
 
       assert_redirected_to admin_email_templates_path(anchor: 'email-delivery')
       assert_match 'Proof is now off', flash[:notice]
-      assert_match 'Affected work that was still queued is blocked', flash[:notice]
       proof = FeatureFlag.find_by!(name: 'email.category.proof')
       assert_not proof.enabled
       assert_equal 1, proof.delivery_generation
@@ -35,8 +34,8 @@ module Admin
     test 'each channel confirmation describes the work it stops' do
       get admin_email_templates_path
 
-      { 'email' => /Email recovery/, 'sms' => /Sign-in codes and recovery by text/,
-        'letter' => /unreleased letters will be canceled/ }.each do |channel, effect|
+      { 'email' => /Email recovery/, 'sms' => /Sign-in and recovery texts will stop/,
+        'letter' => /Letters awaiting download will be canceled/ }.each do |channel, effect|
         name = EmailDelivery::CHANNEL_CONTROLS.fetch(channel)
         assert_select "[data-email-control='#{name}'] form[data-turbo-confirm]" do |forms|
           assert_match effect, forms.sole['data-turbo-confirm']

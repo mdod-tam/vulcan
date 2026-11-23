@@ -67,7 +67,7 @@ test('lost response explains uncertainty and allows retry without clearing selec
   letters[0].checked = true
   global.fetch = jest.fn().mockRejectedValue(new Error('connection lost'))
   await controller.download({ preventDefault: jest.fn(), submitter: submit })
-  expect(status.textContent).toContain('Refresh this page to check release status')
+  expect(status.textContent).toContain('Refresh to check release status before retrying')
   expect(letters[0].checked).toBe(true)
   expect(submit.disabled).toBe(false)
   expect(Turbo.visit).not.toHaveBeenCalled()

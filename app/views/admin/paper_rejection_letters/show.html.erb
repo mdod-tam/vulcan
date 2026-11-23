@@ -12,13 +12,13 @@
       <%= link_to 'Review letter', admin_print_queue_path(@letter), class: 'mt-3 inline-block text-primary-700 underline' %>
     <% elsif @receipt.local_delivery_outcome? %>
       <p class="mt-2 font-semibold">Letter not queued</p>
-      <p><%= @reason_text || 'Preparation failed. Try again from paper intake.' %></p>
+      <p><%= @reason_text || 'Try again from paper intake.' %></p>
       <% if manual_mail_available? %>
         <%= button_to('Record as mailed', record_manual_mail_admin_paper_rejection_letter_path(@receipt),
-                      class: 'btn btn-secondary mt-3', form: { data: { turbo_confirm: 'Record that you mailed this letter by hand?' } }) %>
+                      class: 'btn btn-secondary mt-3', form: { data: { turbo_confirm: 'Have you mailed this letter?' } }) %>
       <% end %>
     <% elsif @receipt.queued_delivery_status? %>
-      <p class="mt-2">Queued for preparation</p>
+      <p class="mt-2">Waiting for PDF</p>
       <%= link_to 'Refresh status', admin_paper_rejection_letter_path(@receipt),
                   class: 'mt-3 inline-block text-primary-700 underline', data: { turbo_action: 'replace' } %>
     <% else %>

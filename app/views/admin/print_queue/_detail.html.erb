@@ -43,18 +43,18 @@
       <p class="mt-4 text-sm text-danger-800">The request is closed. Do not mail this copy.</p>
     <% elsif !@letter.canceled? && !@letter_exportable %>
       <p class="mt-4 text-sm text-danger-800">
-        <% if @letter_decision.allowed? %>
-          The PDF is missing. Issue a replacement or use the approved manual process.
+        <% if @letter_decision.allowed? && @letter_replaceable %>
+          PDF missing. Replace this request.
+        <% elsif @letter_decision.allowed? %>
+          PDF missing. Prepare and mail this letter by hand.
         <% else %>
           <%= letter_delivery_reason(@letter, @letter_decision.reason) %>
         <% end %>
       </p>
     <% end %>
-    <% if @letter.pending? && @letter_exportable %>
-      <p class="mt-4 max-w-prose text-sm text-gray-700">Check the downloaded PDF before printing. Confirm printing after you print it.</p>
-    <% end %>
     <div class="mt-4 flex flex-wrap items-start gap-3">
       <% if @letter_exportable %>
+        <p class="w-full text-sm text-gray-700"><%= 'Check the recipient and mailing address. ' unless @letter.released_at? %>Review the PDF before printing.</p>
         <%= form_with url: release_admin_print_queue_path(@letter), method: :post,
                       data: { turbo: false, controller: 'print-release', print_release_batch_value: false,
                               action: 'submit->print-release#download' } do %>
@@ -66,17 +66,17 @@
       <% if @letter.pending? && @letter.released_at %>
         <%= button_to 'Mark as Printed', mark_as_printed_admin_print_queue_path(@letter),
                       method: :post, class: 'btn btn-success',
-                      form: { data: { turbo_confirm: 'Confirm this letter was physically printed?' } } %>
+                      form: { data: { turbo_confirm: 'Has this letter been printed?' } } %>
       <% end %>
       <% if @letter.pending? %>
         <%= button_to(@letter.downloaded_copy_to_resolve? ? 'Discard unused copy' : 'Cancel letter', cancel_admin_print_queue_path(@letter),
                       method: :post, class: 'btn btn-danger-outline',
                       form: { data: { turbo_confirm: print_letter_cancel_confirmation(@letter) } }) %>
       <% end %>
-      <% if !@letter.canceled? && @letter.secure_request_form&.postal_delivery_eligible?(application: @letter.application) %>
+      <% if @letter_replaceable %>
         <%= button_to 'Replace paper request', replace_request_admin_print_queue_path(@letter),
                       method: :post, class: 'btn btn-secondary',
-                      form: { data: { turbo_confirm: secure_request_replacement_confirmation(@letter.secure_request_form) } } %>
+                      form: { data: { turbo_confirm: secure_request_replacement_confirmation(@letter.secure_request_form, letter: @letter) } } %>
       <% end %>
     </div>
   </div>

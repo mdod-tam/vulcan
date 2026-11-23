@@ -56,7 +56,7 @@ en:
       complained: Reported as spam
       unknown: Delivery unknown
       letter_printed: Letter marked printed
-      letter_released: Letter released for printing
+      letter_released: Letter released
       letter_canceled: Letter canceled
       sms_submitted: Text message submitted
       docuseal: DocuSeal invitation requested
@@ -81,7 +81,6 @@ en:
       letter_printed: Staff marked the letter printed; receipt by the recipient is
         not confirmed.
       letter_released: The letter was released to the print process.
-      letter_canceled: The print queue item was canceled.
       sms_submitted: The text message was submitted to its provider; receipt is not
         confirmed here.
       docuseal: DocuSeal owns this invitation. Postmark feedback does not establish

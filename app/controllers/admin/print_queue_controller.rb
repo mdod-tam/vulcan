@@ -40,13 +40,10 @@ module Admin
     end
 
     def replace_request
-      form = @letter.secure_request_form
-      unless @letter.application_id == form&.application_id && !@letter.canceled? && form&.postal_delivery_eligible?
-        return redirect_to admin_print_queue_path(@letter), status: :see_other, alert: 'This paper request can no longer be replaced.'
-      end
+      return redirect_to(admin_print_queue_path(@letter), status: :see_other, alert: 'This paper request can’t be replaced.') unless replaceable_paper_request?
 
-      result = replace_paper_request(form)
-      feedback = result.success? ? { notice: 'Replacement paper request queued for printing.' } : { alert: replacement_failure_message(result) }
+      result = replace_paper_request(@letter.secure_request_form)
+      feedback = result.success? ? { notice: 'Replacement letter queued.' } : { alert: replacement_failure_message(result) }
       redirect_to admin_print_queue_path(@letter), status: :see_other, **feedback
     end
 
@@ -74,6 +71,12 @@ module Admin
       load_letter
       @letter_decision = @letter.delivery_decision
       @letter_exportable = @letter_decision.allowed? && @letter.pdf_letter.attached?
+      @letter_replaceable = replaceable_paper_request?
+    end
+
+    def replaceable_paper_request?
+      form = @letter.secure_request_form
+      form && @letter.application_id == form.application_id && !@letter.canceled? && form.postal_delivery_eligible?(application: @letter.application)
     end
 
     def replace_paper_request(form)
@@ -138,7 +141,7 @@ module Admin
     def show_export_failure(error)
       AuditEventService.log(action: 'letter_export_failed', actor: current_user,
                             metadata: { print_queue_item_ids: selected_ids.presence || [params[:id]], error_class: error.class.name })
-      render_release_error('The PDF could not be prepared. Nothing was released. Review the selection and try again.')
+      render_release_error('Couldn’t prepare the PDF. Nothing was released. Try again.')
     end
   end
 end

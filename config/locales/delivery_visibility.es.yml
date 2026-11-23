@@ -57,7 +57,7 @@ es:
       complained: Marcado como correo no deseado
       unknown: Entrega desconocida
       letter_printed: Carta marcada como impresa
-      letter_released: Carta liberada para impresión
+      letter_released: Carta liberada
       letter_canceled: Carta cancelada
       sms_submitted: Mensaje de texto enviado al proveedor
       docuseal: Invitación de DocuSeal solicitada
@@ -82,7 +82,6 @@ es:
       letter_printed: El personal marcó la carta como impresa; no se ha confirmado
         su recepción.
       letter_released: La carta se liberó al proceso de impresión.
-      letter_canceled: Se canceló la carta en la cola de impresión.
       sms_submitted: El mensaje de texto se envió a su proveedor; aquí no se confirma
         su recepción.
       docuseal: DocuSeal gestiona esta invitación. Los datos de Postmark no confirman

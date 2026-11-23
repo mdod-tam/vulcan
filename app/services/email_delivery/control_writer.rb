@@ -14,7 +14,7 @@ module EmailDelivery
       def changed? = status == :changed
       def stale? = status == :stale
     end
-    BulkResult = Data.define(:status, :changed_count)
+    BulkResult = Data.define(:status, :changed_count, :letters_affected)
 
     # A form carries the version it was rendered from. On/off plus generation changes on every
     # turn-off, so a form loaded before someone else turned a control off and on again is stale.
@@ -72,8 +72,8 @@ module EmailDelivery
       action = enabled ? 'email_templates_bulk_enabled' : 'email_templates_bulk_disabled'
       EmailTemplate.transaction do
         rows = EmailTemplate.deliverable.order(:id).lock.to_a
-        next BulkResult.new(status: :already_applied, changed_count: 0) if applied?(operation_id, action)
-        next BulkResult.new(status: :stale, changed_count: 0) if bulk_version_for(rows) != expected_version
+        next BulkResult.new(status: :already_applied, changed_count: 0, letters_affected: false) if applied?(operation_id, action)
+        next BulkResult.new(status: :stale, changed_count: 0, letters_affected: false) if bulk_version_for(rows) != expected_version
 
         changed_pairs = rows.group_by { |row| [row.name, row.format] }.values.reject do |pair|
           pair.all? { |row| row.enabled == enabled }
@@ -85,9 +85,18 @@ module EmailDelivery
         AuditEventService.log(actor: actor, action: action, auditable: actor,
                               metadata: { count: changed_pairs.size, operation_id: operation_id })
         Letters::ReconcilePendingJob.schedule if !enabled && changed_pairs.any?
-        BulkResult.new(status: :applied, changed_count: changed_pairs.size)
+        BulkResult.new(status: :applied, changed_count: changed_pairs.size,
+                       letters_affected: !enabled && pending_letters_for?(changed_pairs))
       end
     end
+
+    def self.pending_letters_for?(pairs)
+      pairs.map(&:first).group_by(&:format).any? do |format, templates|
+        PrintQueueItem.unreleased.exists?(["delivery_context->>'template_format' = ? AND delivery_context->>'template_name' IN (?)",
+                                           format, templates.map(&:name)])
+      end
+    end
+    private_class_method :pending_letters_for?
 
     def self.apply_template_pair(rows, enabled:, actor:, operation_id:)
       old_values = rows.to_h { |row| [row.locale, row.enabled] }

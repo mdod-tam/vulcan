@@ -1229,7 +1229,7 @@ module Admin
       receipt = Notification.paper_rejection_letters.find_by!(recipient: @admin)
       assert_redirected_to admin_paper_rejection_letter_path(receipt)
       follow_redirect!
-      assert_select 'p', text: 'Queued for preparation'
+      assert_select 'p', text: 'Waiting for PDF'
       assert_select 'a', text: 'Refresh status'
 
       perform_enqueued_jobs(only: EmailDelivery::MailDeliveryJob)
@@ -1257,7 +1257,7 @@ module Admin
       assert_no_difference -> { Event.where(auditable: receipt, action: 'paper_rejection_mailed_manually').count } do
         post record_manual_mail_admin_paper_rejection_letter_path(receipt)
       end
-      assert_equal 'Manual mailing is unavailable for this letter.', flash[:alert]
+      assert_equal 'Can’t record mailing for this letter.', flash[:alert]
       assert_nil receipt.reload.metadata['mailed_manually_at']
     end
 
@@ -1272,13 +1272,13 @@ module Admin
       assert_no_match(/สวัสดี/, error.message)
       assert_equal 'U+0E2A', receipt.reload.metadata.dig('delivery_error', 'unsupported_codepoint')
       get admin_paper_rejection_letter_path(receipt)
-      assert_select 'p', text: /unsupported character \(U\+0E2A\)/
+      assert_select 'p', text: /Unsupported character \(U\+0E2A\)/
       assert_select 'button', text: 'Record as mailed'
 
       assert_difference -> { Event.where(auditable: receipt, action: 'paper_rejection_mailed_manually').count }, 1 do
         2.times { post record_manual_mail_admin_paper_rejection_letter_path(receipt) }
       end
-      assert_equal 'Manual mailing is already recorded.', flash[:notice]
+      assert_equal 'Already marked as mailed.', flash[:notice]
       follow_redirect!
       assert_select 'p', text: 'Mailed by hand'
     end

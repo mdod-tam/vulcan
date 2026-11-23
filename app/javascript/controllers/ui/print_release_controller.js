@@ -61,7 +61,7 @@ export default class extends Controller {
       setTimeout(() => URL.revokeObjectURL(url), 1000)
       if (this.element.isConnected) Turbo.visit(window.location.href, { action: "replace" })
     } catch (_error) {
-      this.statusTarget.textContent = "The download could not be confirmed. Refresh this page to check release status, then try downloading again."
+      this.statusTarget.textContent = "Couldn’t confirm the download. Refresh to check release status before retrying."
     } finally {
       this.busy = false
       controls.forEach(([control, disabled]) => { control.disabled = disabled })

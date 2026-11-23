@@ -17,20 +17,23 @@ module Admin
 
       assert_text 'Outgoing correspondence is on'
       assert_selector '#email-delivery [data-email-control]', count: EmailDelivery::CONTROL_NAMES.size, visible: :all
-      within('[data-email-control="communications.global"]') do
-        assert_text 'only factor is verified SMS'
-        assert_text 'recovery messages for all users'
-        assert_text 'SMS enrollment follows all controls.'
+      within('#sign-in-and-recovery-exceptions') do
+        assert_no_text 'only two-step verification method'
+        assert_selector 'summary', text: 'Sign-in and recovery exceptions'
+        page.execute_script("document.querySelector('#sign-in-and-recovery-exceptions summary').focus()")
+        page.driver.browser.keyboard.type(:Enter)
+        assert_text 'only two-step verification method'
+        assert_text 'All settings apply to text message setup.'
+        page.driver.browser.keyboard.type(:Enter)
+        assert_no_text 'only two-step verification method'
       end
-      within('[data-email-control="communications.sms"]') { assert_text 'Turning off SMS stops SMS sign-in and recovery.' }
-      assert_no_text 'All must be on for any channel to send.'
       take_screenshot('email-controls-index', html: true)
 
       find('#communication-categories summary').click
       within('[data-email-control="email.category.proof"]') do
         accept_confirm(/unreleased letters will be canceled permanently/) { click_button 'Turn off' }
       end
-      assert_text 'Proof is now off. Affected work that was still queued is blocked.'
+      assert_text 'Proof is now off.'
       within('#templates-proof-heading + ul') do
         assert_text 'Blocked: proof communications are turned off'
       end
@@ -46,7 +49,7 @@ module Admin
 
       voucher_en = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', locale: 'en')
       visit new_test_email_admin_email_template_path(voucher_en)
-      assert_selector '#test-send-controls-note', text: 'Test emails follow the master switch, Email, category, and template settings.'
+      assert_selector '#test-send-controls-note', text: 'Test emails follow delivery settings.'
       fill_in 'Recipient Email Address', with: 'tester@example.com'
       click_button 'Send Test Email'
       assert_text 'Test email not sent: this template is turned off.'
@@ -54,10 +57,11 @@ module Admin
 
       visit admin_email_templates_path
       within('[data-email-control="communications.global"]') do
-        accept_confirm(/blocks affected queued email, texts, and unreleased letters/) { click_button 'Turn off outgoing correspondence' }
+        accept_confirm(/Some sign-in and recovery messages can still go out/) { click_button 'Turn off outgoing correspondence' }
       end
       assert_text 'Outgoing correspondence is now off.'
       assert_text 'Outgoing correspondence is off'
+      assert_text 'Email, texts, and letter downloads are off.'
       assert_button 'Resume outgoing correspondence'
       within('[data-email-control="communications.letters"]') do
         assert_text 'Blocked by master'
@@ -110,6 +114,10 @@ module Admin
 
     test 'bulk changes confirm scope and require review before retrying failed or stale settings' do
       template = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', locale: :en)
+      application = create(:application)
+      context = EmailDelivery::Policy.capture(mail_action: 'ApplicationNotificationsMailer#proof_approved')
+      Letters::Delivery.queue!(recipient: application.user, application: application, letter_type: :proof_approved,
+                               context: context, actor: @admin) { StringIO.new('%PDF letter') }
       group_count = EmailTemplate.deliverable.pluck(:name, :format).uniq.size
       before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == template.id }
@@ -118,13 +126,15 @@ module Admin
       visit admin_email_templates_path
 
       disable_button = "#bulk-template-actions form[action='#{bulk_disable_admin_email_templates_path}'] button"
+      assert_no_link 'View print queue', href: admin_print_queue_index_path
       assert_no_selector disable_button
       page.execute_script("document.querySelector('#bulk-template-actions summary').focus()")
       page.driver.browser.keyboard.type(:Enter)
-      assert_text 'Applies to all available languages'
+      assert_text 'Applies to email and print templates in all available languages.'
+      assert_no_text '0 mixed'
       assert_selector disable_button, text: "Turn off #{group_count} template groups"
       take_screenshot('email-controls-bulk-review', html: true)
-      dismiss_confirm(/template groups across their available languages/) { find(disable_button).click }
+      dismiss_confirm(/template groups in all available languages/) { find(disable_button).click }
       assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       accept_confirm { find(disable_button).click }
 
@@ -140,7 +150,7 @@ module Admin
       current_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       accept_confirm { find(disable_button).click }
 
-      assert_text 'Template settings changed after this page loaded.'
+      assert_text 'Template settings changed. Check the counts and try again.'
       assert_equal current_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       take_screenshot('email-controls-bulk-stale', html: true)
 
@@ -152,11 +162,11 @@ module Admin
       take_screenshot('email-controls-bulk-remaining', html: true)
       accept_confirm(/^#{Regexp.escape(disable_label)}/) { find(disable_button).click }
 
-      assert_text(/\d+ template groups? changed\./)
-      assert_text 'Check the print queue for each letter'
+      assert_text(/Turned off \d+ template groups?\./)
+      assert_link 'View print queue', href: admin_print_queue_index_path
       assert EmailTemplate.deliverable.none?(&:enabled)
       find('#bulk-template-actions summary').click
-      assert_selector "#{disable_button}[disabled]", text: 'No template groups to turn off'
+      assert_no_selector disable_button, visible: :all
       take_screenshot('email-controls-bulk-retried', html: true)
     ensure
       EmailTemplate.skip_callback(:update, :after, callback) if callback

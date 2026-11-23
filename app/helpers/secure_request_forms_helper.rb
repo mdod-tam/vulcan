@@ -30,13 +30,14 @@ module SecureRequestFormsHelper
       default: t('admin.applications.secure_request_forms.contact.unknown'))
   end
 
-  def secure_request_status_label(secure_request_form)
-    if secure_request_form.recipient_channel_letter?
-      item = secure_request_form.print_queue_items.max_by(&:id)
-      return 'Resolve downloaded copy' if item&.downloaded_copy_to_resolve?
-      return t("outbound_delivery.letter_#{item.display_delivery_state}") if item
-    end
-    t("admin.applications.secure_request_forms.statuses.#{secure_request_form.display_status}")
+  def secure_request_row_status(form)
+    letter = form.print_queue_items.max_by(&:id) if form.recipient_channel_letter?
+    request_status = if letter&.downloaded_copy_to_resolve?
+                       tag.span('Request closed. Do not mail this copy.', class: 'text-danger-800')
+                     elsif letter.nil?
+                       tag.span(t("admin.applications.secure_request_forms.statuses.#{form.display_status}"))
+                     end
+    safe_join([request_status, delivery_visibility(form)].compact)
   end
 
   # Stable IDs distinguish people even when names, relationships and contacts collide.

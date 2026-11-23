@@ -8,7 +8,9 @@
       <%= presenter.text('details') %>
     </summary>
     <div class="mt-2 space-y-1 text-gray-700 break-words">
-      <p><%= presenter.description %></p>
+      <% if (description = presenter.description).present? %>
+        <p><%= description %></p>
+      <% end %>
       <p><%= presenter.text('channel', channel: presenter.text("channels.#{presenter.channel}", default: presenter.channel)) %></p>
       <% if presenter.masked_destination %>
         <p><%= presenter.text('destination', destination: presenter.masked_destination) %></p>

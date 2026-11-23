@@ -23,9 +23,9 @@ module Admin
           AuditEventService.log(action: 'paper_rejection_mailed_manually', actor: current_user, auditable: @receipt)
           {}
         elsif manual_mail_recorded?
-          { notice: 'Manual mailing is already recorded.' }
+          { notice: 'Already marked as mailed.' }
         else
-          { alert: 'Manual mailing is unavailable for this letter.' }
+          { alert: 'Can’t record mailing for this letter.' }
         end
       end
 

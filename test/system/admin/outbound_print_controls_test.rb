@@ -103,8 +103,8 @@ module Admin
         click_button 'Release and download PDF'
         assert_text 'Awaiting print confirmation'
         take_full_page_screenshot('expired-paper-request-released')
-        accept_confirm(/Discard unused downloads/) { click_button 'Replace paper request' }
-        assert_text 'Replacement paper request queued for printing.'
+        accept_confirm(/Discard unused copies/) { click_button 'Replace paper request' }
+        assert_text 'Replacement letter queued.'
         assert_text 'Canceled'
         assert_no_button 'Mark as Printed'
         take_full_page_screenshot('expired-paper-request-replaced')
@@ -119,13 +119,15 @@ module Admin
         click_button 'Release and download PDF'
         assert_button 'Mark as Printed'
         visit admin_application_path(application)
-        assert_selector '#mailed-id-document'
+        assert_selector '#mailed-id-document[aria-describedby~="mailed-id-formats"]'
+        assert_selector '#mailed-id-formats', text: /up to/
         within "#secure_request_form_#{form.id}" do
-          assert_text 'Letter canceled'
+          assert_text 'Letter canceled', count: 1
           assert_no_text 'canceled before release'
+          assert_text 'No link'
         end
         within '#audit-logs' do
-          assert_text 'Paper Proof Request Recorded'
+          assert_text 'Paper proof request'
           assert_text "Paper response requested from #{recipient.full_name}"
           assert_no_text 'secure upload link sent'
           assert_no_text 'Proof Resubmission Request Expired'
@@ -136,6 +138,10 @@ module Admin
         assert_text 'Mailed proof uploaded for review.'
         assert application.reload.id_proof.attached?
         assert_not replacement.reload.postal_delivery_eligible?
+        within "#secure_request_form_#{replacement.id}" do
+          assert_text 'Request closed. Do not mail this copy.'
+          assert_text 'Letter released', count: 1
+        end
         take_full_page_screenshot('mailed-proof-recorded')
         click_link "Review letter ##{replacement_letter.id}"
         assert_text 'Resolve downloaded copy'
@@ -153,12 +159,12 @@ module Admin
       receipt.record_delivery_queued!
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit notifications_path
-      within("#notification_#{receipt.id}") { click_link 'Income rejection letter' }
-      assert_text 'Queued for preparation'
+      within("#notification_#{receipt.id}") { click_link "Income rejection letter for #{@recipient.full_name}" }
+      assert_text 'Waiting for PDF'
       receipt.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(:unsupported_letter_text), channel: :letter)
       click_link 'Refresh status'
       assert_text 'Letter not queued'
-      assert_text 'Use the approved manual process.'
+      assert_text 'Prepare and mail this letter by hand.'
       take_screenshot('paper-rejection-letter-failed', html: true)
       accept_confirm { click_button 'Record as mailed' }
       assert_text 'Mailed by hand'
@@ -222,7 +228,7 @@ module Admin
       find("#letter-#{@letter.id}").check
       ActiveStorage::Blob.any_instance.stubs(:download).raises(ActiveStorage::FileNotFoundError)
       click_button 'Release and download selected'
-      assert_text 'The PDF could not be prepared. Nothing was released.'
+      assert_text 'Couldn’t prepare the PDF. Nothing was released.'
       assert_selector "#letter-#{@letter.id}:checked"
       assert_nil @letter.reload.released_at
       take_full_page_screenshot('outbound-print-storage-failure')

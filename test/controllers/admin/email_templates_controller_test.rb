@@ -181,7 +181,7 @@ module Admin
       assert_not en.enabled
       assert_not es.enabled
       assert_equal [1, 1], [en.delivery_generation, es.delivery_generation]
-      assert_match 'Affected work that was still queued is blocked', flash[:notice]
+      assert_match 'pair_toggle_test (EN and ES) is now off', flash[:notice]
     end
 
     test 'a stale template form does not reverse a newer change' do
@@ -227,7 +227,7 @@ module Admin
 
       assert EmailTemplate.deliverable.none?(&:enabled)
       assert(EmailTemplate.fragments.all?(&:enabled))
-      assert_match "#{EmailTemplate.deliverable.pluck(:name, :format).uniq.size} template groups changed", flash[:notice]
+      assert_match "Turned off #{EmailTemplate.deliverable.pluck(:name, :format).uniq.size} template groups", flash[:notice]
     end
 
     test 'all HTML preview surfaces use the same sandboxed document boundary' do
@@ -385,7 +385,7 @@ module Admin
       end
 
       assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
-      assert_match 'Template settings changed after this page loaded', flash[:alert]
+      assert_match 'Template settings changed. Check the counts and try again.', flash[:alert]
     end
 
     test 'rapid distinct edits each record an audit event and an unchanged resubmit records none' do

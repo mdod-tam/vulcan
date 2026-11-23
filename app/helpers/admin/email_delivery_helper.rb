@@ -49,12 +49,14 @@ module Admin
     def email_bulk_template_button(enabled:, counts:, version:)
       total = counts.values.sum
       change_count = total - counts.fetch(enabled ? :on : :off, 0)
+      return if change_count.zero?
+
       key = enabled ? 'enable_all' : 'disable_all'
       url = enabled ? bulk_enable_admin_email_templates_path : bulk_disable_admin_email_templates_path
 
       button_to email_delivery_t("#{key}_groups", count: change_count), url,
                 method: :patch, params: { operation_id: SecureRandom.uuid, expected_version: version },
-                disabled: change_count.zero?, class: enabled ? 'btn btn-secondary' : 'btn btn-danger-outline',
+                class: enabled ? 'btn btn-secondary' : 'btn btn-danger-outline',
                 form: { data: { turbo_confirm: email_delivery_t("#{key}_confirm", count: change_count) } }
     end
 
@@ -62,19 +64,16 @@ module Admin
       return { alert: email_delivery_t('bulk_stale') } if result.status == :stale
       return { notice: email_delivery_t('already_applied') } if result.status == :already_applied
 
-      message = email_delivery_t('bulk_result', count: result.changed_count)
-      message += " #{email_delivery_t('bulk_cancellation')}" if !enabled && result.changed_count.positive?
-      { notice: message }
+      return { notice: email_delivery_t('bulk_no_changes') } if result.changed_count.zero?
+
+      { notice: email_delivery_t(enabled ? 'bulk_enabled_result' : 'bulk_disabled_result', count: result.changed_count) }
     end
 
     def email_control_flash(result, label:)
       enabled = Array(result.control).all?(&:enabled)
       state = email_delivery_t(enabled ? 'state_on' : 'state_off').downcase
       case result.status
-      when :changed
-        message = email_delivery_t('changed', label: label, state: state)
-        message += " #{email_delivery_t('canceled_pending')}" unless enabled
-        { notice: message }
+      when :changed then { notice: email_delivery_t('changed', label: label, state: state) }
       when :unchanged then { notice: email_delivery_t('unchanged', label: label, state: state) }
       when :stale then { alert: email_delivery_t('stale', label: label) }
       else { notice: email_delivery_t('already_applied') }
@@ -88,7 +87,7 @@ module Admin
     private
 
     def saved_state_badge(saved_enabled, mixed)
-      return mixed_state_badge if mixed
+      return badge(email_delivery_t('pair_mixed'), :attention) if mixed
 
       state = if saved_enabled.nil?
                 'state_missing'
@@ -101,10 +100,6 @@ module Admin
                   saved_enabled ? :success : :danger
                 end
       badge(email_delivery_t(state), variant)
-    end
-
-    def mixed_state_badge
-      safe_join([badge(email_delivery_t('state_mixed'), :attention), tag.span(email_delivery_t('pair_mixed'), class: 'text-warning-800')], ' ')
     end
 
     def blocked_state_badge(suppressed_by, category)

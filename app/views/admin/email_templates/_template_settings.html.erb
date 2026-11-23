@@ -7,8 +7,13 @@
         <span><%= email_delivery_t('group_count', count: counts.values.sum) %></span>
         <%= badge(email_delivery_t('count_on', count: counts.fetch(:on, 0)), :success) %>
         <%= badge(email_delivery_t('count_off', count: counts.fetch(:off, 0)), :neutral) %>
-        <%= badge(email_delivery_t('count_mixed', count: counts.fetch(:mixed, 0)), :attention) %>
+        <% if counts.fetch(:mixed, 0).positive? %>
+          <%= badge(email_delivery_t('count_mixed', count: counts.fetch(:mixed)), :attention) %>
+        <% end %>
       </p>
+      <% if @show_print_queue_link %>
+        <%= link_to email_delivery_t('view_print_queue'), admin_print_queue_index_path, class: 'mt-2 inline-block text-primary-700 underline' %>
+      <% end %>
     </div>
     <details class="w-full sm:w-auto sm:max-w-md" id="bulk-template-actions">
       <summary class="btn btn-secondary w-fit cursor-pointer"><%= email_delivery_t('bulk_actions') %><span aria-hidden="true">▾</span></summary>
