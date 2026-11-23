@@ -33,7 +33,7 @@ class ApplicationLifecycleTest < ApplicationSystemTestCase
     visit constituent_portal_application_path(application)
     click_on 'Resubmit Income Proof'
     assert_selector 'h1', text: 'Upload New Income Proof'
-    assert_text 'Maximum file size: 5MB'
+    assert_selector '#file-description', text: 'Maximum size: 5MB.'
     attach_cleared_document 'income_proof', file_fixture('income_proof.pdf')
     click_button 'Submit Document'
     assert_success_message('Proof submitted successfully')
