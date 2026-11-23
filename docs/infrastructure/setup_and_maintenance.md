@@ -93,7 +93,7 @@ Changing a config var creates a release and restarts the app's dynos. `app.json`
 
 On the next build, expect one Node dependency installation, the deferral message, and Rails' JavaScript and CSS builds without intervening Yarn installs. Confirm fingerprinted JS/CSS are present and a page loads both assets. If this flag is used on another environment, install dependencies before precompilation.
 
-Heroku installs the Ruby version recorded in `Gemfile.lock` (`4.0.9`); no chruby installation or Ruby config var is needed on Heroku. See [Heroku's Ruby version selection](https://devcenter.heroku.com/articles/ruby-support-reference#specify-a-ruby-version). Locally use `ruby-install ruby 4.0.9`, then `chruby ruby-4.0.9`, and install the bundle. When updating the pin, run `bundle update --ruby` under the selected Ruby and review the lockfile for unrelated dependency changes.
+Heroku installs the Ruby version recorded in `Gemfile.lock` (`4.0.10`); no chruby installation or Ruby config var is needed on Heroku. See [Heroku's Ruby version selection](https://devcenter.heroku.com/articles/ruby-support-reference#specify-a-ruby-version). Locally use `ruby-install ruby 4.0.10`, then `chruby ruby-4.0.10`, and install the bundle. When updating the pin, run `bundle update --ruby` under the selected Ruby and review the lockfile for unrelated dependency changes.
 
 ## Heroku deployment and operations
 
