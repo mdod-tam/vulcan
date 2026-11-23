@@ -26,12 +26,44 @@ module Admin
     end
 
     def print_letter_stage(letter)
+      return 'In outgoing mail' if letter.mail_handoff_at?
+      return 'Copy discarded' if letter.mail_discarded_at?
       return 'Resolve downloaded copy' if letter.downloaded_copy_to_resolve?
 
       {
         queued: 'Awaiting release', blocked: 'Blocked', configuration_error: 'Needs attention',
         released: 'Awaiting print confirmation', printed: 'Printed', canceled: 'Canceled'
       }.fetch(letter.display_delivery_state)
+    end
+
+    def print_queue_selectable?(letter)
+      letter.pending? || letter.awaiting_mail_handoff?
+    end
+
+    def print_queue_can_mail?(letter, refusals)
+      letter.outgoing_letter? && !refusals.key?(letter.id)
+    end
+
+    def print_queue_attention_reason(letter, refusal: nil)
+      return refusal if refusal
+      return letter_delivery_reason(letter, letter.cancellation_reason) if letter.canceled?
+      return 'PDF missing. Issue a new letter.' unless letter.pdf_letter.attached?
+
+      letter_delivery_reason(letter, letter.delivery_decision.reason)
+    end
+
+    def print_preparation_link(notice)
+      path = if notice.action == Notification::PAPER_REJECTION_LETTER_ACTION
+               admin_paper_rejection_letter_path(notice)
+             elsif notice.notifiable.is_a?(Application)
+               admin_application_path(notice.notifiable)
+             elsif notice.notifiable.is_a?(User)
+               admin_user_path(notice.notifiable)
+             else
+               notifications_path(anchor: "notification_#{notice.id}")
+             end
+
+      link_to "Review notice ##{notice.id}", path, class: 'text-primary-700 underline'
     end
 
     def rejection_letter_status(letter)

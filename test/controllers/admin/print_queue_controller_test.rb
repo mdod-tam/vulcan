@@ -55,6 +55,9 @@ module Admin
       assert_equal 'application/zip', response.media_type
       Zip::File.open_buffer(response.body) { |zip| assert_equal @letters.map(&:pdf_filename).sort, zip.entries.map(&:name).sort }
       assert(@letters.all? { |item| item.reload.released_at })
+      get response.headers.fetch('Content-Location')
+      assert_select 'h1', text: 'Print batch'
+      assert_equal @letters.map { |letter| letter.id.to_s }.sort, css_select('input[name="letter_ids[]"][checked]').pluck('value').sort
     end
 
     test 'a refused batch preserves selection and releases nothing' do
@@ -76,6 +79,85 @@ module Admin
       assert_select "#letter-#{missing.id}[checked]", count: 0
       assert_select "#letter-#{available.id}[checked]"
       assert_nil available.reload.released_at
+    end
+
+    test 'a missing stored file identifies its letter and leaves good rows selected' do
+      missing, available = @letters
+      missing.pdf_letter.blob.service.delete(missing.pdf_letter.blob.key)
+
+      post download_batch_admin_print_queue_index_path, params: { letter_ids: @letters.map(&:id) }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, "Letter ##{missing.id}: The PDF is missing."
+      assert_select "#letter-#{missing.id}[checked]", count: 0
+      assert_select "#letter-#{available.id}[checked]"
+      assert(@letters.none? { |item| item.reload.released_at? })
+    end
+
+    test 'one mail action records printing and outgoing mail without rewriting history on retry' do
+      letter = issue_paper_proof(paper_application).print_queue_items.sole
+      post release_admin_print_queue_path(letter)
+      params = { letter_ids: [letter.id], ids: letter.id.to_s }
+
+      post mark_in_outgoing_mail_admin_print_queue_index_path, params: params
+
+      assert_redirected_to batch_admin_print_queue_index_path(ids: letter.id)
+      assert_predicate letter.reload, :printed?
+      assert_equal @admin, letter.admin
+      assert_equal @admin, letter.mail_handoff_by
+      assert_equal 1, Event.where(action: 'letter_printed', auditable: letter).count
+      assert_equal 1, Event.where(action: 'letter_in_outgoing_mail', auditable: letter).count
+      before = [letter.printed_at, letter.mail_handoff_at]
+
+      travel 1.hour do
+        post mark_in_outgoing_mail_admin_print_queue_index_path, params: params
+      end
+
+      assert_equal before, [letter.reload.printed_at, letter.mail_handoff_at]
+      assert_not PrintQueueItem.outstanding.exists?(letter.id)
+    end
+
+    test 'an address change blocks mail handoff but preserves the record of printing' do
+      letter = issue_paper_proof(paper_application).print_queue_items.sole
+      post release_admin_print_queue_path(letter)
+      letter.constituent.update!(physical_address_1: '76 New Street')
+
+      get batch_admin_print_queue_index_path(ids: letter.id)
+      assert_select "#mail_warning_print_queue_item_#{letter.id}", text: /Do not mail/
+      post mark_in_outgoing_mail_admin_print_queue_index_path, params: { letter_ids: [letter.id], ids: letter.id.to_s }
+      assert_response :unprocessable_content
+      assert_nil letter.reload.mail_handoff_at
+      assert_nil letter.printed_at
+
+      post mark_as_printed_admin_print_queue_path(letter)
+      printed_at = letter.reload.printed_at
+      assert printed_at
+      assert PrintQueueItem.awaiting_mail_handoff.exists?(letter.id)
+
+      post discard_printed_copy_admin_print_queue_path(letter)
+      assert_equal printed_at, letter.reload.printed_at
+      assert letter.mail_discarded_at?
+      assert_not PrintQueueItem.outstanding.exists?(letter.id)
+    end
+
+    test 'failed or overdue preparation is visible until the follow-up is resolved' do
+      failed, overdue = %i[error queued].map do |status|
+        create(:notification, action: Notification::PAPER_REJECTION_LETTER_ACTION, recipient: @admin, notifiable: @recipient,
+                              delivery_status: status, created_at: 2.hours.ago)
+      end
+      current = create(:notification, action: Notification::PAPER_REJECTION_LETTER_ACTION, recipient: @admin, notifiable: @recipient, delivery_status: :queued)
+
+      get admin_print_queue_index_path
+      assert_select 'section[aria-labelledby="print-attention-heading"]' do
+        assert_select 'a', text: "Review notice ##{failed.id}"
+        assert_select 'a', text: "Review notice ##{overdue.id}"
+        assert_select 'a', text: "Review notice ##{current.id}", count: 0
+      end
+
+      post dismiss_preparation_failure_admin_print_queue_index_path, params: { notification_id: failed.id }
+      follow_redirect!
+      assert_select 'a', text: "Review notice ##{failed.id}", count: 0
+      assert_select 'a', text: "Review notice ##{overdue.id}"
     end
 
     test 'physical print confirmation cannot skip release' do

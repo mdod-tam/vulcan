@@ -2,7 +2,7 @@
 
 module Admin
   class PrintQueueController < Admin::BaseController
-    before_action :load_letter, only: %i[cancel replace_request]
+    before_action :load_letter, only: %i[cancel replace_request discard_printed_copy]
     rescue_from Letters::Delivery::ReleaseDenied, with: :show_release_refusal
     rescue_from ActiveStorage::FileNotFoundError, Zip::Error, IOError, with: :show_export_failure
 
@@ -23,7 +23,35 @@ module Admin
     def download_batch
       return redirect_to admin_print_queue_index_path, status: :see_other unless request.post?
 
-      send_export(Letters::Delivery.export!(selected_ids, actor: current_user))
+      export = Letters::Delivery.export!(selected_ids, actor: current_user)
+      response.headers['Content-Location'] = batch_admin_print_queue_index_path(ids: selected_ids.join(','))
+      send_export(export)
+    end
+
+    def batch
+      load_batch
+    end
+
+    def mark_in_outgoing_mail
+      Letters::Delivery.mark_in_outgoing_mail!(selected_ids, actor: current_user)
+      redirect_to batch_return_path, status: :see_other, notice: 'Marked in outgoing mail.'
+    end
+
+    def discard_printed_copy
+      Letters::Delivery.discard_printed_copy!(@letter, actor: current_user)
+      redirect_to admin_print_queue_path(@letter), status: :see_other, notice: 'Copy marked as discarded.'
+    end
+
+    def dismiss_preparation_failure
+      notice = Notification.letter_preparation_attention.error_delivery_status.find(params.expect(:notification_id))
+      notice.update_metadata!(:letter_preparation_resolved_at, Time.current.iso8601)
+      redirect_to admin_print_queue_index_path, status: :see_other, notice: 'Preparation follow-up closed.'
+    end
+
+    def close_follow_up
+      letter = PrintQueueItem.follow_up_needed.find(params.expect(:id))
+      Letters::Delivery.close_follow_up!(letter, actor: current_user)
+      redirect_to admin_print_queue_index_path, status: :see_other, notice: 'Letter follow-up closed.'
     end
 
     def mark_as_printed
@@ -49,7 +77,7 @@ module Admin
 
     def mark_batch_as_printed
       Letters::Delivery.mark_printed!(selected_ids, actor: current_user)
-      redirect_to admin_print_queue_index_path, notice: 'Selected letters marked as printed.'
+      redirect_to batch_return_path, status: :see_other, notice: 'Selected letters marked as printed.'
     end
 
     private
@@ -72,6 +100,7 @@ module Admin
       @letter_decision = @letter.delivery_decision
       @letter_exportable = @letter_decision.allowed? && @letter.pdf_letter.attached?
       @letter_replaceable = replaceable_paper_request?
+      @mail_refusals = mail_refusals([@letter])
     end
 
     def replaceable_paper_request?
@@ -91,10 +120,49 @@ module Admin
 
     def load_queue
       @selected_letter_ids = selected_ids
-      @pending_letters = PrintQueueItem.unreleased.includes(:constituent, :application).order(created_at: :desc)
-      @released_letters = PrintQueueItem.awaiting_print_confirmation.includes(:constituent, :application).order(released_at: :desc)
-      @printed_letters = PrintQueueItem.printed.includes(:constituent, :application, :admin).order(printed_at: :desc).limit(50)
-      @canceled_letters = PrintQueueItem.canceled.includes(:constituent, :application).order(canceled_at: :desc, id: :desc).limit(50)
+      pending = PrintQueueItem.unreleased.includes(:constituent, :application, :secure_request_form, :pdf_letter_attachment).order(:created_at, :id)
+      @pending_letters, blocked = PrintQueueItem.cache { pending.partition { |letter| ready_to_download?(letter) } }
+      @released_letters = PrintQueueItem.awaiting_print_confirmation.includes(:constituent, :application, :secure_request_form).order(:released_at, :id)
+      @mail_letters = PrintQueueItem.awaiting_mail_handoff.includes(:constituent, :application, :secure_request_form, :admin).order(:printed_at, :id)
+      @mail_refusals = mail_refusals(@released_letters.to_a + @mail_letters.to_a)
+      completed_prints = PrintQueueItem.printed.where.not(id: PrintQueueItem.awaiting_mail_handoff)
+      @printed_letters = completed_prints.includes(:constituent, :secure_request_form, :admin, :mail_handoff_by).order(printed_at: :desc).limit(50)
+      @canceled_letters = PrintQueueItem.canceled.includes(:constituent, :secure_request_form).order(canceled_at: :desc, id: :desc).limit(50)
+      @attention_letters = blocked + PrintQueueItem.follow_up_needed.order(:canceled_at, :id).to_a
+      @preparation_notices = Notification.letter_preparation_attention.includes(:notifiable).order(:created_at, :id)
+    end
+
+    def load_batch
+      @batch_letters = PrintQueueItem.where(id: batch_ids.split(',')).where.not(released_at: nil)
+                                     .includes(:constituent, :application, :secure_request_form, :admin, :mail_handoff_by).order(:id).to_a
+      @mail_refusals = mail_refusals(@batch_letters)
+      @selected_letter_ids = if request.get?
+                               @batch_letters.map { |letter| letter.id.to_s } - params[:skipped].to_s.split(',')
+                             else
+                               selected_ids
+                             end
+    end
+
+    def mail_refusals(letters)
+      PrintQueueItem.cache do
+        letters.filter_map do |letter|
+          next unless letter.outgoing_letter? && letter.released_at? && (letter.pending? || letter.awaiting_mail_handoff? || letter.canceled?)
+
+          reason = Letters::Delivery.mail_handoff_refusal(letter)
+          [letter.id, reason] if reason
+        end.to_h
+      end
+    end
+
+    def batch_ids
+      params[:ids].to_s
+    end
+
+    def batch_return_path
+      return admin_print_queue_index_path if batch_ids.blank?
+
+      skipped = batch_ids.split(',') - selected_ids
+      batch_admin_print_queue_index_path({ ids: batch_ids, skipped: skipped.join(',').presence }.compact)
     end
 
     def selected_ids
@@ -108,6 +176,7 @@ module Admin
 
     def show_release_refusal(error)
       message = action_name.in?(%w[release download_batch]) ? "Nothing was released. #{error.message}" : error.message
+      @release_refusals = error.reasons if action_name == 'download_batch'
       render_release_error(message)
     end
 
@@ -115,19 +184,28 @@ module Admin
       detail = params[:id].present?
       if detail
         load_detail
+      elsif batch_ids.present?
+        load_batch
       else
         load_queue
-        preserve_exportable_selection if action_name == 'download_batch'
       end
+      preserve_exportable_selection if action_name == 'download_batch'
+      page = if detail
+               :show
+             elsif batch_ids.present?
+               :batch
+             else
+               :index
+             end
       respond_to do |format|
         format.html do
           flash.now[:alert] = message
-          render(detail ? :show : :index, status: :unprocessable_content)
+          render page, status: :unprocessable_content
         end
         format.turbo_stream do
           target = detail ? 'print-letter-content' : 'print-queue-content'
-          partial = detail ? 'admin/print_queue/detail' : 'admin/print_queue/queue'
-          render turbo_stream: turbo_stream.replace(target, partial: partial, locals: { error: message }),
+          partial = { show: 'detail', batch: 'batch', index: 'queue' }.fetch(page)
+          render turbo_stream: turbo_stream.replace(target, partial: "admin/print_queue/#{partial}", locals: { error: message }),
                  status: :unprocessable_content
         end
       end
@@ -135,7 +213,11 @@ module Admin
 
     def preserve_exportable_selection
       items = PrintQueueItem.pending.where(id: @selected_letter_ids).includes(:constituent, :application, :secure_request_form, :pdf_letter_attachment)
-      @selected_letter_ids = items.filter_map { |item| item.id.to_s if item.pdf_letter.attached? && item.delivery_decision.allowed? }
+      @selected_letter_ids = items.filter_map { |item| item.id.to_s if ready_to_download?(item) }
+    end
+
+    def ready_to_download?(letter)
+      !@release_refusals&.key?(letter.id) && letter.pdf_letter.attached? && letter.delivery_decision.allowed?
     end
 
     def show_export_failure(error)

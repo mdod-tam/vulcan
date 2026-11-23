@@ -117,6 +117,40 @@ module Letters
       end
     end
 
+    def self.mark_in_outgoing_mail!(ids, actor:)
+      items = load_items!(ids)
+      with_locked_items(items, controls: true) do |locked|
+        refusals = locked.reject(&:mail_handoff_at?).each_with_object({}) do |item, rejected|
+          if (reason = mail_handoff_refusal(item))
+            rejected[item.id] = reason
+          end
+        end
+        raise ReleaseDenied, refusals if refusals.any?
+
+        locked.each { |item| item.confirm_mail_handoff!(actor: actor) }
+      end
+    end
+
+    def self.mail_handoff_refusal(item)
+      return 'This letter was canceled.' if item.canceled?
+      return 'Print only.' unless item.outgoing_letter?
+      return 'Release this letter first.' unless item.released_at?
+      return 'This copy was discarded.' if item.mail_discarded_at?
+
+      decision = item.delivery_decision
+      return if decision.allowed?
+
+      EmailDelivery::ControlPanel.reason_text(decision.reason).upcase_first
+    end
+
+    def self.discard_printed_copy!(item, actor:)
+      with_locked_items([item]) { |locked| locked.sole.discard_printed_copy!(actor: actor) }
+    end
+
+    def self.close_follow_up!(item, actor:)
+      with_locked_items([item]) { |locked| locked.sole.close_follow_up!(actor: actor) }
+    end
+
     def self.cancel!(item, reason:, actor: nil, unreleased_only: false)
       with_locked_items([item]) do |locked|
         current = locked.first
@@ -250,16 +284,23 @@ module Letters
       missing = items.reject { |item| item.pdf_letter.attached? }
       raise(ReleaseDenied, missing.to_h { |item| [item.id, 'The PDF is missing. Issue a new letter.'] }) if missing.any?
 
-      return Export.new(bytes: items.first.pdf_letter.download, filename: items.first.pdf_filename, content_type: 'application/pdf') if items.one?
+      return Export.new(bytes: download_pdf!(items.first), filename: items.first.pdf_filename, content_type: 'application/pdf') if items.one?
 
       bytes = Zip::OutputStream.write_buffer do |zip|
         items.each do |item|
           zip.put_next_entry(item.pdf_filename)
-          zip.write(item.pdf_letter.download)
+          zip.write(download_pdf!(item))
         end
       end.string
       Export.new(bytes: bytes, filename: "letters_#{Time.current.to_date.iso8601}.zip", content_type: 'application/zip')
     end
     private_class_method :build_export
+
+    def self.download_pdf!(item)
+      item.pdf_letter.download
+    rescue ActiveStorage::FileNotFoundError
+      raise ReleaseDenied, { item.id => 'The PDF is missing. Issue a new letter.' }
+    end
+    private_class_method :download_pdf!
   end
 end

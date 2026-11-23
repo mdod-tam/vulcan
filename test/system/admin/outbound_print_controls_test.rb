@@ -14,7 +14,7 @@ module Admin
       end
     end
 
-    test 'All dominates saved channels and print release explains a refusal without losing history' do
+    test 'All dominates saved channels and blocked letters remain visible without being selectable' do
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
       within('[data-email-control="communications.global"]') { accept_confirm { click_button 'Turn off outgoing correspondence' } }
@@ -34,10 +34,14 @@ module Admin
       assert_no_selector 'iframe'
       take_full_page_screenshot('outbound-print-detail')
       click_link 'Back to print queue'
-      find("#letter-#{@letter.id}").check
-      click_button 'Release and download selected'
-      assert_text 'Nothing was released'
-      assert_text 'Recently canceled'
+      within('section[aria-labelledby="print-attention-heading"]') do
+        assert_link "Review letter ##{@letter.id}"
+        assert_text 'Outgoing correspondence is turned off'
+      end
+      assert_no_selector "#letter-#{@letter.id}"
+      Letters::ReconcilePendingJob.perform_now
+      refresh
+      within('section[aria-label="Recently canceled"]') { assert_link "Review letter ##{@letter.id}" }
       assert @letter.reload.canceled?
       assert_nil @letter.released_at
       take_full_page_screenshot('outbound-print-release-refused')
@@ -55,7 +59,7 @@ module Admin
       assert_button 'Mark as Printed'
       assert_text 'Awaiting print confirmation'
       take_full_page_screenshot('outbound-print-released')
-      accept_confirm { click_button 'Mark as Printed' }
+      click_button 'Mark as Printed'
       assert_text 'Letter marked as printed.'
       assert @letter.reload.printed?
       take_full_page_screenshot('outbound-print-confirmed')
@@ -194,7 +198,7 @@ module Admin
       take_full_page_screenshot('outbound-sms-setup-retried')
     end
 
-    test 'select all releases a batch and refreshes the queue after downloading' do
+    test 'select all keeps the exact batch together after downloading' do
       second = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :disability_certification_form,
                                         context: EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form'), actor: @admin) do
         StringIO.new('%PDF second letter')
@@ -208,15 +212,18 @@ module Admin
         take_full_page_screenshot('print-batch-selected')
         click_button 'Release and download selected'
       end
-      within('section[aria-label="Awaiting release"]') { assert_text 'No letters in this group.' }
-      within('section[aria-label="Released — awaiting print confirmation"]') do
+      assert_selector 'h1', text: 'Print batch'
+      within('section[aria-label="Batch letters"]') do
+        assert_selector 'input[name="letter_ids[]"]:checked', count: 2
         assert_link "Review letter ##{@letter.id}"
         assert_link "Review letter ##{second.id}"
+        assert_button 'Mark 2 printed'
       end
       assert @letter.reload.released_at
       assert second.reload.released_at
       take_full_page_screenshot('print-batch-refreshed')
       page.current_window.resize_to(390, 844)
+      assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth')
       take_full_page_screenshot('print-batch-phone')
     ensure
       page.current_window.resize_to(1200, 800)
@@ -226,7 +233,7 @@ module Admin
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_print_queue_index_path
       find("#letter-#{@letter.id}").check
-      ActiveStorage::Blob.any_instance.stubs(:download).raises(ActiveStorage::FileNotFoundError)
+      ActiveStorage::Blob.any_instance.stubs(:download).raises(IOError)
       click_button 'Release and download selected'
       assert_text 'Couldn’t prepare the PDF. Nothing was released.'
       assert_selector "#letter-#{@letter.id}:checked"
@@ -239,8 +246,7 @@ module Admin
       assert_no_selector "#letter-#{@letter.id}:checked"
       find("#letter-#{@letter.id}").check
       click_button 'Release and download selected'
-      within('section[aria-label="Awaiting release"]') { assert_text 'No letters in this group.' }
-      within('section[aria-label="Released — awaiting print confirmation"]') { assert_link "Review letter ##{@letter.id}" }
+      within('section[aria-label="Batch letters"]') { assert_link "Review letter ##{@letter.id}" }
       take_full_page_screenshot('outbound-print-storage-retried')
     end
 
@@ -251,14 +257,51 @@ module Admin
         find("#letter-#{@letter.id}").check
         click_button 'Release and download selected'
       end
-      within('section[aria-label="Released — awaiting print confirmation"]') do
-        find("#letter-#{@letter.id}").check
-        click_button 'Mark selected as printed'
+      within('section[aria-label="Batch letters"]') do
+        assert_selector "#letter-#{@letter.id}:checked"
+        click_button 'Mark 1 printed'
       end
 
       assert_text 'Selected letters marked as printed.'
-      within('section[aria-label="Recently printed"]') { assert_link "Review letter ##{@letter.id}" }
+      within('section[aria-label="Batch letters"]') { assert_text 'Printed' }
       assert @letter.reload.printed_at
+    end
+
+    test 'a keyboard user can leave out an unsafe copy and record outgoing mail once' do
+      ensure_system_audit_actor!
+      context = EmailDelivery::Policy.capture(mail_action: 'ApplicationNotificationsMailer#account_created')
+      letters = [@recipient, create(:constituent)].map do |recipient|
+        Letters::Delivery.queue!(recipient: recipient, application: nil, letter_type: :account_created, context: context) do
+          StringIO.new('%PDF letter')
+        end
+      end
+      first, stale = letters
+      sign_in(@admin, bypass_mfa_enrollment: true)
+      visit admin_print_queue_index_path
+      letters.each { |letter| find("#letter-#{letter.id}").check }
+      click_button 'Release and download selected'
+      assert_button 'Mark 2 in outgoing mail'
+      stale.constituent.update!(physical_address_1: '76 New Street')
+      refresh
+      page.current_window.resize_to(390, 844)
+      assert_text 'Do not mail.'
+      assert_selector "#letter-#{stale.id}[aria-describedby='mail_warning_print_queue_item_#{stale.id}']"
+      assert_button 'Mark 2 in outgoing mail', disabled: true
+      take_full_page_screenshot('print-batch-do-not-mail-phone')
+
+      page.execute_script("document.getElementById('letter-#{stale.id}').focus()")
+      page.driver.browser.keyboard.type(:Space)
+      assert_selector "#letter-#{first.id}:checked"
+      assert_button 'Mark 1 in outgoing mail', disabled: false
+      click_button 'Mark 1 in outgoing mail'
+
+      assert_text 'Marked in outgoing mail.'
+      assert first.reload.mail_handoff_at?
+      assert_predicate stale.reload, :pending?
+      assert_no_selector "#letter-#{stale.id}:checked"
+      take_full_page_screenshot('print-batch-mail-recorded')
+    ensure
+      page.current_window.resize_to(1200, 800)
     end
 
     private

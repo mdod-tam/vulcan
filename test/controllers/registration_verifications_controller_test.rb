@@ -87,6 +87,24 @@ class RegistrationVerificationsControllerTest < ActionDispatch::IntegrationTest
     assert_nil next_proof.reload.consumed_at
   end
 
+  test 'a postal registration confirmation has a receipt before the PDF is prepared' do
+    attributes = @attributes.merge(communication_preference: 'letter', physical_address_1: '123 Main Street',
+                                   city: 'Baltimore', state: 'MD', zip_code: '21201')
+    patch registration_verification_path(token: @token), params: { user: attributes }
+
+    user = @verification.reload.created_user
+    notice = Notification.find_by!(action: 'account_created', recipient: user)
+    assert_equal 'letter', notice.metadata['channel']
+    assert_not PrintQueueItem.exists?(constituent: user, letter_type: :registration_confirmation)
+
+    travel 2.hours do
+      assert Notification.letter_preparation_attention.exists?(notice.id)
+    end
+    perform_enqueued_jobs(only: EmailDelivery::MailDeliveryJob)
+    assert PrintQueueItem.exists?(constituent: user, letter_type: :registration_confirmation)
+    assert_not Notification.letter_preparation_attention.exists?(notice.id)
+  end
+
   test 'invalid profile stays editable and the same unexpired link succeeds after correction' do
     assert_no_difference ['User.count', 'Session.count'] do
       patch registration_verification_path(token: @token), params: { user: @attributes.merge(last_name: '', password: 'short') }

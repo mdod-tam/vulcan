@@ -34,6 +34,18 @@
       <% if @letter.released_at %>
         <div><dt class="inline font-semibold">Released:</dt> <dd class="inline"><%= l(@letter.released_at, format: :long) %></dd></div>
       <% end %>
+      <% if @letter.printed_at %>
+        <div>
+          <dt class="inline font-semibold">Printed:</dt>
+          <dd class="inline"><%= l(@letter.printed_at, format: :long) %><%= " by #{@letter.admin.full_name}" if @letter.admin %></dd>
+        </div>
+      <% end %>
+      <% if @letter.mail_handoff_at %>
+        <div>
+          <dt class="inline font-semibold">In outgoing mail:</dt>
+          <dd class="inline"><%= l(@letter.mail_handoff_at, format: :long) %> by <%= @letter.mail_handoff_by.full_name %></dd>
+        </div>
+      <% end %>
       <% if @letter.canceled? %>
         <div><dt class="inline font-semibold">Cancellation:</dt> <dd class="inline"><%= letter_delivery_reason(@letter, @letter.cancellation_reason) %></dd></div>
       <% end %>
@@ -41,6 +53,8 @@
 
     <% if @letter.downloaded_copy_to_resolve? %>
       <p class="mt-4 text-sm text-danger-800">The request is closed. Do not mail this copy.</p>
+    <% elsif (reason = @mail_refusals[@letter.id]) %>
+      <p class="mt-4 font-semibold text-danger-800"><%= "Do not mail. #{reason}" %></p>
     <% elsif !@letter.canceled? && !@letter_exportable %>
       <p class="mt-4 text-sm text-danger-800">
         <% if @letter_decision.allowed? && @letter_replaceable %>
@@ -65,8 +79,15 @@
       <% end %>
       <% if @letter.pending? && @letter.released_at %>
         <%= button_to 'Mark as Printed', mark_as_printed_admin_print_queue_path(@letter),
-                      method: :post, class: 'btn btn-success',
-                      form: { data: { turbo_confirm: 'Has this letter been printed?' } } %>
+                      method: :post, class: 'btn btn-secondary' %>
+      <% end %>
+      <% if @letter.released_at? && print_queue_selectable?(@letter) && print_queue_can_mail?(@letter, @mail_refusals) %>
+        <%= button_to 'Mark in outgoing mail', mark_in_outgoing_mail_admin_print_queue_index_path,
+                      params: { letter_ids: [@letter.id] }, class: 'btn btn-primary' %>
+      <% end %>
+      <% if @letter.awaiting_mail_handoff? %>
+        <%= button_to('Discard printed copy', discard_printed_copy_admin_print_queue_path(@letter),
+                      class: 'btn btn-danger-outline', form: { data: { turbo_confirm: 'Did you discard this copy?' } }) %>
       <% end %>
       <% if @letter.pending? %>
         <%= button_to(@letter.downloaded_copy_to_resolve? ? 'Discard unused copy' : 'Cancel letter', cancel_admin_print_queue_path(@letter),

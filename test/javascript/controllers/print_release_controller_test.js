@@ -40,19 +40,35 @@ test('restored selection is retained, partial selection is announced, and select
   expect(submit.disabled).toBe(true)
 })
 
-test('successful download starts the attachment before refreshing the queue', async () => {
+test('successful download starts the attachment before opening the exact batch', async () => {
   letters[0].checked = true
   const blob = new Blob(['pdf'])
-  global.fetch = jest.fn().mockResolvedValue({ ok: true, headers: new Headers({ 'Content-Disposition': 'attachment; filename="letters.zip"' }), blob: () => Promise.resolve(blob) })
+  const headers = new Headers({ 'Content-Disposition': 'attachment; filename="letters.zip"', 'Content-Location': '/batch?ids=1' })
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, headers, blob: () => Promise.resolve(blob) })
   URL.createObjectURL = jest.fn(() => 'blob:download')
   URL.revokeObjectURL = jest.fn()
   const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
   await controller.download({ preventDefault: jest.fn(), submitter: submit })
   expect(fetch.mock.calls[0][1].body.getAll('letter_ids[]')).toEqual(['1'])
   expect(click).toHaveBeenCalledTimes(1)
-  expect(Turbo.visit).toHaveBeenCalledWith(window.location.href, { action: 'replace' })
+  expect(Turbo.visit).toHaveBeenCalledWith('/batch?ids=1', { action: 'replace' })
   expect(click.mock.invocationCallOrder[0]).toBeLessThan(Turbo.visit.mock.invocationCallOrder[0])
   click.mockRestore()
+})
+
+test('mail action counts selected letters and stays disabled if one cannot be mailed', () => {
+  submit.dataset.countLabel = 'Mark {count} in outgoing mail'
+  submit.dataset.mail = 'true'
+  letters[0].dataset.canMail = 'true'
+  letters[0].checked = true
+  controller.selectionChanged()
+  expect(submit.textContent).toBe('Mark 1 in outgoing mail')
+  expect(submit.disabled).toBe(false)
+
+  letters[1].checked = true
+  controller.selectionChanged()
+  expect(submit.disabled).toBe(true)
+  expect(submit.textContent).toBe('Mark 2 in outgoing mail')
 })
 
 test('server refusal renders preserved selections and does not download or navigate', async () => {

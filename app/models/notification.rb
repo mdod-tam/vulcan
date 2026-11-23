@@ -24,6 +24,16 @@ class Notification < ApplicationRecord
   scope :read_notifications, -> { where.not(read_at: nil) }
   scope :disability_certification_requests, -> { where(action: 'disability_certification_requested') }
   scope :paper_rejection_letters, -> { where(action: PAPER_REJECTION_LETTER_ACTION) }
+  scope :letter_preparation_attention, lambda {
+    unprepared = error_delivery_status.or(where(delivery_status: ['queued', nil], created_at: ...1.hour.ago))
+    letter_notices = unprepared.where(<<~SQL.squish, paper: PAPER_REJECTION_LETTER_ACTION)
+      action = :paper OR metadata->>'actual_delivery_channel' = 'letter' OR metadata->>'requested_channel' = 'letter' OR metadata->>'channel' = 'letter'
+      OR metadata->'delivery_error'->>'channel' = 'letter'
+      OR (metadata->>'letter_preparation_requested' = 'true' AND COALESCE(metadata->>'actual_delivery_channel', 'none') != 'email')
+    SQL
+    letter_notices.where("metadata->>'mailed_manually_at' IS NULL AND metadata->>'letter_preparation_resolved_at' IS NULL")
+                  .where("NOT EXISTS (SELECT 1 FROM print_queue_items WHERE delivery_context->>'notification_id' = notifications.id::text)")
+  }
   scope :with_delivery_handoff, lambda {
     where(delivery_status: %w[queued submitted delivered opened])
       .where("metadata->>'actual_delivery_channel' IN (?)", %w[email sms letter])

@@ -103,7 +103,7 @@ module EmailDelivery
       when 'all_disabled' then 'outgoing correspondence is turned off'
       when 'letters_disabled' then 'printed letters are turned off'
       when 'sms_disabled' then 'SMS text messages are turned off'
-      when 'delivery_identity_changed', 'artifact_changed' then 'the recipient or document changed; issue a new letter'
+      when 'delivery_identity_changed', 'artifact_changed' then 'The recipient or letter changed. Issue a new letter.'
       when 'letter_recipient_ineligible' then 'Recipient no longer eligible. Review the application.'
       when 'request_no_longer_active' then 'This request no longer needs a letter.'
       when 'operator_canceled' then 'this letter was canceled'

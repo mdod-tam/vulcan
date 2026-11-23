@@ -190,7 +190,8 @@ module Letters
       items = [queue, queue(request_key: 'second')]
       items.last.pdf_letter.blob.service.delete(items.last.pdf_letter.blob.key)
 
-      assert_raises(ActiveStorage::FileNotFoundError) { Delivery.export!(items.map(&:id), actor: @admin) }
+      error = assert_raises(Delivery::ReleaseDenied) { Delivery.export!(items.map(&:id), actor: @admin) }
+      assert_equal [items.last.id], error.reasons.keys
       assert(PrintQueueItem.where(id: items.map(&:id)).all? { |item| item.released_at.nil? })
     end
 

@@ -133,7 +133,7 @@ class SecureRequestForm < ApplicationRecord
     return false unless postal_delivery_eligible?
 
     item = print_queue_items.max_by(&:id)
-    return false unless item.present? && !item.canceled?
+    return false unless item.present? && !item.canceled? && !item.mail_discarded_at?
 
     if item.released_at?
       postal_recipient_authorized?(application: application, address_owner_id: item.constituent_id)

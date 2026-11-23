@@ -94,6 +94,7 @@ module EmailDelivery
 
       raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
 
+      notification.update_metadata!(:letter_preparation_requested, true) if actual_delivery_channel == 'letter' && mail_delivery.is_a?(ActionMailer::MessageDelivery)
       outcome = queue_mail_delivery(mail_delivery)
       raise StandardError, "Mail job for '#{notification.action}' could not be queued" if outcome == :enqueue_failed
 

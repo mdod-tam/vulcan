@@ -144,10 +144,15 @@ Rails.application.routes.draw do
         post :mark_as_printed
         post :cancel
         post :replace_request
+        post :discard_printed_copy
+        post :close_follow_up
       end
       collection do
         match :download_batch, via: %i[get post]
+        get :batch
         post :mark_batch_as_printed
+        post :mark_in_outgoing_mail
+        post :dismiss_preparation_failure
       end
     end
 
