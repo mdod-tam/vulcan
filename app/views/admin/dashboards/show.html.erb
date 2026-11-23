@@ -163,7 +163,7 @@
         </div>
 
         <section aria-labelledby="equipment-tools-heading">
-          <h2 id="equipment-tools-heading" class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Equipment and Reimbursement</h2>
+          <h2 id="equipment-tools-heading" class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Equipment Management</h2>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-4">
             <%= link_to admin_equipment_index_path, class: 'btn btn-outline group justify-start', aria: { label: 'Equipment' } do %>
               <div class="flex items-center gap-3">
@@ -182,7 +182,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v10a2 2 0 01-2 2z" />
                 </svg>
                 <div class="text-left">
-                  <div class="font-semibold text-sm">iCanConnect Filing Preparation</div>
+                  <div class="font-semibold text-sm">iCanConnect</div>
                   <div class="text-xs text-gray-600">Prepare reimbursement filings</div>
                 </div>
               </div>
@@ -227,7 +227,7 @@
 
         <section aria-labelledby="configuration-tools-heading">
           <h2 id="configuration-tools-heading" class="text-xs font-semibold text-gray-600 uppercase tracking-widest mb-4 pl-1">Configuration</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-3 gap-y-4">
             <%= link_to admin_policies_path,
                 class: "btn btn-outline group justify-start",
                 aria: { label: "Edit system policies and settings" } do %>
@@ -239,18 +239,6 @@
                 <div class="text-left">
                   <div class="font-semibold text-sm">Edit Policies</div>
                   <div class="text-xs text-gray-600">System settings</div>
-                </div>
-              </div>
-            <% end %>
-
-            <%= link_to admin_feature_flags_path, class: 'btn btn-outline group justify-start', aria: { label: 'Feature Flags' } do %>
-              <div class="flex items-center gap-3">
-                <svg class="h-6 w-6 flex-shrink-0 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 21V4m0 0c5-4 9 4 14 0v10c-5 4-9-4-14 0" />
-                </svg>
-                <div class="text-left">
-                  <div class="font-semibold text-sm">Feature Flags</div>
-                  <div class="text-xs text-gray-600">Turn workflows on or off</div>
                 </div>
               </div>
             <% end %>
