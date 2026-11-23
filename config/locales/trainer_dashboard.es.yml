@@ -1,6 +1,19 @@
 es:
   trainer_workflow:
     dashboard:
+      limit:
+        heading: "Cerca del límite de sesiones"
+        all_trainers: "Todo el personal de capacitación"
+        apply: "Aplicar"
+        apply_filter: "Aplicar filtro por capacitador"
+        empty: "Nadie está cerca del límite."
+        completed: "Completadas"
+        reserved: "Reservadas"
+        next_appointment: "Próxima cita"
+        unassigned: "Sin personal asignado"
+        last_reserved: "Última sesión reservada"
+        one_left: "Queda una sesión"
+        none_scheduled: "Sin cita programada"
       skip: "Saltar al panel de capacitación"
       title: "Panel de capacitación"
       summary: "Resumen de sesiones"

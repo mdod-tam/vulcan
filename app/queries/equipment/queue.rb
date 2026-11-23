@@ -27,6 +27,13 @@ module Equipment
       records.group_by(&:product).sort_by { |product, _rows| [product.manufacturer, product.model_number, product.id] }
     end
 
+    def unreserved_requests
+      available_needs = needs.select(:id, :application_id, :product_id, :remaining_quantity, :unfulfilled_since).includes(bid_group_lines: :bid_group)
+                             .select { |need| need.available_quantity.positive? }
+      reserved_items = BidGroupLine.reserved.where.not(equipment_item_id: nil).select(:equipment_item_id)
+      available_needs + items.where.not(id: reserved_items).select(:id, :application_id, :product_id, :unfulfilled_since).to_a
+    end
+
     def dispatch_groups
       grouped = loaded_items.group_by { |item| [item.application.user_id, item.shipping_snapshot, item.stock?] }
       result = grouped.map do |(_beneficiary_id, _destination, stock), units|

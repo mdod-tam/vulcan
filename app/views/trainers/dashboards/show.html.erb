@@ -1,6 +1,7 @@
 <% content_for :skip_link do %>
   <a href="#main-content" class="skip-link"><%= t('trainer_workflow.dashboard.skip') %></a>
 <% end %>
+<% content_for :head, tag.meta(name: 'turbo-cache-control', content: 'no-cache') if current_user.admin? %>
 <div id="main-content" class="min-w-0 max-w-7xl mx-auto px-4 py-6" aria-labelledby="trainer-dashboard-title" tabindex="-1">
   <% if current_user.admin? %>
     <%= render 'admin/shared/index_header', title: t('trainer_workflow.dashboard.title'), title_id: 'trainer-dashboard-title' %>
@@ -119,6 +120,8 @@
   </section>
 
   <% if current_user.admin? %>
+    <%= render 'training_limit_queue', entries: @training_limits, trainers: @training_limit_trainers,
+                                       selected_trainer: @training_limit_trainer_id %>
     <section id="needs-trainer-section" class="card p-4 mb-6" aria-labelledby="needs-trainer-heading" tabindex="-1">
       <h2 id="needs-trainer-heading" class="text-lg font-semibold mb-4"><%= t('trainer_workflow.dashboard.needs_trainer') %></h2>
       <% if @unassigned_training_requests.any? %>

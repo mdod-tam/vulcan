@@ -17,9 +17,20 @@ module Trainers
       load_training_sessions
       load_display_data
       load_recent_activity
+      load_training_limits if current_user.admin?
     end
 
     private
+
+    def load_training_limits
+      no_store
+      @training_limits = Applications::TrainingLimitQueue.new.entries
+      @training_limit_trainers = @training_limits.filter_map { |entry| entry.application.assigned_trainer }.uniq.sort_by(&:full_name)
+      @training_limit_trainer_id = params[:training_limit_trainer].to_s
+      return if @training_limit_trainer_id.blank?
+
+      @training_limits = @training_limits.select { |entry| entry.application.assigned_trainer_id.to_s == @training_limit_trainer_id }
+    end
 
     def load_training_sessions
       now = Time.current

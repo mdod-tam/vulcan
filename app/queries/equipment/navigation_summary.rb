@@ -5,14 +5,7 @@ module Equipment
     Metric = Data.define(:count, :oldest_at, :unknown_dates, :oldest_application, :oldest_record, :products, :additional_constituents)
 
     def requests
-      @requests ||= begin
-        queue = Queue.new
-        needs = queue.needs.select(:id, :application_id, :product_id, :remaining_quantity, :unfulfilled_since).includes(bid_group_lines: :bid_group)
-                     .select { |need| need.available_quantity.positive? }
-        reserved_items = BidGroupLine.reserved.where.not(equipment_item_id: nil).select(:equipment_item_id)
-        items = queue.items.where.not(id: reserved_items).select(:id, :application_id, :product_id, :unfulfilled_since).to_a
-        fulfillment_metric(needs + items, &:unfulfilled_since)
-      end
+      @requests ||= fulfillment_metric(Queue.new.unreserved_requests, &:unfulfilled_since)
     end
 
     def shipments

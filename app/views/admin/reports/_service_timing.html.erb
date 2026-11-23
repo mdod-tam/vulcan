@@ -1,0 +1,14 @@
+<%# locals: (period:, metrics:) -%>
+<% if metrics.values.any?(&:present?) %>
+  <section aria-labelledby="time-to-schedule">
+    <h3 class="mb-2 text-lg font-semibold" id="time-to-schedule">Average days from assignment to booking</h3>
+    <%= render 'totals', values: { 'Evaluation' => report_days(metrics.fetch(:evaluation_booking)), 'Training' => report_days(metrics.fetch(:training_booking)) } %>
+  </section>
+  <%= report_chart('Evaluation reports submitted by month and evaluator', report_months(period), metrics.fetch(:reports_by_month),
+                   category: 'Month', unit: 'Reports', stacked: true, data_label: 'evaluation reports by month') %>
+  <% delays = metrics.fetch(:report_delays) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <%= report_chart('Report delay by evaluator', delays.map(&:first), { 'Days for about 9 in 10 reports' => delays.map(&:second) },
+                   category: 'Evaluator', unit: 'Days', horizontal: true, show_zero: true, note: 'From appointment to submission.') %>
+<% else %>
+  <%= report_no_results %>
+<% end %>

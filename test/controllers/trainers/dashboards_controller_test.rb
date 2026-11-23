@@ -90,6 +90,48 @@ module Trainers
       assert_equal 10, assigns(:activity_logs).size
     end
 
+    test 'only administrators see the training-limit report and its trainer filter' do
+      Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
+      create_list(:training_session, 2, :completed, application: @application, trainer: @other_trainer)
+      create(:training_session, :completed, application: @other_application, trainer: @other_trainer)
+
+      sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
+      get trainers_dashboard_path(training_limit_trainer: @other_trainer.id)
+
+      assert_response :success
+      assert_select '#training-limit', count: 0
+      assert_nil assigns(:training_limits)
+
+      evaluator = create(:evaluator)
+      sign_in_for_integration_test(evaluator, bypass_mfa_enrollment: true)
+      get trainers_dashboard_path(training_limit_trainer: @other_trainer.id)
+
+      assert_redirected_to root_path
+      assert_select '#training-limit', count: 0
+
+      create(:role_capability, user: evaluator, capability: 'can_train')
+      get trainers_dashboard_path(training_limit_trainer: @other_trainer.id)
+
+      assert_response :success
+      assert_select '#training-limit', count: 0
+      assert_nil assigns(:training_limits)
+
+      sign_in_for_integration_test(@admin, bypass_mfa_enrollment: true)
+      get trainers_dashboard_path
+
+      assert_includes response.headers['Cache-Control'], 'no-store'
+      assert_select 'meta[name="turbo-cache-control"][content="no-cache"]'
+      assert_select '#training-limit tbody tr', count: 2
+      assert_select '#training-limit tbody tr', text: /Last session reserved/
+
+      get trainers_dashboard_path(training_limit_trainer: @other_trainer.id)
+
+      assert_select '#training-limit tbody tr', count: 1
+      assert_select '#training-limit tbody tr', text: /One session left/
+      assert_select '#training-limit a[href=?]', admin_application_path(@other_application, anchor: 'admin-training-heading'),
+                    text: @other_constituent.full_name
+    end
+
     test 'follow-up sessions exclude cancelled sessions superseded by a newer scheduled session' do
       sign_in_for_integration_test(@trainer, bypass_mfa_enrollment: true)
       application = covered_application

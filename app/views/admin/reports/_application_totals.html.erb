@@ -1,0 +1,31 @@
+<%# locals: (report:) -%>
+<% years = ["#{report.current_fy_label} to date", report.previous_fy_label] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<details class="card px-4 py-2">
+  <summary class="w-fit cursor-pointer py-2 font-semibold text-primary-800">Fiscal year application totals</summary>
+  <%= render 'table', caption: 'Applications created in each fiscal year', headers: ['Applications', *years],
+                      rows: [['Created', report.current_fy_applications, report.previous_fy_applications],
+                             ['Drafts', report.current_fy_draft_applications, report.previous_fy_draft_applications]] %>
+  <h3 class="mt-4 font-semibold">Disability types</h3>
+  <p class="text-sm text-gray-600">Applicants may select more than one type.</p>
+  <% current = report.disability_chart_data(:current) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <% previous = report.disability_chart_data(:previous) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <%= render 'table', caption: 'Disability types by fiscal year', headers: ['Disability type', *years],
+                      rows: current.map { |label, count| [label, count, previous.fetch(label)] } +
+                            [['Applications with a disability listed', report.current_fy_total_disability_applications,
+                              report.previous_fy_total_disability_applications]] %>
+</details>
+<details class="card px-4 py-2">
+  <summary class="w-fit cursor-pointer py-2 font-semibold text-primary-800">Referral sources</summary>
+  <% periods = { # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments.
+       report.referral_month_label => report.referral_month_data, report.referral_quarter_label => report.referral_quarter_data,
+       report.referral_ytd_label => report.referral_ytd_data,
+       report.referral_prior_year_label => report.referral_prior_year_data
+     } %>
+  <% sources = periods.values.flat_map(&:keys).uniq.sort # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <% if sources.any? %>
+    <%= render 'table', caption: 'How applicants heard about MAT', headers: ['Source', *periods.keys],
+                        rows: sources.map { |source| [source, *periods.values.map { |counts| counts.fetch(source, 0) }] } %>
+  <% else %>
+    <p class="py-2 text-sm text-gray-600">No referral sources recorded.</p>
+  <% end %>
+</details>

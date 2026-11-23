@@ -1,0 +1,15 @@
+<div id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-4 py-8">
+  <%= render 'report_header', section: :mfr, mfr: @mfr %>
+  <div class="space-y-4">
+    <% fiscal_year = FiscalYear.label_for_start_year(@mfr.year) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <% previous_year = FiscalYear.label_for_start_year(@mfr.year - 1) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <div id="mfr-data" class="card p-4">
+      <p class="text-sm text-gray-600">Each person counts once per measure per year. Devices count when delivery is recorded.</p>
+      <%= render 'table', caption: 'MAT fiscal year results', headers: ['Measure', fiscal_year, previous_year],
+                          rows: @measures %>
+    </div>
+    <%= report_chart('MAT results by fiscal year', @measures.pluck(0).map { |label| Reports::MfrReport::MEASURES.fetch(label, label) },
+                     { fiscal_year => @measures.pluck(1), previous_year => @measures.pluck(2) },
+                     category: 'Measure', unit: 'Count', horizontal: true, show_zero: true, data_table: false) %>
+  </div>
+</div>

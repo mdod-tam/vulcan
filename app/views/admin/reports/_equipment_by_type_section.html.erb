@@ -1,40 +1,35 @@
-<%# locals: (vouchers_enabled:, period:, period_options:, period_label:, rows:, chart_data:, error_message: nil) -%>
-<% non_voucher_label = vouchers_enabled ? 'Without vouchers' : 'Equipment fulfilled' %>
-<% voucher_label = 'With vouchers' %>
+<%# locals: (vouchers_enabled:, report_period:, period:, period_options:, period_label:, rows:, chart_data:, error_message: nil) -%>
+<% non_voucher_label = 'Shipped units' # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% voucher_label = 'Units from vouchers' # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 
 <section aria-labelledby="equipment-by-type-heading" class="card p-6 mb-8">
   <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-4">
     <div>
-      <h2 id="equipment-by-type-heading" class="text-xl font-bold">Equipment by Type</h2>
+      <h3 id="equipment-by-type-heading" class="text-lg font-semibold">Equipment by type</h3>
       <p class="text-sm text-gray-500 mt-1">
-        <% if vouchers_enabled %>
-          Equipment counts use current ordered device units and actual catalog products, by Date PO sent.
-          Voucher counts use completed voucher redemption products.
-        <% else %>
-          Equipment counts use current ordered device units and actual catalog products, by Date PO sent.
-        <% end %>
+        A device can count under more than one type.
       </p>
     </div>
-    <%= form_with url: admin_reports_path, method: :get, class: 'flex items-center gap-2', data: { controller: 'autosubmit' } do |f| %>
-      <%= f.label :equipment_period, "Period:", class: "form-label" %>
+    <%= form_with url: equipment_distribution_admin_reports_path, method: :get, class: 'flex flex-wrap items-center gap-2' do |f| %>
+      <%= f.hidden_field :period, value: report_period %>
+      <%= f.label :equipment_period, 'Equipment period', class: 'form-label' %>
       <%= f.select :equipment_period,
-          options_for_select(period_options.map { |value, label| [label, value] }, period),
-          {},
-          class: "form-input w-auto",
-          data: { action: 'change->autosubmit#submit' } %>
+                   options_for_select(period_options.map { |value, label| [label, value] }, period),
+                   {},
+                   class: 'form-input w-auto' %>
+      <%= f.button 'Apply', name: nil, class: 'btn btn-outline', aria: { label: 'Apply equipment period' } %>
     <% end %>
   </div>
 
   <div class="bg-gray-50 rounded p-4">
-    <h3 id="equipment-period-heading" class="font-medium text-gray-700 mb-3"><%= period_label %></h3>
+    <h4 id="equipment-period-heading" class="font-medium text-gray-700 mb-3"><%= period_label %></h4>
     <% if error_message.present? %>
       <div class="rounded-md border border-warning-200 bg-warning-50 p-4" role="alert">
         <p class="text-sm font-medium text-warning-900"><%= error_message %></p>
-        <p class="mt-1 text-sm text-warning-800">Other report sections are still available.</p>
       </div>
     <% elsif rows.any? %>
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 text-sm" aria-labelledby="equipment-period-heading">
+        <table class="min-w-full divide-y divide-gray-200 text-sm [overflow-wrap:anywhere]">
           <caption class="sr-only">Equipment counts by device type for <%= period_label %></caption>
           <thead>
             <tr>
@@ -43,7 +38,7 @@
                 <%= non_voucher_label %>
               </th>
               <% if vouchers_enabled %>
-                <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700">With vouchers</th>
+                <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700"><%= voucher_label %></th>
               <% end %>
             </tr>
           </thead>
@@ -61,21 +56,12 @@
         </table>
       </div>
 
-      <div class="mt-4 relative h-[300px] w-full"
-           aria-describedby="equipment-by-type-chart-desc"
-           data-controller="chart"
-           data-chart-data-value="<%= chart_data[:non_voucher].to_json %>"
-           data-chart-comparison-data-value="<%= (vouchers_enabled ? chart_data[:voucher] : {}).to_json %>"
-           data-chart-dataset-label-value="<%= non_voucher_label %>"
-           data-chart-comparison-label-value="<%= vouchers_enabled ? voucher_label : '' %>"
-           data-chart-title-value="Equipment by Type">
-        <canvas data-chart-target="canvas" role="img" aria-label="Equipment by Type" aria-describedby="equipment-by-type-chart-desc"></canvas>
-        <div id="equipment-by-type-chart-desc" class="sr-only">
-          Bar chart showing equipment counts by device type for <%= period_label %>.
-        </div>
+      <div class="mt-4 relative h-[300px] w-full" data-controller="chart"
+           data-chart-config-value="<%= report_equipment_type_chart_config(chart_data, vouchers_enabled:).to_json %>">
+        <canvas data-chart-target="canvas" aria-hidden="true"></canvas>
       </div>
     <% else %>
-      <p class="text-sm text-gray-500">No equipment recorded for this period.</p>
+      <p class="text-sm text-gray-600">No equipment recorded for this period.</p>
     <% end %>
   </div>
 </section>

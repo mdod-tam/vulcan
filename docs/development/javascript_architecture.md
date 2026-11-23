@@ -90,17 +90,15 @@ Every password input renders through [`shared/_password_field`](../../app/views/
 
 ## Charts
 
-[`chart_controller.js`](../../app/javascript/controllers/charts/chart_controller.js) imports Chart.js and registers only bar-chart components. It remains part of the single application bundle. Views provide a canvas inside a relatively positioned container with a fixed height, plus stable accessible labels and text descriptions.
+[`chart_controller.js`](../../app/javascript/controllers/charts/chart_controller.js) registers the bar, line, and scatter components in the application bundle. Each chart has its own relatively positioned container with a set height.
 
-`connect()` constructs one responsive chart from the primary and optional comparison data. `disconnect()` destroys it. Chart.js handles container resizing and device-pixel-ratio changes; the controller does not measure, replace, defer, or poll canvases. Horizontal bars use `indexAxis: "y"`. Tooltips and normal Chart.js interactions remain enabled.
+`connect()` creates one responsive chart. `disconnect()` destroys it. Chart.js handles resizing, device-pixel-ratio changes, and tooltips. Horizontal bars use `indexAxis: "y"`.
 
-The optional `yAxisLabel` titles the numeric value axis: Y for vertical bars, X for horizontal bars.
+Admin reports pass native Chart.js options and hide the canvases from assistive technology. The chart data is available in named tables under **View data** or alongside the chart.
 
-Comparison data must use the primary data's category keys; the controller derives labels from the primary data.
+Existing bar charts pass primary and comparison data with matching category keys. The optional `yAxisLabel` titles the numeric axis for either orientation. Chart.js reads the canvas's actual computed styles for layout and tooltip placement.
 
-Do not patch `getComputedStyle`: Chart.js uses real element measurements for hover and tooltip positioning, so zero-size stubs can break interactions.
-
-The vendor chart is constructed while hidden. [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) only toggles its region and button state; Chart.js resizes the canvas when revealed. Reports retain all existing visualizations, including the six compact fiscal-year charts, their numeric cards, and consolidated comparisons.
+The vendor portal chart starts hidden. [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) changes the region and button state. Chart.js resizes the canvas when it becomes visible.
 
 If either `RAILS_ENV` or `NODE_ENV` is `production`, builds are minified and omit source maps; development builds retain them. Production also excludes the unused Turbo and Stimulus gem assets, including their source maps, because esbuild bundles these libraries. The shared debounce utility provides trailing calls and cancellation for controller teardown.
 

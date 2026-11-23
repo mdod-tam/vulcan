@@ -9,6 +9,7 @@ module Admin
       @groups = BidGroup.order(created_at: :desc)
       @groups = @groups.program_stock if params[:purpose] == 'program_stock'
       @groups = @groups.open if params[:state] == 'open'
+      @groups = @groups.awaiting_award if params[:state] == 'awaiting_award'
       if params[:application_id].present?
         lines = BidGroupLine.left_joins(:equipment_need, :equipment_item)
         matches = lines.where(equipment_needs: { application_id: params[:application_id] })

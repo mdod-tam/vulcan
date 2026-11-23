@@ -1,2 +1,47 @@
-<h1>Admin::Reports#vendor_performance</h1>
-<p>Find me in app/views/admin/reports/vendor_performance.html.erb</p>
+<div id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-4 py-8">
+  <%= render 'report_header', section: :vendor_performance, period: @period %>
+  <div class="space-y-4">
+    <% backlog = @activity.oldest_outstanding_orders # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <% shipments = @activity.volume_and_speed # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <% orders = @activity.orders_by_vendor # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <% has_results = shipments.any? || orders.any? # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <% if backlog.entries.any? || has_results %>
+      <section class="card p-4" aria-labelledby="oldest-orders-heading">
+        <h3 id="oldest-orders-heading" class="text-lg font-semibold">Oldest orders waiting to ship</h3>
+        <% if backlog.entries.any? %>
+          <p class="mt-1 text-sm text-gray-600">All dates.<%= " Showing the #{backlog.entries.size} oldest." if backlog.total > backlog.entries.size %></p>
+          <%= render 'table', caption: 'Oldest orders waiting to ship', headers: ['Vendor and purchase order', 'Units awaiting shipment', 'Days since order sent'],
+                              rows: report_outstanding_order_rows(backlog.entries) %>
+          <%= link_to 'View all units waiting to ship', admin_equipment_index_path(tab: 'ordered', source: 'vendor'),
+                      class: 'mt-2 inline-block text-sm text-primary-700 underline' %>
+        <% else %>
+          <p class="mt-1 text-sm text-gray-600">No vendor orders are awaiting shipment.</p>
+        <% end %>
+      </section>
+    <% end %>
+    <% if has_results %>
+      <%= report_vendor_scatter(shipments) %>
+      <% if shipments.any? %>
+        <section class="card p-4" aria-labelledby="vendor-shipping-times-heading">
+          <h3 id="vendor-shipping-times-heading" class="text-lg font-semibold">Shipping times by vendor</h3>
+          <%= render 'table', caption: 'Shipping times by vendor',
+                              headers: ['Vendor', 'Units shipped', 'Median days to ship', 'Days to ship (about 9 in 10 units)',
+                                        'Median days from ship date to entry', 'Units with a shipment entry date'], rows: @activity.vendor_shipping_times %>
+        </section>
+      <% end %>
+      <%= report_chart('Ordered units by vendor', orders.map(&:first),
+                       { 'Shipment recorded' => orders.map(&:second), 'Outstanding' => orders.map(&:last) },
+                       category: 'Vendor', unit: 'Units on purchase orders', horizontal: true, stacked: true,
+                       note: 'Purchase orders sent in this period.') %>
+    <% else %>
+      <%= report_no_results %>
+    <% end %>
+    <% if @report %>
+      <details class="card px-4 py-2" id="vendor-activity-heading">
+        <summary class="w-fit cursor-pointer py-2 font-semibold text-primary-800">Voucher vendor activity</summary>
+        <%= render 'table', caption: 'Voucher vendor activity', headers: ['Period', 'Vendors with transactions'],
+                            rows: [['All time', @report.active_vendors], ['Past month', @report.recent_active_vendors]] %>
+      </details>
+    <% end %>
+  </div>
+</div>

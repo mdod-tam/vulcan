@@ -314,7 +314,8 @@ module Admin
 
       assert_current_path admin_reports_path
 
-      assert_selector 'h1', text: 'System Reports'
+      assert_selector 'h1', text: 'Reports'
+      assert_selector '#report-title', text: 'Applications'
     end
 
     test 'admin action links are present and selected links navigate' do
