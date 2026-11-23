@@ -305,7 +305,7 @@ module Evaluators
       failed_event.errors.add(:base, 'Audit record unavailable')
       AuditEventService.stub(:log, ->(**) { raise ActiveRecord::RecordInvalid, failed_event }) do
         within '#working-notes-form' do
-          fill_in 'Working Notes', with: 'Reached voicemail; try again tomorrow.'
+          fill_in 'Private working notes', with: 'Reached voicemail; try again tomorrow.'
           click_button 'Save working notes'
         end
         assert_selector '#save-working-notes-errors'
@@ -316,7 +316,7 @@ module Evaluators
       take_screenshot('working-notes-restored', html: true, full: true)
 
       within '#working-notes-form' do
-        fill_in 'Working Notes', with: 'Contact person confirmed the appointment arrangements.'
+        fill_in 'Private working notes', with: 'Contact person confirmed the appointment arrangements.'
         click_button 'Save working notes'
       end
       assert_text 'Working notes saved.'
@@ -328,7 +328,7 @@ module Evaluators
       take_screenshot('working-notes-saved', html: true, full: true)
 
       within '#working-notes-form' do
-        fill_in 'Working Notes', with: ''
+        fill_in 'Private working notes', with: ''
         click_button 'Save working notes'
       end
       assert_text 'Working notes saved.'

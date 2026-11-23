@@ -2,7 +2,7 @@
   <div class="max-w-3xl mx-auto">
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="test-email-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
-        Send Test Email: <%= @email_template.name %> (<%= template_syntax_label(@email_template) %>)
+        Send test email
       </h1>
       <div>
         <%= link_to admin_email_template_path(@email_template),
@@ -17,7 +17,7 @@
       <h2 class="text-xl font-semibold text-gray-900 mb-4">Test Email Details</h2>
 
       <p class="text-sm text-gray-600 mb-2">
-        Send a test email using this template. The email will be rendered with sample data to showcase how the template will appear to recipients.
+        The test email uses sample data.
       </p>
       <p class="text-sm text-gray-700 mb-6" id="test-send-controls-note">
         <%= email_delivery_t('test_send.explanation') %>
@@ -30,9 +30,6 @@
             <%= form.email_field :email, class: 'form-input',
                                          required: true %>
           </div>
-          <p class="form-hint">
-            Enter the email address where you'd like to receive the test email.
-          </p>
         </div>
 
         <%= form.hidden_field :template_id %>
@@ -54,12 +51,6 @@
       </div>
 
       <div class="prose max-w-none mb-4">
-        <h3 class="text-lg font-medium text-gray-700 mb-2">
-          Template Format
-        </h3>
-        <p class="font-medium text-sm text-primary-600 mb-4">
-          <%= @email_template.format.titleize %> · <%= template_syntax_label(@email_template) %>
-        </p>
 
         <h3 class="text-lg font-medium text-gray-700 mb-2">
           Body Preview<%= ' (first 300 characters)' unless @email_template.html? %>
@@ -76,9 +67,6 @@
         </div>
       </div>
 
-      <div class="text-sm text-gray-600 mt-4 italic">
-        <p>The test email will include all required variables filled with sample data.</p>
-      </div>
     </div>
   </div>
 </main>

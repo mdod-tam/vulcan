@@ -15,25 +15,10 @@
     </div>
   </header>
 
-  <main>
+  <div>
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
       <div class="card overflow-hidden rounded-none sm:rounded-lg">
         <div class="px-4 py-5 sm:p-6">
-          <div class="rounded-md bg-info-50 p-4 mb-6">
-            <div class="flex">
-              <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-info-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <div class="ml-3 flex-1 md:flex md:justify-between">
-                <p class="text-sm text-info-700">
-                  <%= t("constituent_portal.proofs.upload.guidance.#{@proof_type}") %>
-                </p>
-              </div>
-            </div>
-          </div>
-
           <%= form_with url: constituent_portal_application_proofs_resubmit_path(@application), method: :post, class: 'space-y-6' do |form| %>
             <%= hidden_field_tag :proof_type, @proof_type %>
 
@@ -41,6 +26,11 @@
               <label for="<%= "#{@proof_type}_proof" %>" class="form-label">
                 <%= t('constituent_portal.proofs.upload.label', proof: t("applications.proof_card.types.#{@proof_type}")) %>
               </label>
+              <% if @proof_type.to_s == 'income' && !@application.income_proof_required? %>
+                <p id="income-hint" class="form-hint"><%= t('applications.proof_upload.icanconnect_income') %></p>
+              <% else %>
+                <%= render 'constituent_portal/applications/proof_guidance', proof: @proof_type, flow: :replacement, locale: I18n.locale %>
+              <% end %>
               <p class="form-hint" id="file-description">
                 <%= t('constituent_portal.proofs.upload.formats', formats: proof_upload_formats_label, size: proof_upload_max_size_label) %>
               </p>
@@ -48,7 +38,7 @@
               <div class="mt-2">
                 <%= render 'shared/document_upload',
                            form: form, field: "#{@proof_type}_proof", model: Application, blob: @retained_upload,
-                           described_by: 'file-description' %>
+                           described_by: "#{@proof_type}-hint file-description" %>
               </div>
             </div>
 
@@ -63,10 +53,9 @@
       </div>
 
       <div class="mt-6 px-4 sm:px-0">
-        <h2 class="sr-only"><%= t('constituent_portal.proofs.upload.instructions') %></h2>
         <div class="border-t border-gray-200 py-5">
           <details class="group">
-            <summary class="flex items-center text-sm font-medium text-gray-500 cursor-pointer hover:text-gray-700">
+            <summary class="flex items-center text-sm font-medium text-gray-700 cursor-pointer hover:text-gray-900">
               <span><%= t('constituent_portal.proofs.upload.help') %></span>
               <span class="ml-2 flex-shrink-0">
                 <svg class="h-5 w-5 text-gray-500 group-open:transform group-open:rotate-180" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -74,29 +63,16 @@
                 </svg>
               </span>
             </summary>
-            <div class="mt-4 text-sm text-gray-500 space-y-3">
-              <p><%= t('constituent_portal.proofs.upload.steps') %></p>
-              <ol class="list-decimal pl-5 space-y-2">
-                <li><%= t('constituent_portal.proofs.upload.choose') %></li>
-                <li><%= t('constituent_portal.proofs.upload.select') %></li>
-                <li><%= t('constituent_portal.proofs.upload.send') %></li>
-              </ol>
-              <p class="mt-3"><%= t('constituent_portal.proofs.upload.troubleshooting') %></p>
-              <ul class="list-disc pl-5 space-y-2">
-                <li><%= t('constituent_portal.proofs.upload.format_help', formats: proof_upload_formats_label) %></li>
-                <li><%= t('constituent_portal.proofs.upload.size_help', size: proof_upload_max_size_label) %></li>
-                <li><%= t('constituent_portal.proofs.upload.legible') %></li>
-                <li><%= t('constituent_portal.proofs.upload.complete') %></li>
-              </ul>
-              <p class="mt-3">
+            <div class="mt-4 text-sm text-gray-700">
+              <p>
                 <%= t('constituent_portal.proofs.upload.support_html',
-                      email: mail_to(ProgramContact.support_email, class: 'text-primary-600 hover:text-primary-900'),
-                      phone: ProgramContact.support_phone) %>
+                      email: mail_to(ProgramContact.support_email, class: 'underline'),
+                      phone: link_to(ProgramContact.support_phone, "tel:#{ProgramContact.support_phone.delete('^0-9+')}", class: 'underline')) %>
               </p>
             </div>
           </details>
         </div>
       </div>
     </div>
-  </main>
+  </div>
 </div>

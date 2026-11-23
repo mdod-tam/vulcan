@@ -24,9 +24,7 @@ module Admin
         address = applicant.mailing_address_line.presence || 'not provided'
         "Does the address in this residency proof match the address provided in the application (#{address})?"
       when :income
-        income = number_to_currency(application.annual_income).presence || 'not provided'
-        "Does the income shown in this proof match the annual household income reported in the application (#{income})? " \
-          "Household size: #{application.household_size || 'not provided'}."
+        income_proof_review_guidance(application)
       when :id
         date_of_birth = applicant.date_of_birth&.strftime('%B %d, %Y') || 'not provided'
         "Does this ID match the applicant, #{applicant.full_name}, and their date of birth (#{date_of_birth})? " \
@@ -293,6 +291,25 @@ module Admin
     end
 
     private
+
+    def income_proof_review_guidance(application)
+      icanconnect_guidance = 'For iCanConnect, check that the proof meets its income requirements.'
+      return icanconnect_guidance unless application.income_proof_required?
+
+      size = application.household_size
+      result = IncomeThresholdCalculationService.call(size) if size&.positive?
+      qualification = 'Does this document show that the applicant currently receives retirement income or Social Security'
+      award_letter = 'A Social Security award letter must be dated this year.'
+
+      guidance = if result&.success?
+                   limit = number_to_currency(result.data.fetch(:threshold))
+                   "#{qualification}, or that their annual household income is at or below #{limit} for a household of #{size}? #{award_letter}"
+                 else
+                   "#{qualification}, or that their annual household income is at or below the limit for their household size? " \
+                     "#{award_letter} Confirm the household size and income limit before approving based on earnings."
+                 end
+      application.approved_deafblind? ? "#{guidance} #{icanconnect_guidance}" : guidance
+    end
 
     def latest_disability_certification_notification(application, action)
       Notification

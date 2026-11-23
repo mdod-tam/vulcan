@@ -88,6 +88,22 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
+  test 'seeded payment notices include the check number only when available' do
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
+    load_seeded_email_templates('vendor_notifications_payment_issued')
+
+    { 'en' => 'Check number', 'es' => 'Número de cheque' }.each do |locale, label|
+      @vendor.update!(locale: locale)
+      @invoice.check_number = nil
+      without_check = VendorNotificationsMailer.with(invoice: @invoice).payment_issued
+      assert_not_includes decoded_text_part(without_check), label
+
+      @invoice.check_number = 'CHK-123'
+      with_check = VendorNotificationsMailer.with(invoice: @invoice).payment_issued
+      assert_includes decoded_text_part(with_check), "#{label}: CHK-123"
+    end
+  end
+
   test 'invoice payment and W9 notices use the vendor own email and locale despite guardian relationships' do
     VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     guardian = create(:constituent, locale: 'es')
@@ -105,7 +121,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal [[@vendor.email]] * 4, emails.map(&:to)
     assert_equal 'W9 Form Approved', emails[2].subject
-    assert_includes decoded_text_part(emails[2]), 'W9 approval and vendor authorization are separate steps'
+    assert_includes decoded_text_part(emails[2]), 'We approved your W9. Check your vendor dashboard for any remaining steps to redeem vouchers.'
     assert_not_includes decoded_text_part(emails[2]), 'now fully activated'
   end
 
@@ -138,7 +154,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     assert_equal [[@vendor.email]] * 2, emails.map(&:to)
     assert_equal 'Formulario W9 Aprobado', emails.first.subject
-    assert_includes decoded_text_part(emails.first), I18n.t('vendor_onboarding.approval_notice.body', locale: :es)
+    assert_includes decoded_text_part(emails.first), 'Aprobamos su W9. Consulte el panel de proveedores'
     assert_equal 'El Formulario W9 Requiere Corrección', emails.last.subject
     rejected_text = decoded_text_part(emails.last)
     assert_includes rejected_text, I18n.t('vendor_notifications.w9_rejected.title', locale: :es)

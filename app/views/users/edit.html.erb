@@ -1,8 +1,8 @@
-<a href="#main-content" class="skip-link">
-  Skip to main content
-</a>
+<% content_for :skip_link do %>
+  <%= link_to t('shared.skip_to_main_content'), '#page-title', class: 'skip-link' %>
+<% end %>
 
-<main role="main" id="main-content" aria-labelledby="page-title" class="max-w-2xl mx-auto p-6">
+<div class="max-w-2xl mx-auto p-6">
   <h1 id="page-title" class="text-2xl font-bold mb-6" tabindex="-1">Edit Profile</h1>
 
   <%= form_with(model: @user, url: profile_path, method: :patch, html: { class: "space-y-6", 'aria-describedby': (@user.errors.any? ? 'error_explanation' : nil) }) do |f| %>
@@ -63,7 +63,6 @@
   <section aria-labelledby="webauthn-heading" class="mt-8 pt-6 border-t border-gray-200">
     <h2 id="webauthn-heading" class="text-lg font-medium text-gray-900">Two-Factor Authentication (Security Keys)</h2>
     <% if current_user.webauthn_credentials.any? %>
-      <p class="mt-1 text-sm text-gray-500">Manage your registered security keys.</p>
       <ul class="mt-4 space-y-2">
         <% current_user.webauthn_credentials.each do |credential| %>
           <li class="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-md">
@@ -82,7 +81,7 @@
         <%= link_to "Register New Security Key", new_credential_two_factor_authentication_path(type: 'webauthn'), class: "btn btn-primary" %>
       </div>
     <% else %>
-      <p class="mt-1 text-sm text-gray-500">You have not registered any security keys yet. Add one for enhanced account security.</p>
+      <p class="mt-1 text-sm text-gray-500"><%= t('credential_setup.no_keys', locale: current_user.effective_message_locale) %></p>
       <div class="mt-4">
         <%= link_to "Register Security Key", new_credential_two_factor_authentication_path(type: 'webauthn'), class: "btn btn-primary" %>
       </div>
@@ -92,7 +91,6 @@
   <section aria-labelledby="totp-heading" class="mt-8 pt-6 border-t border-gray-200">
     <h2 id="totp-heading" class="text-lg font-medium text-gray-900">Two-Factor Authentication (Authenticator App)</h2>
     <% if current_user.totp_credentials.any? %>
-      <p class="mt-1 text-sm text-gray-500">Manage your registered authenticator apps.</p>
       <ul class="mt-4 space-y-2">
         <% current_user.totp_credentials.each do |credential| %>
           <li class="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-md" id="totp_credential_<%= credential.id %>">
@@ -121,7 +119,6 @@
   <section aria-labelledby="sms-heading" class="mt-8 pt-6 border-t border-gray-200">
     <h2 id="sms-heading" class="text-lg font-medium text-gray-900">Two-Factor Authentication (Text Message/SMS)</h2>
     <% if current_user.sms_credentials.verified.any? %>
-      <p class="mt-1 text-sm text-gray-500">Manage your registered phone numbers for SMS verification.</p>
       <ul class="mt-4 space-y-2">
         <% current_user.sms_credentials.verified.each do |credential| %>
           <li class="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-md" id="sms_credential_<%= credential.id %>">
@@ -146,4 +143,4 @@
       </div>
     <% end %>
   </section>
-</main>
+</div>

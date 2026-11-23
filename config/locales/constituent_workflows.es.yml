@@ -90,24 +90,10 @@ es:
       upload:
         title: "Subir nuevo comprobante de %{proof}"
         label: "Suba su documento de %{proof}"
-        formats: "Formatos aceptados: %{formats}. Tamaño máximo: %{size}."
+        formats: "Tipos de archivo: %{formats}. Tamaño máximo: %{size}."
         submit: "Enviar documento"
-        instructions: "Instrucciones para subir documentos"
-        help: "¿Necesita ayuda para subir su documento?"
-        steps: "Siga estos pasos para subir su documento:"
-        choose: "Pulse el botón para elegir un archivo que aparece arriba."
-        select: "Seleccione el documento en su dispositivo."
-        send: "Pulse \"Enviar documento\" para subirlo y enviarlo."
-        troubleshooting: "Si tiene problemas, compruebe que su documento:"
-        format_help: "Esté en formato %{formats}"
-        size_help: "Tenga un tamaño de %{size} o menos"
-        legible: "Sea claramente legible"
-        complete: "Muestre toda la información requerida"
-        support_html: "Si necesita más ayuda, escriba a nuestro equipo a %{email} o llame al %{phone}."
-        guidance:
-          income: "Su comprobante de ingresos debe mostrar claramente su nombre, la fecha y los detalles de sus ingresos. Se aceptan declaraciones de impuestos, cartas de beneficios de la SSA del año actual, estados bancarios recientes que muestren depósitos de la SSA, documentación vigente de SSA/SSI/SSDI, cartas vigentes de beneficios de Medicaid/SNAP o cartas vigentes de beneficios del VA."
-          residency: "Su comprobante de residencia debe mostrar claramente su nombre y dirección actual. Se aceptan licencias de conducir, documentos de identidad estatales, tarjetas de identificación, facturas de servicios públicos, contratos de alquiler o documentos de identidad con foto."
-          id: "Su comprobante de identidad debe mostrar claramente su identidad. Se aceptan licencias de conducir, documentos de identidad estatales, tarjetas de identificación, pasaportes u otros documentos oficiales de identidad con foto."
+        help: "Ayuda para subir un documento"
+        support_html: "Compruebe que el archivo se abra y que se pueda leer toda la información requerida. Si necesita ayuda para subir el documento, escriba a MAT a %{email} o llame al %{phone}."
         not_found: "No se encontró la solicitud"
         unavailable: "No se pueden enviar documentos en este momento"
         invalid: "El tipo o estado del documento no es válido"
@@ -177,3 +163,86 @@ es:
       empty: "No hay notificaciones"
       empty_help: "No tiene notificaciones en este momento."
       not_found: "No se encontró la notificación."
+  applications:
+    proof_upload:
+      documents: "Documentos obligatorios para enviar la solicitud"
+      accepted: "Documentos aceptados"
+      instructions:
+        income: "Suba un documento que respalde los ingresos que indicó para su hogar o que muestre que recibe ingresos de jubilación o beneficios del Seguro Social."
+        residency: "Suba un documento que muestre el domicilio en Maryland que figura en esta solicitud."
+        id: "Suba una identificación oficial vigente con foto de la persona solicitante. Verifique que el nombre y la fecha de nacimiento coincidan con su registro de MAT."
+      replacement_instructions:
+        residency: "Suba un documento que muestre el nombre de la persona solicitante y el domicilio en Maryland que figura en esta solicitud."
+        income: "Suba un documento que muestre el nombre de la persona solicitante, la fecha y sus ingresos o beneficios del Seguro Social."
+      icanconnect_income: "Suba un documento que muestre el nombre de la persona solicitante, la fecha y sus ingresos para iCanConnect."
+      social_security_letter: "Si presenta una carta de beneficios del Seguro Social, use una fechada este año."
+      examples:
+        new:
+          income:
+            - "Declaración de impuestos (preferida)"
+            - "Carta de beneficios del Seguro Social fechada este año"
+            - "Estado de cuenta de ingresos de jubilación"
+            - "Estado de cuenta bancario reciente que muestre un depósito del Seguro Social"
+            - "Otro documento vigente de SSA, SSI o SSDI"
+            - "Carta vigente de beneficios de Medicaid o SNAP"
+            - "Carta vigente de beneficios del VA"
+          residency:
+            - "Licencia de conducir"
+            - "Identificación estatal, tarjeta de identificación o identificación con foto"
+            - "Factura de servicios públicos"
+          id:
+            - "Licencia de conducir o identificación estatal"
+            - "Pasaporte"
+            - "Otra identificación oficial con foto"
+        edit:
+          income:
+            - "Carta de beneficios del Seguro Social fechada este año"
+            - "Estado de cuenta de ingresos de jubilación"
+            - "Otros documentos de SSI o SSDI"
+            - "Recibos de pago recientes"
+            - "Formularios de impuestos"
+          residency:
+            - "Licencia de conducir"
+            - "Identificación estatal, tarjeta de identificación o identificación con foto"
+            - "Factura de servicios públicos"
+          id:
+            - "Licencia de conducir o identificación estatal"
+            - "Pasaporte"
+            - "Otra identificación oficial con foto"
+        replacement:
+          income:
+            - "Declaración de impuestos"
+            - "Carta de beneficios del Seguro Social fechada este año"
+            - "Estado de cuenta de ingresos de jubilación"
+            - "Estado de cuenta bancario reciente que muestre un depósito del Seguro Social"
+            - "Otro documento vigente de SSA, SSI o SSDI"
+            - "Carta vigente de beneficios de Medicaid o SNAP"
+            - "Carta vigente de beneficios del VA"
+          residency:
+            - "Licencia de conducir"
+            - "Identificación estatal, tarjeta de identificación o identificación con foto"
+            - "Factura de servicios públicos"
+            - "Contrato de alquiler"
+          id:
+            - "Licencia de conducir o identificación estatal"
+            - "Pasaporte"
+            - "Otra identificación oficial con foto"
+    disability_release:
+      contact_html: "¿Tiene preguntas sobre este permiso? Escriba a MAT a %{email}, llame al %{phone} o use el videoteléfono %{videophone}."
+      heading: "Permiso para compartir información sobre la discapacidad"
+      intro: "MAT necesita su permiso para revisar esta solicitud."
+      summary:
+        - "MAT puede comunicarse con el profesional que indicó para verificar la discapacidad de la persona solicitante."
+        - "El profesional puede ver la solicitud completa y enviar a MAT los documentos pertinentes sobre la discapacidad."
+        - "MAT puede compartir información pertinente sobre la discapacidad con el personal autorizado que revisa la solicitud."
+      read_full: "Leer el permiso completo"
+      full_intro: "Al proporcionar los datos de contacto del profesional y marcar la casilla, usted autoriza todo lo siguiente."
+      full_terms:
+        - "Compartir su información con el profesional certificador, incluido el acceso a la solicitud completa."
+        - "Que el programa MAT se comunique con el profesional certificador para verificar la información sobre la discapacidad para esta solicitud."
+        - "Que el profesional certificador comparta con MAT los documentos pertinentes sobre la discapacidad para tramitar la solicitud."
+        - "Que el programa MAT comparta información pertinente sobre la discapacidad con el personal autorizado para revisar la solicitud."
+      required: "Debe dar su permiso para enviar la solicitud."
+    certifying_professional:
+      enter_contact: "Ingrese los datos de contacto del profesional que puede certificar su discapacidad."
+      check_contact: "Revise los datos antes de enviar la solicitud."

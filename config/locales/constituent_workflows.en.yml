@@ -90,24 +90,10 @@ en:
       upload:
         title: "Upload New %{proof} Proof"
         label: "Upload your %{proof} document"
-        formats: "Acceptable formats: %{formats}. Maximum file size: %{size}."
+        formats: "File types: %{formats}. Maximum size: %{size}."
         submit: "Submit Document"
-        instructions: "Upload Instructions"
-        help: "Need help with your document upload?"
-        steps: "Follow these steps to upload your document:"
-        choose: "Click the \"Choose File\" button above."
-        select: "Select your document from your device."
-        send: "Click \"Submit Document\" to upload and submit."
-        troubleshooting: "If you're having trouble, make sure your document:"
-        format_help: "Is in %{formats} format"
-        size_help: "Is %{size} or smaller"
-        legible: "Is clearly legible"
-        complete: "Shows all required information"
-        support_html: "For additional assistance, please contact our team at %{email} or call %{phone}."
-        guidance:
-          income: "Your income proof document should clearly show your name, date, and income details. Acceptable documents include: tax returns, current year SSA award letters, recent bank statements showing SSA deposits, current unexpired SSA/SSI/SSDI documentation, current unexpired Medicaid/SNAP award letters, or current unexpired VA Benefits letters."
-          residency: "Your residency proof document should clearly show your name and current address. Acceptable documents include: driver's license, state ID, identification card, utility bill, lease agreement, or photo ID."
-          id: "Your ID proof document should clearly show your identity. Acceptable documents include: driver's license, state ID, identification card, passport, or other government-issued photo ID."
+        help: "Help uploading a document"
+        support_html: "Make sure the file opens and all required information is readable. For help uploading the document, email MAT at %{email} or call %{phone}."
         not_found: "Application not found"
         unavailable: "Cannot submit proof at this time"
         invalid: "Invalid proof type or status"
@@ -177,3 +163,86 @@ en:
       empty: "No notifications"
       empty_help: "You don't have any notifications at this time."
       not_found: "Notification not found."
+  applications:
+    proof_upload:
+      documents: "Documents required to submit"
+      accepted: "Accepted documents"
+      instructions:
+        income: "Upload one document that supports the household income you entered or shows that you receive retirement income or Social Security benefits."
+        residency: "Upload one document that shows the Maryland home address on this application."
+        id: "Upload a current government-issued photo ID for the applicant. Check that the name and date of birth match the applicant’s MAT record."
+      replacement_instructions:
+        residency: "Upload one document that shows the applicant’s name and the Maryland home address on this application."
+        income: "Upload a document that shows the applicant’s name, the date, and their income or Social Security benefits."
+      icanconnect_income: "Upload a document that shows the applicant’s name, the date, and their income for iCanConnect."
+      social_security_letter: "Use a letter dated this year if you submit a Social Security award letter."
+      examples:
+        new:
+          income:
+            - "Tax return (preferred)"
+            - "Social Security award letter dated this year"
+            - "Retirement income statement"
+            - "Recent bank statement showing a Social Security deposit"
+            - "Other current SSA, SSI, or SSDI document"
+            - "Current Medicaid or SNAP award letter"
+            - "Current VA benefits letter"
+          residency:
+            - "Driver’s license"
+            - "State ID, identification card, or photo ID"
+            - "Utility bill"
+          id:
+            - "Driver’s license or state ID"
+            - "Passport"
+            - "Other government-issued photo ID"
+        edit:
+          income:
+            - "Social Security award letter dated this year"
+            - "Retirement income statement"
+            - "Other SSI or SSDI documents"
+            - "Recent pay stubs"
+            - "Tax forms"
+          residency:
+            - "Driver’s license"
+            - "State ID, identification card, or photo ID"
+            - "Utility bill"
+          id:
+            - "Driver’s license or state ID"
+            - "Passport"
+            - "Other government-issued photo ID"
+        replacement:
+          income:
+            - "Tax return"
+            - "Social Security award letter dated this year"
+            - "Retirement income statement"
+            - "Recent bank statement showing a Social Security deposit"
+            - "Other current SSA, SSI, or SSDI document"
+            - "Current Medicaid or SNAP award letter"
+            - "Current VA benefits letter"
+          residency:
+            - "Driver’s license"
+            - "State ID, identification card, or photo ID"
+            - "Utility bill"
+            - "Lease agreement"
+          id:
+            - "Driver’s license or state ID"
+            - "Passport"
+            - "Other government-issued photo ID"
+    disability_release:
+      contact_html: "Questions about this permission? Email MAT at %{email}, call %{phone}, or use videophone %{videophone}."
+      heading: "Permission to share disability information"
+      intro: "MAT needs your permission to review this application."
+      summary:
+        - "MAT may contact the professional you listed to verify the applicant’s disability."
+        - "The professional may see the full application and send relevant disability records to MAT."
+        - "MAT may share relevant disability information with authorized staff who review the application."
+      read_full: "Read the full permission"
+      full_intro: "By providing the professional’s contact information and checking the box, you consent to all of the following."
+      full_terms:
+        - "The release of your information to your certifying professional, including the capability to view your application in its entirety."
+        - "The MAT program contacting your certifying professional to verify disability-related information for your application."
+        - "Your certifying professional sharing relevant disability documentation with the MAT program for application processing."
+        - "The MAT program sharing relevant disability information with authorized program staff for application review."
+      required: "Permission is required to submit the application."
+    certifying_professional:
+      enter_contact: "Enter the contact details of the professional who can certify your disability."
+      check_contact: "Double check details before submitting."

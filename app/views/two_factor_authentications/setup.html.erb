@@ -1,19 +1,17 @@
+<% locale = @user.effective_message_locale # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <%= link_to 'Skip to main content', '#main-content', class: 'skip-link' %>
 
 <div class="max-w-4xl mx-auto px-4 py-8">
-  <main id="main-content" role="main" tabindex="-1">
+  <div id="main-content" tabindex="-1">
     <div class="card p-8">
 
       <header class="text-center mb-8">
         <h1 class="text-3xl font-bold text-gray-800">Secure Your Account</h1>
-        <p class="mt-3 text-gray-600">Choose a method to protect your account with two-factor authentication.</p>
-        <p class="mt-3 text-gray-800 font-medium">
-          Two-factor authentication keeps your account safe even if someone learns your password.
-        </p>
+        <p class="mt-3 text-gray-600"><%= t('credential_setup.intro', locale: locale) %></p>
       </header>
 
       <section aria-labelledby="choose-2fa-heading" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 items-stretch">
-        <h2 id="choose-2fa-heading" class="sr-only">Choose a two-factor authentication method</h2>
+        <h2 id="choose-2fa-heading" class="sr-only"><%= t('credential_setup.options', locale: locale) %></h2>
 
         <!-- WebAuthn/Security Key Option -->
         <article aria-labelledby="webauthn-heading" class="card border border-gray-200 hover:shadow-elevation-3 transition flex flex-col">
@@ -26,19 +24,17 @@
             <h3 id="webauthn-heading" class="text-lg font-semibold text-center text-gray-800">Security Key</h3>
             <div class="mt-2 flex justify-center">
               <span class="badge badge-success">
-                Best protection
+                <%= t('credential_setup.recommended', locale: locale) %>
               </span>
             </div>
             <p class="mt-3 text-gray-600 text-center">
-              Use your device (fingerprint or face) or a physical security key.
-              Choose this if you want the strongest protection.
+              <%= t('credential_setup.description_device', locale: locale) %>
             </p>
           </div>
           <div class="p-5 pt-0">
             <div class="flex flex-col space-y-2">
               <%= link_to new_credential_two_factor_authentication_path(type: 'webauthn'),
-                  class: 'btn btn-primary w-full',
-                  role: 'button' do %>
+                          class: 'btn btn-primary w-full' do %>
                 <svg aria-hidden="true" focusable="false" class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 116 0z" clip-rule="evenodd"/>
                 </svg>
@@ -57,21 +53,14 @@
               </svg>
             </div>
             <h3 id="totp-heading" class="text-lg font-semibold text-center text-gray-800">Authenticator App</h3>
-            <div class="mt-2 flex justify-center">
-              <span class="badge badge-info">
-                Strong protection
-              </span>
-            </div>
             <p class="mt-3 text-gray-600 text-center">
-              Use a phone app like Google Authenticator, Microsoft Authenticator, or Authy.
-              Choose this if you already use an authenticator app.
+              <%= t('credential_setup.description_app', locale: locale) %>
             </p>
           </div>
           <div class="p-5 pt-0">
             <div class="flex flex-col space-y-2">
               <%= link_to new_credential_two_factor_authentication_path(type: 'totp'),
-                  class: 'btn btn-primary w-full',
-                  role: 'button' do %>
+                          class: 'btn btn-primary w-full' do %>
                 <svg aria-hidden="true" focusable="false" class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
                 </svg>
@@ -90,20 +79,14 @@
               </svg>
             </div>
             <h3 id="sms-heading" class="text-lg font-semibold text-center text-gray-800">Text Message</h3>
-            <div class="mt-2 flex justify-center">
-              <span class="badge badge-warning">
-                Good for convenience
-              </span>
-            </div>
             <p class="mt-3 text-gray-600 text-center">
-              Get a code by text when you sign in. Choose this if texting is easiest.
+              <%= t('credential_setup.description_text', locale: locale) %>
             </p>
           </div>
           <div class="p-5 pt-0">
             <div class="flex flex-col space-y-2">
               <%= link_to new_credential_two_factor_authentication_path(type: 'sms'),
-                  class: 'btn btn-primary w-full',
-                  role: 'button' do %>
+                          class: 'btn btn-primary w-full' do %>
                 <svg aria-hidden="true" focusable="false" class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"></path>
                   <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z"></path>
@@ -116,33 +99,6 @@
 
       </section>
 
-      <section id="why-2fa" aria-labelledby="why-2fa-heading" class="bg-info-50 rounded-lg p-6 mb-8">
-        <h2 id="why-2fa-heading" class="text-xl font-semibold text-gray-800 mb-2">Why use two-factor authentication?</h2>
-        <p class="text-gray-700">
-          Two-factor authentication adds an extra layer of security to your account. Even if someone discovers your
-          password, they won’t be able to access your account without the second factor that only you possess.
-        </p>
-      </section>
-
-      <aside role="note" aria-labelledby="recommendation-heading" class="bg-warning-50 border border-warning-200 rounded-lg p-4">
-        <div class="flex">
-          <div class="flex-shrink-0">
-            <svg aria-hidden="true" focusable="false" class="h-5 w-5 text-warning-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-            </svg>
-          </div>
-        <div class="ml-3">
-            <h3 id="recommendation-heading" class="text-sm font-medium text-warning-800">Recommendation</h3>
-            <div class="mt-2 text-sm text-warning-700">
-              <p>
-              If you can, use a security key or your device's fingerprint or face for the strongest protection.
-              If you already use an authenticator app, that is a great choice too.
-              </p>
-            </div>
-          </div>
-        </div>
-      </aside>
-
       <% unless @mfa_required_for_setup_user %>
         <div class="mt-8 text-center">
           <%= link_to 'Skip for now (not recommended)', @setup_dashboard_path, class: 'text-primary-600 hover:text-primary-800 font-medium' %>
@@ -150,5 +106,5 @@
       <% end %>
 
     </div>
-  </main>
+  </div>
 </div>

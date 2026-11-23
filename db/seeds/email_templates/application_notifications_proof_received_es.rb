@@ -6,11 +6,9 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_received
   template.body = <<~TEXT
     %<header_text>s
 
-    Estimado/a %<user_first_name>s,
+    Hola, %<user_first_name>s,
 
-    Hemos recibido su documentación de %<proof_type_formatted>s y ahora está en revisión.
-
-    Le notificaremos una vez que nuestra revisión esté completa. Gracias por su paciencia.
+    Recibimos su comprobante de %<proof_type_formatted>s. Le avisaremos cuando terminemos de revisarlo.
 
     %<footer_text>s
   TEXT

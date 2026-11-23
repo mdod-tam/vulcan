@@ -489,7 +489,9 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
     assert_select 'h1', I18n.t!('secure_provider_info_forms.unavailable.heading', locale: :es)
-    assert_includes response.body, I18n.t!('secure_provider_info_forms.unavailable.body', locale: :es)
+    assert_select 'p', text: /Escriba a MAT/
+    assert_select "a[href='mailto:#{ProgramContact.support_email}']"
+    assert_select "a[href='tel:#{ProgramContact.support_phone.delete('-')}']"
   end
 
   test 'raw token does not appear in unavailable show response body' do
@@ -645,7 +647,9 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
     assert_select 'h1', I18n.t!('secure_provider_info_form_resends.unavailable.heading', locale: :es)
-    assert_includes response.body, I18n.t!('secure_provider_info_form_resends.unavailable.body', locale: :es)
+    assert_select 'p', text: /Escriba a MAT/
+    assert_select "a[href='mailto:#{ProgramContact.support_email}']"
+    assert_select "a[href='tel:#{ProgramContact.support_phone.delete('-')}']"
   end
   test 'resend new renders expiry heading in Spanish for Spanish-locale recipient' do
     constituent = create(:constituent, locale: 'es')

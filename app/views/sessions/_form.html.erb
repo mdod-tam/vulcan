@@ -48,16 +48,14 @@
              attribute: :password,
              id: 'password-input',
              label: t('sessions.form.password_label'),
-             autocomplete: 'current-password',
-             hint: t('sessions.form.password_hint') %>
+             autocomplete: 'current-password' %>
 
   <%= form.submit t("sessions.form.submit"),
       class: "btn btn-primary w-full",
       "data-disable-with": t("sessions.form.submitting"),
-      "aria-busy": "true",
       "aria-label": t("sessions.form.submit_aria") %>
 
-  <div class="text-center" role="contentinfo">
+  <div class="text-center">
     <%= link_to t("sessions.form.forgot_password"),
       new_password_path(locale: public_request_locale_param),
       class: "text-sm font-medium text-primary-600 hover:text-primary-500 rounded",

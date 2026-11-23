@@ -4,38 +4,19 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_payment_issued', fo
   template.subject = 'Pago Emitido'
   template.description = 'Enviado a un proveedor cuando el Departamento de Contabilidad General (GAD) ha emitido el pago de su factura.'
   template.body = <<~TEXT
-    Pago Emitido
+    Hola, %<vendor_business_name>s,
 
-    Estimado/a %<vendor_business_name>s,
+    Emitimos el pago de la factura %<invoice_number>s.
 
-    Nos complace informarle que se ha emitido el pago de su factura.
+    Monto: %<total_amount_formatted>s
+    Referencia de contabilidad: %<gad_invoice_reference>s
+    %<check_number_line>s
 
-    DETALLES DEL PAGO
-    --------------
-    Número de Factura: %<invoice_number>s
-    Monto Total: %<total_amount_formatted>s
-    Referencia GAD: %<gad_invoice_reference>s
-    Número de Cheque: %<check_number>s
-
-    INFORMACIÓN DE PAGO
-    -----------------
-    El pago ha sido emitido y debe recibirse de acuerdo con los términos de pago estándar.
-    Por favor haga referencia al número de factura GAD en cualquier correspondencia futura sobre este pago.
-
-    INFORMACIÓN DE CONTACTO
-    -----------------
-    Para preguntas sobre este pago:
-    Departamento de Contabilidad General - tam.invoices@maryland.gov
-    Referencia: número de factura GAD %<gad_invoice_reference>s
-
-    Para todas las demás consultas:
-    Equipo de Soporte - %<support_email>s
-
-    ¡Gracias por su participación en nuestro programa!
+    Para preguntas sobre el pago, escriba a tam.invoices@maryland.gov e incluya la referencia de contabilidad. Para otras consultas, escriba a %<support_email>s.
   TEXT
   template.variables = {
     'required' => %w[vendor_business_name invoice_number total_amount_formatted gad_invoice_reference support_email],
-    'optional' => %w[check_number]
+    'optional' => %w[check_number_line]
   }
   template.version = 1
 end

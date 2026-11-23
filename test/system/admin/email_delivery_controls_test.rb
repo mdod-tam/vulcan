@@ -23,10 +23,11 @@ module Admin
         page.execute_script("document.querySelector('#sign-in-and-recovery-exceptions summary').focus()")
         page.driver.browser.keyboard.type(:Enter)
         assert_text 'only two-step verification method'
-        assert_text 'All settings apply to text message setup.'
+        assert_text 'Account recovery messages for everyone.'
         page.driver.browser.keyboard.type(:Enter)
         assert_no_text 'only two-step verification method'
       end
+      assert_text 'All applicable settings still apply when someone sets up text verification.'
       take_screenshot('email-controls-index', html: true)
 
       find('#communication-categories summary').click
@@ -61,7 +62,7 @@ module Admin
       end
       assert_text 'Outgoing correspondence is now off.'
       assert_text 'Outgoing correspondence is off'
-      assert_text 'Email, texts, and letter downloads are off.'
+      assert_text 'Turning off permanently cancels messages and letters still waiting to go out.'
       assert_button 'Resume outgoing correspondence'
       within('[data-email-control="communications.letters"]') do
         assert_text 'Blocked by master'

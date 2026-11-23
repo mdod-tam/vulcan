@@ -16,8 +16,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_select '#recommendation-notes-help', text: /\AThe applicant or their guardian will receive this text as written\./
-    assert_select '#working-notes-help', text: /internal notes.*not included.*confirmation emails or letters/
+    assert_select '#recommendation-notes-help', text: /\AThe applicant or guardian will read this as written\./
+    assert_select '#working-notes-help strong', text: 'Internal notes only.'
     assert_select '#complete_evaluation_recommendation_notes[aria-describedby~="recommendation-notes-help"]'
     assert_select '#working_evaluation_working_notes[aria-describedby~="working-notes-help"]'
   end
@@ -30,7 +30,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '#complete-evaluation-form input[type="radio"]', count: 0
     assert_select '#catalog-recommendations-group:not([hidden]):not([disabled])'
     assert_select '#complete_evaluation_no_suitable_product[type="checkbox"]:not([checked])'
-    assert_select '#recommendation-notes-help strong', text: /Put private notes in Report internal notes\./
+    assert_select '#recommendation-notes-help strong', text: /If no product fits, explain why\./
     assert_select '#complete-internal-notes-help strong', text: 'Internal notes only.'
     assert_select '#complete-evaluation-form input[type="submit"][data-turbo-submits-with="Submitting report..."]'
     assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s
@@ -380,13 +380,13 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "a[href='#{application_details_evaluators_evaluation_path(@evaluation)}']", text: I18n.t('application_contact.link')
     assert_includes @response.body, 'Assigned Evaluator'
-    assert_includes @response.body, 'Working Notes'
+    assert_includes @response.body, 'Private working notes'
     assert_includes @response.body, 'Call constituent before arrival'
     assert_body_order(
       'Scheduled For',
       'Location',
       'Assigned Evaluator',
-      'Working Notes',
+      'Private working notes',
       'Communication Preferences'
     )
     assert_includes @response.body, 'Constituent'

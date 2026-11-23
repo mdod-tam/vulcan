@@ -21,12 +21,8 @@
                data-pdf-loader-pdf-url-value="<%= vendor_w9_document_path(@vendor,
                                                                           @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob) %>">
             <div data-pdf-loader-target="placeholder" class="flex flex-col items-center justify-center h-full bg-gray-100">
-              <div class="text-center mb-4">
-                <h3 class="text-lg font-medium text-gray-700">W9 Form Ready to Preview</h3>
-                <p class="text-sm text-gray-500">Click the button below to load the PDF preview</p>
-              </div>
               <button data-action="click->pdf-loader#loadPdf" class="btn btn-primary">
-                Load PDF Preview
+                Preview W9
               </button>
             </div>
             
@@ -48,10 +44,7 @@
 
     <div class="card overflow-hidden">
       <div class="px-4 py-5 sm:px-6 bg-gray-50">
-        <h3 class="text-lg leading-6 font-medium text-gray-900">Review Decision</h3>
-        <p class="mt-1 max-w-2xl text-sm text-gray-500">
-          Please review the W9 form and choose your decision.
-        </p>
+        <h3 class="text-lg leading-6 font-medium text-gray-900">Decision</h3>
       </div>
       <div class="border-t border-gray-200 p-4">
         <%= form_with(model: [@vendor, @w9_review], url: admin_vendor_w9_reviews_path(@vendor), local: true, class: "space-y-6", id: "review-form", data: { w9_review_target: "form" }) do |f| %>
@@ -109,13 +102,13 @@
 
             <div class="mt-4">
               <label for="w9_review_rejection_reason" class="form-label">
-                Detailed Explanation
+                Reason for rejection
               </label>
               <div class="mt-1">
-                <%= f.text_area :rejection_reason, rows: 4, class: "form-input", id: "w9_review_rejection_reason" %>
+                <%= f.text_area :rejection_reason, rows: 4, class: 'form-input', id: 'w9_review_rejection_reason', aria: { describedby: 'w9-rejection-help' } %>
               </div>
-              <p class="mt-2 text-sm text-gray-500">
-                Please provide a detailed explanation of why the W9 form is being rejected. This will be sent to the vendor.
+              <p id="w9-rejection-help" class="mt-2 text-sm text-gray-700">
+                Tell the vendor what to fix.
               </p>
             </div>
           </div>

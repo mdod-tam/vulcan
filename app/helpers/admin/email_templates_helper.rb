@@ -61,11 +61,13 @@ module Admin
     end
 
     def variable_display_label(variable)
-      variable.to_s.tr('._', ' ').squish.titleize
-    end
-
-    def variable_option_label(template, variable, syntax: nil)
-      "#{variable_display_label(variable)} - #{variable_placeholder_for(template, variable, syntax: syntax)}"
+      case variable.to_s
+      when 'constituent_first_name' then 'Applicant first name'
+      when 'user_first_name', 'user.first_name' then 'First name'
+      when 'expiration_date_formatted' then 'Expiration date'
+      when 'check_number_line' then 'Check number with label'
+      else variable.to_s.tr('._', ' ').squish.titleize
+      end
     end
 
     def placeholder_style_help_classes(style, template)
@@ -73,10 +75,6 @@ module Admin
       classes = ['rounded-md border px-3 py-2 text-sm']
       classes.unshift('hidden') unless visible
       classes.join(' ')
-    end
-
-    def standard_placeholder_style_help_classes(template)
-      "#{placeholder_style_help_classes(:legacy_percent, template)} border-gray-200 bg-gray-50 text-gray-600"
     end
 
     def liquid_placeholder_style_help_classes(template)
@@ -93,11 +91,11 @@ module Admin
                  .uniq
       message = messages.join(', ')
 
-      return message if admin_actionable_template_error?(message)
+      return message.sub('Use variables from Insert Variable only.', 'Use Insert a detail to add information.') if admin_actionable_template_error?(message)
 
-      return 'This template has a placeholder problem. Use Insert Variable, then preview again.' if template_placeholder_error?(message)
+      return 'Check the inserted details, then preview again.' if template_placeholder_error?(message)
 
-      'This template could not be previewed. Check the placeholders and try again.'
+      'This template could not be previewed. Check the inserted details and try again.'
     end
 
     def template_validation_error_messages(messages)
@@ -107,13 +105,13 @@ module Admin
     def template_validation_error_message(message)
       cleaned_message = message.to_s.sub(/\A(?:Base|Body|Subject|Syntax) /, '')
 
-      return 'This template has a placeholder problem. Use Insert Variable, then save again.' if invalid_liquid_syntax_error?(cleaned_message)
+      return 'Check the inserted details, then save again.' if invalid_liquid_syntax_error?(cleaned_message)
 
       if (match = cleaned_message.match(/\AMust include the required variable (.+) in the subject or body\z/))
-        return "Add the required variable #{match[1]} using Insert Variable."
+        return "Use Insert a detail to add #{variable_display_label(match[1])}."
       end
 
-      cleaned_message
+      cleaned_message.sub('Use variables from Insert Variable only.', 'Use Insert a detail to add information.')
     end
 
     private

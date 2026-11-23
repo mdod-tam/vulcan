@@ -100,3 +100,21 @@ es:
       antes de comenzar de nuevo.
     completed_sign_in: Se creó su cuenta. Inicie sesión para continuar.
     completed_notice_failed: Se creó su cuenta. No se pudo poner en cola el correo de bienvenida.
+  credential_setup:
+    intro: "Elija cómo confirmar su identidad al iniciar sesión."
+    description_device: "Use su dispositivo o una llave de seguridad."
+    description_app: "Obtenga un código de una aplicación de autenticación."
+    description_text: "Reciba un código por mensaje de texto."
+    recommended: "Recomendado"
+    options: "Métodos de inicio de sesión"
+    welcome: "Su cuenta está lista."
+    sms_instruction: "Ingrese el código de 6 dígitos que enviamos por mensaje de texto al %{number}. Vence en 10 minutos."
+    sms_help: "Si el código no llega, compruebe el número de teléfono o elija otro método de inicio de sesión."
+    backup: "Agregar un método de inicio de sesión de respaldo"
+    continue: "Ir al panel"
+    no_keys: "No hay llaves de seguridad registradas"
+    added:
+      device: "Dispositivo agregado"
+      security_key: "Llave de seguridad agregada"
+      app: "Aplicación de autenticación agregada"
+      text: "Verificación por mensaje de texto agregada"

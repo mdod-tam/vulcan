@@ -1,0 +1,24 @@
+es:
+  program_pages:
+    help:
+      title: "Ayuda con MAT"
+      body: "Comuníquese con MAT si necesita ayuda con su cuenta, solicitud o documentos."
+      action: "Contactar a MAT"
+    apply:
+      title: "Solicitar servicios de MAT"
+      body: "Inicie sesión para comenzar o continuar su solicitud. Cree una cuenta si es la primera vez que usa MAT."
+      action: "Iniciar sesión"
+    eligibility:
+      title: "Requisitos de MAT"
+      body: "Comuníquese con MAT para saber si reúne los requisitos y qué documentos necesita."
+      action: "Contactar a MAT"
+    how_it_works:
+      title: "Cómo funciona MAT"
+      body: "MAT revisará su solicitud y se comunicará con usted para indicarle los siguientes pasos."
+      action: "Solicitar servicios de MAT"
+    contact:
+      title: "Contactar a MAT"
+      body: "Obtenga ayuda con su cuenta, solicitud o equipo."
+      email: "Correo electrónico"
+      phone: "Teléfono"
+      videophone: "Videoteléfono"

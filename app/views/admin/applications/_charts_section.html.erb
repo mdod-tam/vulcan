@@ -13,7 +13,7 @@
 
     <div class="overflow-x-auto mb-4">
       <table class="min-w-full text-sm" aria-labelledby="status-breakdown-heading">
-        <caption class="sr-only">Application counts by current status for the fiscal year cohort</caption>
+        <caption class="sr-only">Current status of applications created this fiscal year</caption>
         <thead>
           <tr class="border-b border-gray-200">
             <th scope="col" class="text-left py-2 pr-4 font-medium text-gray-700">Status</th>
@@ -23,7 +23,7 @@
         <tbody>
           <% @metrics[:status_counts].each do |status_key, count| %>
             <tr class="border-b border-gray-100">
-              <td class="py-2 pr-4 text-gray-600"><%= status_key.to_s.humanize %></td>
+              <th scope="row" class="py-2 pr-4 text-left font-normal text-gray-600"><%= status_key.to_s.humanize %></th>
               <td class="py-2 text-right font-medium text-gray-900"><%= count %></td>
             </tr>
           <% end %>
@@ -31,17 +31,13 @@
       </table>
     </div>
 
-    <p id="status-chart-desc" class="sr-only">
-      Chart showing the same status counts as the table above for <%= @metrics[:current_fy_range_label] %>.
-    </p>
     <div data-controller="chart"
          data-chart-data-value="<%= @metrics[:status_chart_data].to_json %>"
          data-chart-comparison-data-value="{}"
          data-chart-dataset-label-value="<%= @metrics[:current_fy_label] %>"
          data-chart-title-value="<%= @metrics[:current_fy_label] %> Application Status Snapshot"
-         class="relative w-full h-[300px]"
-         aria-describedby="status-chart-desc">
-      <canvas data-chart-target="canvas" role="img" aria-labelledby="status-breakdown-heading" aria-describedby="status-chart-desc"></canvas>
+         class="relative w-full h-[300px]">
+      <canvas data-chart-target="canvas" aria-hidden="true"></canvas>
     </div>
   </div>
 </section>

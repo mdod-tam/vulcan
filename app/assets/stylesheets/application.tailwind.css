@@ -261,12 +261,11 @@
 
 .protected-variable {
   background-color: #e5e7eb;
-  color: #6b7280;
+  color: #374151;
   padding: 2px 4px;
   border-radius: 3px;
   font-weight: 500;
   cursor: not-allowed;
-  user-select: none;
 }
 
 .protected-variable-movable {

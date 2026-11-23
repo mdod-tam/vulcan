@@ -40,9 +40,9 @@
   <%= hidden_field_tag 'pair_ids[]', candidate.id, id: "#{dom_id_prefix}-candidate-id" %>
 
   <fieldset aria-describedby="<%= canonical_hint_id %>">
-    <legend class="text-sm font-medium text-gray-700">Canonical record and login identity</legend>
+    <legend class="text-sm font-medium text-gray-700">Choose which account to keep</legend>
     <p id="<%= canonical_hint_id %>" class="text-xs text-gray-500 mb-2">
-      Choose which account survives. Its password, MFA, sessions, and login email stay together.
+      The other account will be signed out and deactivated. Its password and verification methods won’t transfer. Its email and phone will be cleared from that record.
     </p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
       <% pair_users.each do |user| %>
@@ -100,7 +100,6 @@
         </div>
       <% end %>
     </div>
-    <p class="text-xs text-gray-500 mt-1">The other record is retired, releases its primary contact values, and points at the canonical survivor. It is never deleted.</p>
   </fieldset>
 
   <%= render 'relationship_impact', preview: relationship_preview, dom_id_prefix: dom_id_prefix %>
@@ -241,7 +240,7 @@
   <div>
     <%= check_box_tag :same_person_confirmed, '1', false, id: confirmation_id, required: true %>
     <%= label_tag confirmation_id,
-                  'I confirm these records are the same person. All applications on the duplicate record will transfer to the canonical account.',
+                  'I confirm these records are the same person. Applications on the other record will move to the account I chose to keep.',
                   class: 'ml-1 text-sm text-gray-700' %>
   </div>
 

@@ -71,7 +71,7 @@ module Trainers
       select 'Complete training', from: 'training-outcome'
       assert_selector '#training-outcome:focus'
       assert_selector '[data-training-outcome-target="status"][role="status"][aria-live="polite"]',
-                      text: 'Complete training form shown below. Fill in the details, then save.'
+                      text: 'Complete training form opened.'
       assert_field 'complete_completed_at', with: ''
       assert_selector :select, 'complete_product_trained_on_id', selected: 'Select a product'
       assert_field 'complete_internal_notes', with: 'Call before arrival; preparation notes stay private.'
@@ -101,7 +101,7 @@ module Trainers
       end
       select 'Reschedule at constituent request', from: 'training-outcome'
       assert_selector '[data-training-outcome-target="status"]',
-                      text: 'Reschedule at constituent request form shown below. Fill in the details, then save.'
+                      text: 'Reschedule at constituent request form opened.'
       assert_field 'reschedule_scheduled_for', with: ''
       assert_no_selector '#complete_completed_at:not([disabled])', visible: :all
       select 'Complete training', from: 'training-outcome'

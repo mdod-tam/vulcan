@@ -81,14 +81,8 @@ module Baseline
       {
         code: 'outdated_ss_award',
         proof_type: 'income',
-        en_body: 'Your Social Security benefit award letter is out-of-date. Please submit ' \
-                 'your most recent award letter, which should be dated within the last 12 ' \
-                 'months. You can obtain a new benefit verification letter by visiting the ' \
-                 'Social Security Administration website or contacting your local SSA office.',
-        es_body: 'Su carta de concesión de beneficios del Seguro Social está desactualizada. Por favor, envíe ' \
-                 'su carta de concesión más reciente, que debe estar fechada dentro de los últimos 12 ' \
-                 'meses. Puede obtener una nueva carta de verificación de beneficios visitando el ' \
-                 'sitio web de la Administración del Seguro Social o comunicándose con su oficina local de la SSA.'
+        en_body: 'Upload a Social Security award letter dated this year that shows you receive benefits.',
+        es_body: 'Suba una carta de beneficios del Seguro Social fechada este año que muestre que recibe beneficios.'
       },
       {
         code: 'missing_signature',

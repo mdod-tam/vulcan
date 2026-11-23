@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maryland Accessible Telecommunications Program</title>
+    <title><%= content_for?(:title) ? yield(:title) : 'Maryland Accessible Telecommunications Program' %></title>
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <%= favicon_link_tag 'TAM.ico' %>

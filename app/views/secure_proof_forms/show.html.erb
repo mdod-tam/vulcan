@@ -40,11 +40,17 @@
       <%= form.label :file, class: "form-label" do %>
         <%= t('.file_label') %> <abbr title="<%= t('.required') %>" class="text-danger-700 no-underline" aria-hidden="true">*</abbr>
       <% end %>
+      <% description_ids = %w[file_help] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <% if @secure_request_form.kind_income_proof_resubmission? && @secure_request_form.application.income_proof_required? %>
+        <% description_ids << 'social-security-help' %>
+        <p id="social-security-help" class="form-hint"><%= t('applications.proof_upload.social_security_letter') %></p>
+      <% end %>
+      <% description_ids << 'file_error' if file_errors.any? %>
       <p id="file_help" class="form-hint"><%= t('.file_help', max_size: ProofUploadFormats.max_megabytes(:proof)) %></p>
       <%= render 'shared/document_upload', form: form, model: @secure_request_form, field: :file,
                                            input_id: 'file', purpose: :proof, secure_form_type: 'proof',
                                            slot: "#{Applications::SubmitProofResubmission::KIND_TO_PROOF_TYPE.fetch(@secure_request_form.kind)}_proof",
-                                           required: true, described_by: ['file_help', ('file_error' if file_errors.any?)].compact.join(' '),
+                                           required: true, described_by: description_ids.join(' '),
                                            input_aria: { invalid: file_errors.any? ? 'true' : nil } %>
       <% if file_errors.any? %>
         <p id="file_error" class="mt-2 text-sm text-danger-700"><%= file_errors.to_sentence %></p>

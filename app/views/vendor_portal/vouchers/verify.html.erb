@@ -24,7 +24,7 @@
 
   <div class="card p-6 mb-6">
     <h2 class="text-xl font-semibold mb-4">Identity Verification</h2>
-    <p class="mb-4 text-gray-700">Please ask the constituent to provide their date of birth to verify their identity.</p>
+    <p class="mb-4 text-gray-700">Ask the customer for their date of birth.</p>
     
     <%= form_with(url: verify_dob_vendor_portal_voucher_path(@voucher), method: :post, id: "verification-form", class: "space-y-6") do |f| %>
       <div class="mb-4">

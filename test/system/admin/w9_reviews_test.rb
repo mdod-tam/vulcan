@@ -14,7 +14,7 @@ module Admin
       visit admin_vendor_path(@vendor)
       assert_text 'Pending Review'
       click_link 'Review W9'
-      click_button 'Load PDF Preview'
+      click_button 'Preview W9'
       assert_selector '[data-pdf-loader-target="container"] iframe[data-turbo="false"][src]'
       reviewed_blob = @vendor.w9_form.blob
       click_button 'Approve'
@@ -38,7 +38,7 @@ module Admin
       assert_selector '.rejection-reason', visible: true
       assert_selector '#w9_review_rejection_reason_code_address_mismatch:focus'
       find_field('Address Mismatch').send_keys(:space)
-      fill_in 'Detailed Explanation', with: 'The address on the W9 does not match our records.'
+      fill_in 'Reason for rejection', with: 'The address on the W9 does not match our records.'
       take_screenshot('admin-w9-rejection-reason-narrow', html: true, full: true)
       click_button 'Confirm Reject'
       assert_text 'W9 review completed successfully'

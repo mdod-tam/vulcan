@@ -301,7 +301,7 @@ module Admin
       assert_response :success
       assert_select 'iframe#template-preview-en-document[name="template-preview-en-document"][sandbox][srcdoc]' do |frames|
         assert_includes frames.first['srcdoc'], 'role="alert"'
-        assert_includes frames.first['srcdoc'], 'Use Insert Variable'
+        assert_includes frames.first['srcdoc'], 'inserted details'
       end
       assert_select '#template-preview-en [role="alert"][aria-atomic="true"]', text: /Preview unavailable.*correct the draft/
       assert_select 'input[value="Preview Draft"][formtarget="template-preview-en-document"]'
@@ -522,7 +522,7 @@ module Admin
         }
         assert_response :unprocessable_content
         assert_select 'turbo-frame#template-preview-en [role="alert"]',
-                      text: 'This template could not be previewed. Check the placeholders and try again.'
+                      text: 'This template could not be previewed. Check the inserted details and try again.'
         assert_not_includes response.body, sentinel
         assert_not_includes response.body, 'person@example.test'
         assert_equal original, template.reload.attributes
@@ -553,8 +553,8 @@ module Admin
       assert_select 'turbo-frame#template-preview-en'
       assert_select 'turbo-frame#template-preview-en[aria-live="polite"][aria-atomic="true"]'
       assert_select 'turbo-frame#template-preview-en [role="alert"]'
-      assert_includes response.body, 'Use variables from Insert Variable only'
-      assert_equal 1, response.body.scan('Use variables from Insert Variable only').size
+      assert_includes response.body, 'Use Insert a detail to add information'
+      assert_equal 1, response.body.scan('Use Insert a detail to add information').size
       assert_no_match(/Invalid Liquid syntax|Liquid render failed/i, response.body)
     end
 
@@ -611,7 +611,7 @@ module Admin
 
       assert_response :unprocessable_content
       assert_equal 'legacy_percent', template.reload.syntax
-      assert_includes response.body, 'This template has a placeholder problem. Use Insert Variable, then save again.'
+      assert_includes response.body, 'Check the inserted details, then save again.'
       assert_no_match(/Invalid Liquid syntax|Liquid syntax error/i, response.body)
     end
 
@@ -695,8 +695,8 @@ module Admin
       get edit_admin_email_template_path(template), headers: default_headers
 
       assert_response :success
-      assert_select 'option[value="legacy_percent"]'
-      assert_select 'option[value="liquid"]', count: 0
+      assert_select 'input[type="hidden"][name="email_template[syntax]"][value="legacy_percent"]'
+      assert_select 'select[name="email_template[syntax]"]', count: 0
     end
 
     test 'edit renders locale-scoped field ids and syntax help descriptions' do
@@ -724,23 +724,25 @@ module Admin
         assert_select "##{legacy_id}", count: 0
       end
 
+      assert_select 'main', count: 1
       %w[en es].each do |locale|
-        assert_select "#email-template-subject-#{locale}", count: 1
+        assert_select "#email-template-subject-#{locale}[role=\"textbox\"][aria-labelledby=\"email-template-subject-#{locale}-label\"]", count: 1
         assert_select "#email-template-body-#{locale}", count: 1
         assert_select "#email-template-description-#{locale}", count: 1
         assert_select "#email-template-syntax-#{locale}", count: 1
         assert_select "#email-template-locale-#{locale}", count: 1
-        assert_select "label[for=\"email-template-subject-#{locale}\"]", count: 1
+        assert_select "label[for=\"email-template-subject-#{locale}-value\"]", count: 1
         assert_select "label[for=\"email-template-description-#{locale}\"]", count: 1
         assert_select "label[for=\"email-template-syntax-#{locale}\"]", count: 1
         assert_select "select#email-template-syntax-#{locale}[aria-describedby]" do |elements|
           describedby = elements.first['aria-describedby']
           assert_includes describedby, "syntax-help-#{locale}"
-          assert_includes describedby, "syntax-standard-help-#{locale}"
-          assert_includes describedby, "syntax-liquid-help-#{locale}"
         end
-        assert_select "#syntax-help-#{locale}", text: /Standard: most templates/
-        assert_select "#syntax-standard-help-#{locale}", count: 1
+        assert_select 'details summary', text: 'Advanced template settings', count: 2
+        assert_select "details:not([open]) select#email-template-syntax-#{locale}", count: 1
+        assert_select "#insert-detail-help-#{locale}", text: 'Choose a detail to fill in when the email is sent.'
+        assert_select "#subject-variable-insert-#{locale} option[data-variable-name='name']", text: 'Name'
+        assert_select "#variable-insert-#{locale} option[data-variable-name='name']", text: 'Name'
         assert_select "#syntax-liquid-help-#{locale}", count: 1
       end
     end
@@ -753,7 +755,7 @@ module Admin
       assert_response :success
       %w[en es].each do |locale|
         assert_select "#confirmation-outcome-help-#{locale}",
-                      text: /outside the catalog.*no suitable product.*Recommendation details verbatim.*migration preserves custom bodies/m
+                      text: /outside the catalog.*no suitable product.*Recommendation details as written/m
         assert_select "#body-editor-#{locale}[aria-describedby~='variable-help-#{locale}']"
       end
 
@@ -948,6 +950,7 @@ module Admin
 
       assert_response :success
       assert_select '#email-delivery h3', text: 'Outgoing correspondence is on'
+      assert_select '#email-delivery p', text: /Turning off permanently cancels messages and letters still waiting to go out\./
       assert_not_includes response.body, 'historical fax callbacks'
       assert_select '#email-delivery [data-email-control=?]', EmailDelivery::GLOBAL_CONTROL
       assert_select '#email-delivery [data-email-control]', EmailDelivery::CONTROL_NAMES.size

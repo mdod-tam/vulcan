@@ -1,2 +1,22 @@
-<h1>Pages#contact</h1>
-<p>Find me in app/views/pages/contact.html.erb</p>
+<% locale = public_request_locale # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% title = t('program_pages.contact.title', locale: locale) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% content_for :title, title %>
+
+<section lang="<%= locale %>" aria-labelledby="program-page-heading" class="card mx-auto max-w-2xl p-6">
+  <h1 id="program-page-heading" class="text-2xl font-semibold"><%= title %></h1>
+  <p class="mt-3"><%= t('program_pages.contact.body', locale: locale) %></p>
+  <dl class="mt-4 space-y-3">
+    <div>
+      <dt class="font-semibold"><%= t('program_pages.contact.email', locale: locale) %></dt>
+      <dd><%= mail_to ProgramContact.support_email, class: 'underline' %></dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><%= t('program_pages.contact.phone', locale: locale) %></dt>
+      <dd><%= link_to ProgramContact.support_phone, "tel:#{ProgramContact.support_phone.delete('-')}", class: 'underline' %></dd>
+    </div>
+    <div>
+      <dt class="font-semibold"><%= t('program_pages.contact.videophone', locale: locale) %></dt>
+      <dd><%= link_to ProgramContact.support_videophone, "tel:#{ProgramContact.support_videophone.delete('-')}", class: 'underline' %></dd>
+    </div>
+  </dl>
+</section>

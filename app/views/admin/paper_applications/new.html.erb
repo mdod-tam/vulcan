@@ -557,13 +557,13 @@
               <% end %>
 
               <div data-controller="document-proof-handler" class="mt-6 pt-6 border-t border-gray-200">
-                <h4 class="text-sm font-semibold text-gray-900 mb-4">Disability Certification</h4>
+                <h4 class="text-sm font-semibold text-gray-900 mb-2">Disability Certification</h4>
+                <p class="mb-4 text-sm"><%= link_to 'Edit standard rejection reasons', admin_rejection_reasons_path, class: 'underline text-primary-700' %></p>
 
                 <fieldset class="mb-4" aria-describedby="disability-certification-action-help">
                   <legend class="text-sm font-medium text-gray-700 mb-2">Disability Certification Action</legend>
                   <p id="disability-certification-action-help" class="mb-3 text-sm text-gray-600">
-                    If no certification came with the application, choose None Provided. No additional reason or notes are required.
-                    Choose Reject when a certification was received but is unacceptable, and select a reason so the signer knows what to correct.
+                    Choose None Provided if no form arrived. If you reject a form, choose a reason that tells the signer what to correct.
                   </p>
                   <div class="flex flex-wrap gap-4">
                     <label class="flex items-center p-3 bg-info-50 border border-info-200 rounded-lg cursor-pointer hover:bg-info-100 has-[:checked]:ring-2 has-[:checked]:ring-info-500">
@@ -646,10 +646,6 @@
                       </select>
                     </div>
                     <div id="disability_certification_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
-                    <p class="text-xs text-gray-500">
-                      Predefined reasons are read-only in this form. To edit that wording, use
-                      <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
-                    </p>
                     <div class="hidden" data-document-proof-handler-target="customReasonSection">
                       <label for="disability_certification_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
                       <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice">
@@ -800,7 +796,7 @@
                            blob: @uploaded_proofs&.dig('income_proof'), described_by: 'income_proof_help',
                            input_data: { document_proof_handler_target: 'fileInput' } %>
                 <p id="income_proof_help" class="mt-1 text-xs text-gray-500">
-                  Upload documents verifying income eligibility: recent tax return (1040), Social Security award letter,
+                  Upload documents verifying income eligibility: recent tax return (1040), Social Security award letter dated this year,
                   SSI/SSDI benefits statement, pension statement, pay stubs, or other income verification.
                   Accepted formats: <%= proof_upload_formats_label %>.
                 </p>
@@ -871,10 +867,6 @@
                     </select>
                   </div>
                   <div id="income_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
-                  <p class="text-xs text-gray-500">
-                    Predefined reasons are read-only in this form. To edit that wording, use
-                    <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
-                  </p>
                   <div class="hidden" data-document-proof-handler-target="customReasonSection">
                     <label for="income_proof_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
                     <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
@@ -1004,10 +996,6 @@
                     </select>
                   </div>
                   <div id="residency_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
-                  <p class="text-xs text-gray-500">
-                    Predefined reasons are read-only in this form. To edit that wording, use
-                    <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
-                  </p>
                   <div class="hidden" data-document-proof-handler-target="customReasonSection">
                     <label for="residency_proof_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
                     <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
@@ -1116,10 +1104,6 @@
                   </select>
                 </div>
                 <div id="id_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
-                <p class="text-xs text-gray-500">
-                  Predefined reasons are read-only in this form. To edit that wording, use
-                  <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
-                </p>
                 <div class="hidden" data-document-proof-handler-target="customReasonSection">
                   <label for="id_proof_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
                   <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">

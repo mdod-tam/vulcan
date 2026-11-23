@@ -207,7 +207,7 @@ module Admin
       form = result.data.fetch(:secure_request_forms).sole
       item = form.print_queue_items.sole
       pdf_text = extracted_pdf_text(item.pdf_letter.download)
-      assert_includes pdf_text, 'mail a copy of your document'
+      assert_includes pdf_text, 'Mail a copy to:'
       assert_no_match(/[?&]token=/, pdf_text)
 
       travel_to form.sent_at + 72.hours do

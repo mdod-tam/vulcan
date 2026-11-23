@@ -2,8 +2,7 @@
   <h3 id="certifying-professional-info-heading" class="text-base font-medium text-gray-900">Certifying Professional Information and Authorization to Contact</h3>
   
   <p class="text-sm text-gray-700 mb-4">
-    Please provide contact information for your Doctor or a qualified Certifying Professional. 
-    The system will automatically send your Disability Certification form to them to complete.
+    <%= t('applications.certifying_professional.enter_contact', locale: form_message_locale) %>
   </p>
 
   <div class="text-sm text-gray-700 mb-4">
@@ -58,36 +57,40 @@
   </div>
 
   <div class="mt-6 p-4 bg-info-50 border border-info-200 rounded">
-    <h4 class="text-base font-medium text-info-800 mb-3">Professional Information Release Authorization</h4>
-    
-    <div class="bg-white p-3 rounded border mb-4">
-      <h4 class="text-sm font-medium text-gray-900 mb-2">MAT Program Contact Information</h4>
-      <div class="space-y-1 text-xs text-gray-700">
-        <p><strong>Email:</strong> <a href="mailto:<%= ProgramContact.support_email %>"
-                                      class="text-primary-600 hover:text-primary-500"><%= ProgramContact.support_email %></a></p>
-        <p><strong>Phone:</strong> <a href="tel:8005527724" class="text-primary-600 hover:text-primary-500">800-552-7724</a></p>
-        <p><strong>Voice/TTY:</strong> <a href="tel:4107677253" class="text-primary-600 hover:text-primary-500">410-767-7253</a></p>
-        <p><strong>Video Phone:</strong> <a href="tel:4108019618" class="text-primary-600 hover:text-primary-500">410-801-9618</a></p>
-      </div>
-    </div>
-    
-    <div class="text-sm text-info-700 space-y-3">
-      <p class="font-medium">By providing your certifying professional's contact information and checking the authorization below, you consent to:</p>
-      
-      <ul class="list-disc list-inside space-y-1 ml-4">
-        <li>The release of your information to your certifying professional, including the capability to view your application in its entirety</li>
-        <li>The MAT program contacting your certifying professional to verify disability-related information for your application</li>
-        <li>Your certifying professional sharing relevant disability documentation with the MAT program for application processing</li>
-        <li>The MAT program sharing relevant disability information with authorized program staff for application review</li>
+    <h4 class="text-base font-medium text-info-800 mb-3">
+      <%= t('applications.disability_release.heading', locale: form_message_locale) %>
+    </h4>
+
+    <div class="space-y-2 text-sm text-gray-700">
+      <p><%= t('applications.disability_release.intro', locale: form_message_locale) %></p>
+      <ul role="list" class="list-disc space-y-1 pl-5">
+        <% t('applications.disability_release.summary', locale: form_message_locale).each do |term| %>
+          <li><%= term %></li>
+        <% end %>
       </ul>
-      
-      <p class="text-xs">
-        <strong>Important:</strong> You are responsible for ensuring that the contact information provided is correct. 
-        For security and privacy, you cannot make changes after you submit this application. 
-        If you need to update your certifying professional's contact information after submission, you must contact MAT staff.
+      <details id="disability-release-details" class="mb-3 rounded border border-gray-200 bg-white p-3">
+        <summary class="cursor-pointer font-medium text-primary-700">
+          <%= t('applications.disability_release.read_full', locale: form_message_locale) %>
+        </summary>
+        <p class="mt-3"><%= t('applications.disability_release.full_intro', locale: form_message_locale) %></p>
+        <ul role="list" class="mt-2 list-disc space-y-1 pl-5">
+          <% t('applications.disability_release.full_terms', locale: form_message_locale).each do |term| %>
+            <li><%= term %></li>
+          <% end %>
+        </ul>
+      </details>
+      <p><%= t('applications.certifying_professional.check_contact', locale: form_message_locale) %></p>
+      <p>
+        <%= t(
+              'applications.disability_release.contact_html',
+              locale: form_message_locale,
+              email: mail_to(ProgramContact.support_email, class: 'underline'),
+              phone: link_to(ProgramContact.support_phone, "tel:#{ProgramContact.support_phone.delete('-')}", class: 'underline'),
+              videophone: link_to(ProgramContact.support_videophone, "tel:#{ProgramContact.support_videophone.delete('-')}", class: 'underline')
+            ) %>
       </p>
     </div>
-    
+
     <div class="flex items-start pt-3 mt-3 border-t border-info-200">
       <%# Bound to the submitted value, falling back to the stored one, so a re-render (validation
           failure, pending review, any refusal) keeps the authorization. The box is required, so
@@ -103,7 +106,7 @@
                     class: 'ml-2 block text-sm font-medium text-info-800 required-label', for: 'application_disability_information_release_authorized' %>
     </div>
     <p id="disability-release-description" class="text-xs text-info-600 ml-6 mt-1">
-      This authorization is required to process your MAT application and verify your eligibility.
+      <%= t('applications.disability_release.required', locale: form_message_locale) %>
     </p>
   </div>
 </div>

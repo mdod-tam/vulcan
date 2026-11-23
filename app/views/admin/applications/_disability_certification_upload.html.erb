@@ -115,13 +115,14 @@
 
             <div id="cert-custom-reason-area" class="hidden mt-2" data-document-proof-handler-target="customReasonSection">
               <label for="disability_certification_rejection_reason" class="form-label">Custom Rejection Reason</label>
+              <p id="cert-custom-reason-help" class="form-hint">Tell the signer what to fix.</p>
               <textarea name="disability_certification_rejection_reason"
                         id="disability_certification_rejection_reason"
                         rows="3"
                         disabled
                         data-document-proof-handler-target="customReasonField"
                         class="form-input mt-1"
-                        placeholder="Enter the rejection reason that will be sent to the certifying professional..."></textarea>
+                        aria-describedby="cert-custom-reason-help"></textarea>
             </div>
           </div>
 

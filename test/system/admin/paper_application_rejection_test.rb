@@ -54,9 +54,9 @@ module Admin
 
       select 'Missing Name', from: 'income_proof_rejection_reason'
 
-      assert_selector '#income_proof_reason_preview', visible: true
-      assert_text 'Predefined reasons are read-only in this form.'
-      assert_text 'Rejection Reasons'
+      reason = find('#income_proof_rejection_reason option[value="missing_name"]')['data-reason-text']
+      assert_selector '#income_proof_reason_preview[role=status]', text: reason, visible: true
+      assert_link 'Edit standard rejection reasons', href: admin_rejection_reasons_path, count: 1
 
       assert_no_selector "[name='income_proof_custom_rejection_reason']", visible: true
     end

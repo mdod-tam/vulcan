@@ -18,7 +18,7 @@ module Trainers
       assert_select 'h2#session-actions-heading', text: '¿Qué ocurrió?'
       assert_select '[data-training-outcome-target=status][role=status][aria-live=polite]', text: ''
       assert_select '[data-controller=training-outcome][data-training-outcome-message-value=?]',
-                    'Se muestra el formulario de «__ACTION__». Complete los datos y guarde los cambios.'
+                    'Se abrió el formulario: __ACTION__.'
       assert_select 'dt', text: 'Correo electrónico de contacto'
       assert_select 'p', text: 'Idioma preferido: inglés'
       assert_not_includes response.body, 'Translation missing'

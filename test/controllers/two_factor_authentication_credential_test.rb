@@ -43,7 +43,8 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select 'html[lang=en]'
     assert_select 'h1', 'Secure Your Account'
-    assert_select 'section[aria-labelledby="choose-2fa-heading"] + section#why-2fa'
+    assert_select 'section[aria-labelledby="choose-2fa-heading"] article', count: 3
+    assert_select 'p', text: 'Choose how you’ll verify it’s you when you sign in.', count: 1
   end
 
   test 'TOTP enrollment uses the shared invalid-code feedback' do
@@ -186,8 +187,8 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_predicate credential, :verified?
     follow_redirect!
     assert_response :success
-    assert_select 'h1', 'Setup Complete!'
-    assert_includes response.body, 'Your Text Message Verification has been successfully set up.'
+    assert_select 'h1', 'Text message verification added'
+    assert_select 'a', 'Add a backup sign-in method'
   end
 
   test 'successful SMS setup confirmation redirects Turbo requests to success page' do

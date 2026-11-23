@@ -89,12 +89,12 @@ module Admin
       visit new_admin_vendor_w9_review_path(vendor)
       click_button 'Reject', exact: true
       choose 'Address Mismatch'
-      fill_in 'Detailed Explanation', with: 'Unsaved W9 review explanation'
+      fill_in 'Reason for rejection', with: 'Unsaved W9 review explanation'
       expire_and_count_submissions(admin, '#review-form')
       click_button 'Confirm Reject'
 
       assert_selector '[data-session-activity-target="notice"]', text: I18n.t('sessions.activity.messages.expired')
-      assert_field 'Detailed Explanation', with: 'Unsaved W9 review explanation'
+      assert_field 'Reason for rejection', with: 'Unsaved W9 review explanation'
       assert_current_path new_admin_vendor_w9_review_path(vendor)
       assert_equal 0, page.evaluate_script('window.expiredFormSubmissions')
       assert_empty vendor.reload.w9_reviews

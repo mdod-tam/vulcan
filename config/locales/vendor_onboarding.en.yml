@@ -14,24 +14,23 @@ en:
     states:
       missing_w9:
         title: "Upload your W9"
-        body: "Add your W9 on your profile. Staff must review the W9 and separately authorize your vendor account before you can redeem vouchers."
+        body: "MAT must approve your W9 and authorize your account before you can redeem vouchers."
         action: "Upload W9 on your profile"
       awaiting_w9_review:
         title: "Your W9 is awaiting review"
-        body: "Staff will review the W9 you submitted. You cannot redeem vouchers until your current W9 is approved and your vendor account is authorized."
+        body: "You can redeem vouchers once MAT approves your W9 and authorizes your account."
       rejected_w9:
         title: "Your W9 needs a correction"
-        body: "Read the reason in your W9 notice and upload a corrected file on your profile or through your secure upload link. Staff must review the replacement before you can redeem vouchers."
+        body: "Read the reason in your W9 notice, then upload a corrected form."
         action: "Upload a corrected W9"
       awaiting_authorization:
         title: "W9 approved; vendor authorization is still pending"
-        body: "Your W9 has been approved. Program staff must separately authorize your vendor account before you can redeem vouchers. Contact the program if you need an update."
+        body: "MAT must authorize your account before you can redeem vouchers."
       suspended:
         title: "Your vendor account is suspended"
         body: "You cannot redeem vouchers while your account is suspended, even if your W9 is approved. Contact the program to discuss the next step."
       ready:
         title: "You are ready to redeem vouchers"
-        body: "Your current W9 is approved and the program has authorized your vendor account. You can now process a voucher."
         action: "Process a voucher"
       terms_unpublished:
         title: "Vendor terms are not yet available"

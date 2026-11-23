@@ -1,2 +1,9 @@
-<h1>Pages#how_it_works</h1>
-<p>Find me in app/views/pages/how_it_works.html.erb</p>
+<% locale = public_request_locale # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% title = t('program_pages.how_it_works.title', locale: locale) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% content_for :title, title %>
+
+<section lang="<%= locale %>" aria-labelledby="program-page-heading" class="card mx-auto max-w-2xl p-6">
+  <h1 id="program-page-heading" class="text-2xl font-semibold"><%= title %></h1>
+  <p class="mt-3"><%= t('program_pages.how_it_works.body', locale: locale) %></p>
+  <%= link_to t('program_pages.how_it_works.action', locale: locale), apply_path(locale: locale), class: 'btn btn-primary mt-4' %>
+</section>

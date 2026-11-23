@@ -1,0 +1,14 @@
+<%# locals: (proof:, flow:, locale:) %>
+<p id="<%= proof %>-hint" class="form-hint mt-1">
+  <% if flow == :replacement && proof.to_s != 'id' %>
+    <%= t("applications.proof_upload.replacement_instructions.#{proof}", locale: locale) %>
+  <% else %>
+    <%= t("applications.proof_upload.instructions.#{proof}", locale: locale) %>
+  <% end %>
+</p>
+<p class="form-hint"><%= t('applications.proof_upload.accepted', locale: locale) %></p>
+<ul role="list" class="form-hint mb-2 list-disc pl-5">
+  <% t("applications.proof_upload.examples.#{flow}.#{proof}", locale: locale).each do |example| %>
+    <li><%= example %></li>
+  <% end %>
+</ul>

@@ -27,7 +27,6 @@ en:
       contact_label: "Email Address or Phone Number"
       error_heading: "Please address the following errors:"
       password_label: "Password"
-      password_hint: "Enter your password"
       submit: "Sign In"
       submitting: "Signing in..."
       submit_aria: "Sign in to your account"
@@ -47,7 +46,7 @@ en:
     account_recovery:
       title: "Security Key Recovery"
       note_label: "Note:"
-      note: "Lost security keys cannot be recovered. An administrator will need to verify your identity and reset your 2FA enrollment."
+      note: "MAT must first verify your identity."
       contact_hint: "Use the email address or phone number on your portal account so an administrator can identify the account for review. This does not send an account access link."
       details_label: "Additional Details"
       details_placeholder: "Please provide any details that will help verify your identity (e.g., reason for reset, when you last accessed the system, etc.)"
@@ -83,7 +82,6 @@ en:
       password_confirmation_label: "Confirm Password"
       language_preference_label: "Language Preference"
       language_prompt: "Select Language"
-      language_hint: "Select from our supported languages"
       language_options:
         en: "English"
         es: "Spanish"
@@ -126,7 +124,7 @@ en:
           attributes:
             base:
               portal_self_registration_requires_email: "A portal account requires an email address. If you do not have email, please contact MAT at %{support_email} or %{support_phone} for assistance with a paper application."
-              portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Please contact the MAT Team at %{support_email} or %{support_phone} for assistance."
+              portal_self_registration_unavailable_contact: "We couldn’t complete your registration. Contact MAT at %{support_email} or %{support_phone}."
             phone_type:
               portal_self_registration_phone_type_required: "must be selected when a phone number is provided"
             date_of_birth:
@@ -161,7 +159,7 @@ en:
           attributes:
             base:
               certifying_professional_required: "Certifying professional information is required for submission."
-              pending_identity_review: "This application cannot be submitted yet because we need to review some of the information associated with this application. You can keep editing and saving the draft in the meantime. Please contact the MAT Team if you have questions."
+              pending_identity_review: "Contact MAT staff. Submission on hold. You can still save your draft."
   activity_history:
     labels:
       training_scheduled: "Training Scheduled"
@@ -265,7 +263,6 @@ en:
       incomplete: "Complete all required fields before submitting."
       ready: "Application is ready to submit."
       detail: "Still needed: %{items}."
-    income_proof_required: "This proof is required to submit your application."
     form_labels:
       maryland_resident: "I certify that I am a resident of Maryland"
       household_size: "Household Size"
@@ -325,10 +322,10 @@ en:
       failed: "Some changes are not saved yet. Use \"Save Application\" to keep them."
     submission_gate:
       # The live region explains the disabled control. The visible notice has the full explanation.
-      pending_identity_review_status: "Submitting is unavailable while we review information associated with this application. You can still save your draft."
+      pending_identity_review_status: "Submission on hold. You can still save your draft."
       # Only refusals show this notice. Text survives the re-render, but file selections do not.
       # A draft save attaches the files.
-      refused_documents_notice: "Any documents you had selected were not attached. Choose them again and use \"Save Application\" to keep them with your draft."
+      refused_documents_notice: "Choose your files again, then select Save Application to keep them with your draft."
     proof_resubmission_requests:
       create:
         failure: "Secure proof upload request could not be sent."
@@ -394,7 +391,7 @@ en:
         no_longer_needed: "This document no longer needs to be uploaded. Contact the program if you have questions."
     certification_upload:
       messages:
-        provider_email_required: "A secure certification upload link cannot be sent because the provider email is missing. Send a provider information link to the constituent or guardian to collect the contact information of the certifying professional."
+        provider_email_required: "Provider email is missing. Send the applicant or guardian a link to enter it."
         unsupported_channel: "Secure certification upload links can only be sent by email."
         cooldown_active: "A secure certification upload link was sent recently. Please wait %{minutes} minutes before sending another one."
         request_created: "Secure certification upload request created."
@@ -420,13 +417,13 @@ en:
       friend: "Friend"
       other: "Other"
     alternate_contact:
-      portal_help: "You may provide an alternate contact person who can help with your application. Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
+      portal_help: "An alternate contact can help with your application. MAT won’t send them application notices or secure links."
       admin_help: "Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
       admin_authorization_help: "Alternate contacts are informational only. They are not authorized application recipients and do not receive secure workflow links or workflow notifications."
     dependent_contact:
-      strategy_help: "Use guardian contact information when secure workflow communications for this dependent should go to the guardian by default. Provide separate dependent contact information when those communications may go to the dependent/applicant."
-      guardian_email_help: "Secure workflow communications for the dependent will go to the guardian's email address by default."
-      dependent_email_help: "This email will be used for communications about the dependent's benefits. Secure workflow communications may default to the dependent/applicant when this email is separate from the guardian email."
+      strategy_help: "Choose whose contact details MAT should use for notices and secure links."
+      guardian_email_help: "Use the guardian’s email for notices and secure links about this application."
+      dependent_email_help: "MAT may send notices and secure links to the dependent if you enter a separate email address."
       guardian_phone_help: "Calls or texts for the dependent will use the guardian's phone number."
   trainers:
     training_sessions:
@@ -522,14 +519,14 @@ en:
       submission_options:
         paper: |-
           HOW TO SUBMIT THIS DOCUMENT:
-          If it is easier, you may mail a copy of your document to our office, and we will scan and upload it for you:
+          Mail a copy to:
              Maryland Accessible Telecommunications
              %{office_address}
         online: |-
           HOW TO SUBMIT THIS DOCUMENT:
           1. Secure proof upload link for your %{proof_type_formatted}:
              %{secure_upload_url}
-          2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
+          2. Or mail a copy to:
              Maryland Accessible Telecommunications
              %{office_address}
     proof_rejected:
@@ -545,14 +542,14 @@ en:
       resubmission_options:
         paper: |-
           HOW TO SUBMIT A CORRECTED DOCUMENT:
-          If it is easier, you may mail a copy of your document to our office, and we will scan and upload it for you:
+          Mail a copy to:
              Maryland Accessible Telecommunications
              %{office_address}
         online: |-
           HOW TO SUBMIT A CORRECTED DOCUMENT:
           1. Secure corrected proof upload link for your %{proof_type_formatted}:
              %{secure_upload_url}
-          2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
+          2. Or mail a copy to:
              Maryland Accessible Telecommunications
              %{office_address}
       archived_message: "Unfortunately, you have reached the maximum number of submission attempts for this application. Your application has been archived."
@@ -583,6 +580,8 @@ en:
            %{download_form_url}
         2. Fax: Send the updated form to 410-767-4276
   vendor_notifications:
+    payment_issued:
+      check_number: "Check number: %{number}"
     action_required: "Action Required"
     association_required: "Your association requires a valid W9."
     association_requirement_title: "Association Requirement"
@@ -680,6 +679,7 @@ en:
 
         If you have questions, please contact %{support_email}.
   shared:
+    skip_to_main_content: "Skip to main content"
     # Every date-of-birth text field. DateInputNormalizer reads month first in every locale.
     date_of_birth:
       label: "Date of Birth"
@@ -753,7 +753,7 @@ en:
           guardian: "Guardian"
         panel:
           title: "Secure provider information requests"
-          description: "Send a secure link for entering certifying professional contact information."
+          description: "Choose a recipient and how to send the link."
           legend: "Recipients"
           channel_label: "Delivery channel for %{recipient}"
           channel_prompt: "Choose a channel"
@@ -882,7 +882,7 @@ en:
         create:
           success: "Secure certification upload link sent successfully."
           failure: "Failed to send secure certification upload link."
-          provider_email_required: "A secure certification upload link cannot be sent because the provider email is missing. Send a provider information link to the constituent or guardian to collect the contact information of the certifying professional."
+          provider_email_required: "Provider email is missing. Send the applicant or guardian a link to enter it."
       send_document_signing_request:
         d_sign_request_pass: "Document signing request sent successfully."
       assign_voucher:
@@ -901,9 +901,14 @@ en:
       global_label: "Outgoing correspondence"
       correspondence_on: "Outgoing correspondence is on"
       correspondence_off: "Outgoing correspondence is off"
-      correspondence_off_help: "Email, texts, and letter downloads are off. Some sign-in and recovery messages can still go out."
+      correspondence_help: "Turning off permanently cancels messages and letters still waiting to go out."
+      released_help: "Downloaded letters and messages already accepted for delivery can’t be recalled."
       account_access_heading: "Sign-in and recovery exceptions"
-      account_access_help: "Recovery messages for anyone and sign-in codes for people who use texts as their only two-step verification method can bypass Outgoing correspondence and Account security. Channel and template settings still apply. All settings apply to text message setup."
+      account_access_help: "These messages can still go out when Outgoing correspondence or Account security is off:"
+      account_access_sign_in: "Sign-in codes for people who use texts as their only two-step verification method."
+      account_access_recovery: "Account recovery messages for everyone."
+      channels_help: "Each channel keeps its saved setting. Turning off a channel stops all messages on it, including sign-in and recovery."
+      sms_help: "All applicable settings still apply when someone sets up text verification."
       pause_correspondence: "Turn off outgoing correspondence"
       resume_correspondence: "Resume outgoing correspondence"
       pause_correspondence_confirm: "Turn off outgoing correspondence? Queued emails, texts, and letters awaiting download will be canceled. Some sign-in and recovery messages can still go out."
@@ -911,7 +916,7 @@ en:
       blocked_by_master: "Blocked by master"
       saved_on: "Saved on"
       categories_heading: "Communication categories"
-      categories_help: "Each category applies to the channels it uses."
+      categories_help: "Each category applies to the channels it uses. Template settings still apply."
       state_on: "On"
       state_off: "Off"
       state_missing: "Configuration error"
@@ -1158,8 +1163,7 @@ en:
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
-      contact_info: "Email %{email} or call %{phone}."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   secure_provider_info_form_resends:
     new:
       title: "Request New Secure Link"
@@ -1170,12 +1174,11 @@ en:
     create:
       title: "Request Received"
       heading: "Request received"
-      body: "If this request can be resent, a new secure link will be sent using the current eligible contact information on file."
+      body: "If we can send a new link, we’ll use the contact details we have on file."
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
-      contact_info: "Email %{email} or call %{phone}."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   passwords:
     account_access_sms:
       message: "MAT account access link to set your password: %{reset_url} This link expires in 20 minutes."
@@ -1220,8 +1223,7 @@ en:
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
-      contact_info: "Email %{email} or call %{phone}."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   secure_proof_form_resends:
     new:
       title: "Request New Secure Link"
@@ -1232,11 +1234,11 @@ en:
     create:
       title: "Request Received"
       heading: "Request received"
-      body: "If this request can be resent, a new secure link will be sent using the current eligible contact information on file."
+      body: "If we can send a new link, we’ll use the contact details we have on file."
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   secure_certification_forms:
     show:
       title: "Secure Certification Upload"
@@ -1260,8 +1262,7 @@ en:
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
-      contact_info: "Email %{email} or call %{phone}."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   secure_certification_form_resends:
     new:
       title: "Request New Secure Link"
@@ -1277,7 +1278,7 @@ en:
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure link is no longer available. For help with this request, contact the MAT support team."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   secure_w9_forms:
     show:
       title: "W9 Upload"
@@ -1301,8 +1302,7 @@ en:
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure W9 upload link is no longer available. Contact the MAT support team if you still need help with this request."
-      contact_info: "Email %{email} or call %{phone}."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   secure_w9_form_resends:
     new:
       title: "Request New Secure W9 Link"
@@ -1317,9 +1317,17 @@ en:
     unavailable:
       title: "Secure Link Unavailable"
       heading: "Secure link unavailable"
-      body: "This secure W9 upload link is no longer available. Contact the MAT support team if you still need help with this request."
-      contact_info: "Email %{email} or call %{phone}."
+      contact_info_html: "Email MAT at %{email} or call %{phone}."
   terms_and_conditions:
+    equipment_heading: "Equipment agreement"
+    summary:
+      intro: "Maryland owns the equipment it lends. The applicant can use it for personal calls while living in Maryland."
+      points:
+        - "Keep the equipment for the applicant’s own use. The agreement prohibits selling, pawning, lending, or giving it away."
+        - "Contact MAT for warranty repairs on equipment MAT lent you."
+        - "Report lost equipment to MAT. Maryland provides no replacement for lost equipment. If it’s stolen, report it to the police right away and send MAT a copy of the report before MAT can replace it."
+      more: "The full agreement also covers eligibility, training, and legal and financial responsibilities."
+      read_full: "Read the full equipment agreement"
     title: "Maryland Accessible Telecommunications Program Agreement for Acceptance of State Property for Personal Use"
     intro: "I understand and agree to the following:"
     item_1_title: "1. Equipment Ownership"

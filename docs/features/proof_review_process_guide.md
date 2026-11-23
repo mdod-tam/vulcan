@@ -54,9 +54,9 @@ Attaching a file does not always mean it still needs review — the entry point 
 
 Proof intake uses the formats and the inclusive 5 MB limit in [`ProofUploadFormats`](../../app/models/proof_upload_formats.rb). The shared upload control stages a private snapshot for [antivirus scanning](../security/attachment_scanning.md); the existing proof stays in place while its replacement is checked. [`UploadedDocument`](../../app/services/uploaded_document.rb) requires a clean, purpose-matched snapshot owned by the uploader or the exact secure form before a new file can attach. Raw files posted directly to the final submission are refused. Missing, unreadable, unavailable, expired, oversized, wrongly typed, or elsewhere-attached files are also refused. [`ProofAttachmentValidator`](../../app/services/proof_attachment_validator.rb) identifies type from bytes and rejects PDF active content such as scripts or form actions. Audit size and filename come from the resolved blob. On save, [`DocumentValidator`](../../app/validators/document_validator.rb) checks newly attached files from metadata; proof approval separately requires antivirus clearance.
 
-## Unresolved SSA document requirements
+## Social Security award letters
 
-Two former skipped test placeholders proposed requiring an SSA award letter from the current year and less than two months old. Neither rule is implemented by the attachment validators. Program owners must decide whether either restriction applies, what document date to measure, how to handle year boundaries, and whether the two-month limit is inclusive before validation or review guidance changes.
+Staff check that a Social Security award letter is dated in the current calendar year and shows the applicant receives benefits. A letter that lists a monthly amount also qualifies. The attachment validators check the file itself. Staff make the decision about the document’s contents. For MAT, current retirement income or Social Security meets the income requirement. iCanConnect has its own income requirements. For earnings-based qualification, staff compare annual household income to the configured threshold for that household size, which defaults to 400% of the federal poverty level.
 
 ## Requesting a replacement
 

@@ -22,6 +22,7 @@ module EmailTemplates
     def for_template(template, subject: nil, include_optional_variables: nil)
       include_optional_variables = !template.liquid? if include_optional_variables.nil?
       base_data = base(subject: subject || template.subject)
+      base_data['check_number_line'] = I18n.t('vendor_notifications.payment_issued.check_number', number: base_data['check_number'], locale: @locale)
       if template.name == 'application_notifications_proof_rejected'
         base_data['request_explanation'] = I18n.t('applications.proof_resubmission.rejection_explanation.pending', locale: @locale)
       end

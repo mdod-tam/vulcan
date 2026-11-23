@@ -162,7 +162,7 @@ module Admin
 
       prefix = "duplicate-review-#{@review_case.id}-candidate-#{@candidate.id}"
       within(form_selector) do
-        assert_text 'Canonical record and login identity'
+        assert_selector 'legend', text: 'Choose which account to keep'
         assert_text "Login email: #{@subject.email}"
         assert_text "Login email: #{@candidate.email}"
         assert_text 'Newer record', count: 1

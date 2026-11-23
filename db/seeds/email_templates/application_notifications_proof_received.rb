@@ -8,9 +8,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_received
 
     Dear %<user_first_name>s,
 
-    We have received your %<proof_type_formatted>s documentation and it is now under review.
-
-    We will notify you once our review is complete. Thank you for your patience.
+    We received your %<proof_type_formatted>s document. We’ll let you know when we finish reviewing it.
 
     %<footer_text>s
   TEXT
