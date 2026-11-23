@@ -1,5 +1,5 @@
 <%# locals: (form_errors: { save_resource: @resource.errors.to_hash(true) }) %>
-<p class="mt-4 text-gray-700">Saving publishes public program guidance for this exact product. Do not include personal or session information. Resources are ordered by title within each language.</p>
+<p class="mt-4 text-gray-700">Saving publishes this resource. Leave out personal or session information.</p>
 <p class="mt-2 text-sm text-gray-600">Use descriptive titles. PDFs should be searchable and tagged for accessibility. Hosted videos should have captions and a transcript. Prefer HTTPS links.</p>
 <%= form_with model: [:admin, @product, @resource], class: 'mt-6 space-y-5' do |form| %>
   <%= render 'shared/action_errors', action: :save_resource, form: form, form_errors: form_errors,
@@ -22,7 +22,7 @@
     <%= select_tag 'product_resource[source]', options_for_select([['External link', 'url'], ['PDF document', 'pdf']], @source),
                    id: 'product_resource_source', class: 'form-input mt-1',
                    aria: action_form_field_aria(:save_resource, :base, form_errors: form_errors, describedby: 'source-help') %>
-    <p id="source-help" class="form-hint">Choose the source to save. Selecting an external link replaces the saved PDF after a successful save; selecting PDF replaces the saved link. Only the selected source is saved.</p>
+    <p id="source-help" class="form-hint">Saving replaces the current PDF or link with the source you select.</p>
     <%= render 'shared/field_errors', action: :save_resource, attribute: :base, form_errors: form_errors %>
   </div>
   <div>

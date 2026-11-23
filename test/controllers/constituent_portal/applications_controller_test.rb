@@ -178,8 +178,8 @@ module ConstituentPortal
 
     test 'new application explains required income proof in the applicant locale' do
       messages = {
-        'en' => 'This proof is required to submit your application.',
-        'es' => 'Este comprobante es obligatorio para enviar su solicitud.'
+        'en' => 'Income Verification (required)',
+        'es' => 'Comprobante de ingresos (obligatorio)'
       }
       FeatureFlag.stub(:income_proof_required?, true) do
         messages.each do |locale, message|
@@ -188,7 +188,9 @@ module ConstituentPortal
           get new_constituent_portal_application_path
 
           assert_response :success
-          assert_select '#income-hint span.font-semibold', text: message
+          assert_select 'label[for="application_income_proof"]', text: message
+          assert_select '#application_income_proof[aria-describedby~="income-hint"]'
+          assert_select '#income-hint', text: I18n.t('applications.proof_upload.instructions.income', locale: locale)
           assert_select '#income-hint .translation_missing', count: 0
         end
       end

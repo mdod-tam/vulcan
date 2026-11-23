@@ -82,8 +82,7 @@
         To keep a voucher redemption off the next invoice, put it on hold from its voucher page after withdrawing.
       </p>
       <%= form_with url: withdraw_admin_invoice_path(@invoice), method: :patch, class: 'space-y-4',
-                    data: { turbo_confirm: 'Withdraw this invoice? Its voucher redemptions are released and can be added to a later invoice. ' \
-                                           'The invoice and its number are kept and marked Withdrawn.' } do |f| %>
+                    data: { turbo_confirm: 'Withdraw this invoice? Its voucher redemptions can go on a later invoice.' } do |f| %>
         <%= hidden_field_tag :expected_status, @invoice.status, id: nil %>
         <div>
           <%= label_tag :reason, 'Reason', class: 'form-label' %>
@@ -98,8 +97,7 @@
     <section aria-labelledby="correction-heading" class="card p-6 mb-6">
       <h2 id="correction-heading" class="text-lg font-medium text-gray-900 mb-2">Add a correction note</h2>
       <p id="correction-help" class="text-sm text-gray-600 mb-4">
-        Fix the error in accounting first, then record its accounting reference and what was done. The note is kept in this
-        invoice's history; the original payment details are not changed.
+        Correct the payment in accounting first. Enter the accounting reference and what you changed.
       </p>
       <%= form_with url: correction_note_admin_invoice_path(@invoice), method: :post, class: 'space-y-4' do |f| %>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">

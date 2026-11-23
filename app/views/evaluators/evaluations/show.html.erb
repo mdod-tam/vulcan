@@ -251,7 +251,7 @@
       <%= render "completed_notes_form", evaluation: @evaluation %>
     <% else %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
-        No lifecycle actions are available for this evaluation status.
+        No actions are available for this evaluation.
       </div>
     <% end %>
     <% (@evaluation_form_errors.keys.map(&:to_sym) - visible_form_actions - [:save_working_notes]).each do |action| %>

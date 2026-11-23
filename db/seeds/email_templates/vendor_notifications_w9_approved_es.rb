@@ -6,22 +6,16 @@ EmailTemplate.find_or_create_by!(name: 'vendor_notifications_w9_approved', forma
   template.body = <<~TEXT
     %<header_text>s
 
-    Estimado/a %<vendor_business_name>s,
+    Hola, %<vendor_business_name>s,
 
-    Nos complace informarle que su formulario W9 ha sido revisado y aprobado.
+    Aprobamos su W9. Consulte el panel de proveedores para ver si le queda algún paso antes de canjear vales.
 
-    %<status_box_text>s
-
-    La aprobación del W9 y la autorización del proveedor son pasos separados. Antes de procesar vales, el programa también debe autorizar su cuenta de proveedor. Consulte su panel para ver los pasos pendientes.
-
-    Si tiene alguna pregunta o necesita ayuda, no dude en comunicarse con nuestro equipo de soporte al %<support_email>s o llame al (410) 767-6960.
-
-    Gracias por su colaboración.
+    Si necesita ayuda, escriba a %<support_email>s o llame al 410-767-6960.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text vendor_business_name status_box_text footer_text support_email],
+    'required' => %w[header_text vendor_business_name support_email footer_text],
     'optional' => []
   }
   template.version = 1

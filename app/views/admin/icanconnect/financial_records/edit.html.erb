@@ -8,7 +8,7 @@
     <p id="financial-constituents">For program stock.</p>
   <% end %>
   <% if @record.is_a?(PurchaseOrder) %>
-    <p>Enter the amounts from the invoice. Enter 0 for shipping, tax or other charges that don’t apply. Leave unknown amounts blank.</p>
+    <p>Use invoice amounts. Enter 0 for charges that don’t apply. Leave unknown amounts blank.</p>
   <% else %>
     <p>Enter the amount paid or billed. Leave unknown amounts blank. You can add a bill after the service report is finished.</p>
   <% end %>

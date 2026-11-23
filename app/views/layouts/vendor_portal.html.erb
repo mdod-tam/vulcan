@@ -11,6 +11,7 @@
 </head>
 
 <body class="min-h-screen bg-gray-50">
+  <%= link_to t('shared.skip_to_main_content'), '#vendor-main-content', class: 'skip-link' %>
   <% if (session_deadlines = session_activity_deadlines) %>
     <%= render 'shared/session_activity',
                deadlines: session_deadlines,
@@ -37,7 +38,7 @@
     </div>
   </header>
 
-  <main class="container mx-auto px-4 py-6">
+  <main id="vendor-main-content" tabindex="-1" class="container mx-auto px-4 py-6">
     <%= render "shared/flash" %>
     <%= yield %>
   </main>

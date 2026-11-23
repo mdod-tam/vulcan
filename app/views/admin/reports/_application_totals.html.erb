@@ -5,11 +5,11 @@
   <%= render 'table', caption: 'Applications created in each fiscal year', headers: ['Applications', *years],
                       rows: [['Created', report.current_fy_applications, report.previous_fy_applications],
                              ['Drafts', report.current_fy_draft_applications, report.previous_fy_draft_applications]] %>
-  <h3 class="mt-4 font-semibold">Disability types</h3>
+  <h3 class="mt-4 font-semibold">Disability counts by fiscal year</h3>
   <p class="text-sm text-gray-600">Applicants may select more than one type.</p>
   <% current = report.disability_chart_data(:current) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
   <% previous = report.disability_chart_data(:previous) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
-  <%= render 'table', caption: 'Disability types by fiscal year', headers: ['Disability type', *years],
+  <%= render 'table', caption: 'Disability types applicants selected', headers: ['Disability type', *years],
                       rows: current.map { |label, count| [label, count, previous.fetch(label)] } +
                             [['Applications with a disability listed', report.current_fy_total_disability_applications,
                               report.previous_fy_total_disability_applications]] %>

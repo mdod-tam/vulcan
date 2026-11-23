@@ -114,8 +114,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     visit credential_success_two_factor_authentication_path(type: 'webauthn')
 
-    assert_text 'Setup Complete!', wait: 10
-    assert_text 'Your Security Key has been successfully set up', wait: 10
+    assert_text 'Security key added', wait: 10
     take_screenshot('webauthn-setup-ui-success')
 
     user.reload

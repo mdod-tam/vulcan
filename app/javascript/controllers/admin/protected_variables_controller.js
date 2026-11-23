@@ -5,412 +5,261 @@ const BLOCK_ELEMENTS = new Set([
   "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "nav",
   "ol", "p", "pre", "section", "table", "ul"
 ])
+const PLACEHOLDER = /(%<[\w.]+>s|%{[\w.]+}|{{-?\s*[\w.]+\s*-?}})/g
 
 export default class extends Controller {
   static targets = [
-    "textarea", "editor", "variableSelect", "syntaxSelect", "subjectInput", "subjectVariableSelect",
-    "standardHelp", "liquidHelp", "convertPanel"
+    "textarea", "editor", "variableSelect", "syntaxSelect", "subjectInput", "subjectEditor",
+    "subjectVariableSelect", "liquidHelp", "convertPanel"
   ]
-  
+
   connect() {
     this.listeners = new AbortController()
-    this.previousSyntax = this.hasSyntaxSelectTarget ? this.syntaxSelectTarget.value : null
-    this.lastEditorRange = null
-    this.renderProtectedVariables()
-    this.listen(this.element, "submit", () => this.syncToTextarea())
-    this.listen(this.editorTarget, "input", () => {
-      this.syncToTextarea()
-      this.rememberEditorSelection()
-    })
-    this.listen(this.editorTarget, "focus", () => this.rememberEditorSelection())
-    this.listen(this.editorTarget, "click", () => this.rememberEditorSelection())
-    this.listen(this.editorTarget, "keyup", () => this.rememberEditorSelection())
-    this.listen(this.editorTarget, "mouseup", () => this.rememberEditorSelection())
-    this.listen(this.editorTarget, "keydown", (e) => this.handleKeydown(e))
-    this.listen(this.editorTarget, "paste", (e) => this.handlePaste(e))
-    this.listen(this.editorTarget, "dragover", (e) => this.handleDragOver(e))
-    this.listen(this.editorTarget, "drop", (e) => this.handleDrop(e))
-    this.listen(this.textareaTarget, "change", () => this.renderProtectedVariables())
-    this.listen(this.variableSelectTarget, "change", (e) => this.insertVariable(e))
-    if (this.hasSubjectVariableSelectTarget) {
-      this.listen(this.subjectVariableSelectTarget, "change", (e) => this.insertSubjectVariable(e))
-    }
+    this.fields = [
+      { editor: this.editorTarget, input: this.textareaTarget, picker: this.variableSelectTarget },
+      { editor: this.subjectEditorTarget, input: this.subjectInputTarget, picker: this.subjectVariableSelectTarget, singleLine: true }
+    ]
+    this.labels = new Map(Array.from(this.variableSelectTarget.options, (option) => [option.dataset.variableName, option.textContent.trim()]))
+    this.fields.forEach(field => this.connectField(field))
+    this.subjectInputTarget.type = "hidden"
+    this.subjectEditorTarget.hidden = false
+    this.subjectEditorTarget.classList.remove("hidden")
+    this.listen(this.element, "submit", () => this.fields.forEach(field => this.syncField(field)), true)
+
     if (this.hasSyntaxSelectTarget) {
+      this.previousSyntax = this.syntaxSelectTarget.value
       this.listen(this.syntaxSelectTarget, "change", () => this.handleSyntaxChange())
-      this.updateVariableOptions()
-      this.updateSyntaxHelp()
+      this.updateSyntaxControls()
     }
   }
-  
+
   disconnect() {
     this.listeners.abort()
-    this.lastEditorRange = null
-    this.draggedElement = null
+    this.draggedDetail = null
   }
 
-  listen(element, event, callback) {
-    element.addEventListener(event, callback, { signal: this.listeners.signal })
+  listen(element, event, callback, capture = false) {
+    element.addEventListener(event, callback, { capture, signal: this.listeners.signal })
   }
 
-  handleKeydown(e) {
-    if ((e.key === 'Backspace' || e.key === 'Delete') && e.target.classList?.contains('protected-variable')) {
-      e.preventDefault()
-      e.target.remove()
-      this.syncToTextarea()
-      return
+  connectField(field) {
+    const { editor, input, picker, singleLine } = field
+    this.renderField(field)
+    this.listen(input, "change", () => this.renderField(field))
+    this.listen(editor, "input", () => {
+      this.syncField(field)
+      this.rememberSelection(field)
+    })
+    for (const event of ["focus", "keyup", "mouseup"]) {
+      this.listen(editor, event, () => this.rememberSelection(field))
     }
-    
-    this.preventCursorInVariable(e)
+    if (singleLine) {
+      this.listen(editor, "beforeinput", (event) => {
+        if (["insertParagraph", "insertLineBreak"].includes(event.inputType)) event.preventDefault()
+      })
+    }
+    this.listen(editor, "copy", event => this.copySelection(event, field))
+    this.listen(editor, "cut", event => this.copySelection(event, field))
+    this.listen(editor, "paste", event => {
+      event.preventDefault()
+      const text = event.clipboardData?.getData("text/plain")
+      if (text) this.replaceSelection(field, text)
+    })
+    this.listen(editor, "dragstart", event => this.startDrag(event))
+    this.listen(editor, "dragend", () => { this.draggedDetail = null })
+    this.listen(editor, "dragover", event => event.preventDefault())
+    this.listen(editor, "drop", event => this.dropDetail(event, field))
+    this.listen(picker, "change", () => {
+      if (!picker.value) return
+      this.replaceSelection(field, picker.value)
+      picker.value = ""
+    })
   }
-  
-  preventCursorInVariable(e) {
-    if (e.target.classList?.contains("protected-variable")) {
-      e.preventDefault()
-      
-      const selection = window.getSelection()
-      const range = document.createRange()
-      const nextNode = e.target.nextSibling || e.target.parentNode.nextSibling
-      
-      if (nextNode) {
-        range.setStart(nextNode, 0)
-      } else {
-        range.setStart(this.editorTarget, this.editorTarget.childNodes.length)
+
+  renderField(field) {
+    field.editor.replaceChildren(this.editorContent(field.input.value))
+    field.lastRange = null
+  }
+
+  editorContent(text) {
+    const fragment = document.createDocumentFragment()
+    text.split(PLACEHOLDER).forEach((part, index) => {
+      if (!part) return
+      const name = index % 2 === 1 && part.match(/^%<([\w.]+)>s$|^%{([\w.]+)}$|^{{-?\s*([\w.]+)\s*-?}}$/)?.slice(1).find(Boolean)
+      const label = this.labels.get(name)
+      if (!label) {
+        fragment.append(part)
+        return
       }
+
+      const detail = document.createElement("span")
+      detail.className = "protected-variable protected-variable-movable"
+      detail.setAttribute("contenteditable", "false")
+      detail.draggable = true
+      detail.dataset.placeholder = part
+      detail.textContent = label
+      fragment.append(detail)
+    })
+    return fragment
+  }
+
+  rangeInEditor(field, range) {
+    return range && field.editor.contains(range.commonAncestorContainer)
+  }
+
+  rememberSelection(field) {
+    const selection = window.getSelection()
+    const range = selection.rangeCount ? selection.getRangeAt(0) : null
+    if (this.rangeInEditor(field, range)) field.lastRange = range.cloneRange()
+  }
+
+  insertionRange(field) {
+    const selection = window.getSelection()
+    const current = selection.rangeCount ? selection.getRangeAt(0) : null
+    if (this.rangeInEditor(field, current)) return current.cloneRange()
+    if (this.rangeInEditor(field, field.lastRange)) return field.lastRange.cloneRange()
+
+    const range = document.createRange()
+    range.selectNodeContents(field.editor)
+    range.collapse(false)
+    return range
+  }
+
+  selectRange(editor, range) {
+    editor.focus()
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+
+  replaceSelection(field, text, range = this.insertionRange(field)) {
+    const value = field.singleLine ? text.replace(/[\r\n]+/g, " ") : text.replace(/\r\n?/g, "\n")
+    const content = this.editorContent(value)
+    if (!content.hasChildNodes()) return
+
+    this.selectRange(field.editor, range)
+    const wrapper = document.createElement("div")
+    wrapper.append(content.cloneNode(true))
+    // Native insertion keeps the browser's undo history for choices and plain-text paste.
+    if (!document.execCommand?.("insertHTML", false, wrapper.innerHTML)) {
+      const lastNode = content.lastChild
+      range.deleteContents()
+      range.insertNode(content)
+      range.setStartAfter(lastNode)
       range.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(range)
+      this.selectRange(field.editor, range)
+    }
+    this.syncField(field)
+    this.rememberSelection(field)
+  }
+
+  copySelection(event, field) {
+    const selection = window.getSelection()
+    if (!event.clipboardData || selection.isCollapsed || !selection.rangeCount) return
+    const range = selection.getRangeAt(0)
+    if (!this.rangeInEditor(field, range)) return
+
+    event.preventDefault()
+    event.clipboardData.setData("text/plain", this.serializeChildren(range.cloneContents()))
+    if (event.type === "cut") {
+      if (!document.execCommand?.("delete")) range.deleteContents()
+      this.syncField(field)
     }
   }
 
-  handleDragStart(e) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/html', e.target.outerHTML)
-    e.dataTransfer.setData('text/plain', e.target.textContent)
-    this.draggedElement = e.target
-    e.target.style.opacity = '0.5'
+  startDrag(event) {
+    const detail = event.target.closest(".protected-variable")
+    if (!detail) return
+    this.draggedDetail = detail
+    event.dataTransfer.effectAllowed = "copyMove"
+    event.dataTransfer.setData("text/plain", detail.dataset.placeholder)
   }
-  
-  handleDragEnd(e) {
-    e.target.style.opacity = '1'
-  }
-  
-  handleDragOver(e) {
-    e.preventDefault()
-    if (e.target === this.editorTarget || (e.target.nodeType === Node.TEXT_NODE)) {
-      e.dataTransfer.dropEffect = 'move'
-    } else if (!e.target.classList?.contains('protected-variable')) {
-      e.dataTransfer.dropEffect = 'move'
-    } else {
-      e.dataTransfer.dropEffect = 'none'
-    }
-  }
-  
-  handleDrop(e) {
-    e.preventDefault()
-    
-    if (e.target.classList?.contains('protected-variable')) {
+
+  dropDetail(event, field) {
+    event.preventDefault()
+    const caret = document.caretPositionFromPoint?.(event.clientX, event.clientY)
+    const range = caret ? document.createRange() : document.caretRangeFromPoint?.(event.clientX, event.clientY)
+    if (caret) range.setStart(caret.offsetNode, caret.offset)
+    if (!this.rangeInEditor(field, range)) return
+    const detail = this.draggedDetail
+    if (detail && field.editor.contains(detail)) {
+      if (detail.contains(range.startContainer)) return
+      range.insertNode(detail)
+      this.syncField(field)
       return
     }
-    
-    e.target.style.opacity = '1'
-    
-    const variableText = e.dataTransfer.getData('text/plain')
-    
-    const range = document.caretRangeFromPoint(e.clientX, e.clientY)
-    
-    if (range && (range.commonAncestorContainer.parentElement === this.editorTarget || this.editorTarget.contains(range.commonAncestorContainer))) {
-      const span = document.createElement('span')
-      span.className = 'protected-variable protected-variable-movable'
-      span.draggable = true
-      span.contentEditable = false
-      span.textContent = variableText
-      
-      range.insertNode(span)
-      
-      this.listen(span, 'dragstart', (e) => this.handleDragStart(e))
-      this.listen(span, 'dragend', (e) => this.handleDragEnd(e))
-      
-      if (this.draggedElement && this.draggedElement !== span) {
-        this.draggedElement.remove()
-      }
 
-      this.syncToTextarea()      
-    }
-    
-    this.draggedElement = null
+    const text = event.dataTransfer.getData("text/plain")
+    if (text) this.replaceSelection(field, text, range)
   }
 
-  handlePaste(e) {
-    e.preventDefault()
-    const text = e.clipboardData?.getData("text/plain") || ""
-    if (!text) return
-
-    this.insertTextAtSelection(text)
-    this.syncToTextarea()
+  syncField(field) {
+    const text = this.serializeChildren(field.editor)
+      .replace(/\u00a0/g, " ")
+    field.input.value = field.singleLine ? text.replace(/[\r\n]+/g, " ") : text.replace(/\n{3,}/g, "\n\n").replace(/\n+$/, "")
   }
 
-  insertVariable(e) {
-    const variableText = e.target.value
-    if (!variableText) return
-
-    const range = this.rangeForVariableInsertion()
-
-    const span = document.createElement('span')
-    span.className = 'protected-variable protected-variable-movable'
-    span.draggable = true
-    span.contentEditable = false
-    span.textContent = variableText
-
-    range.deleteContents()
-    range.insertNode(span)
-
-    this.listen(span, 'dragstart', (e) => this.handleDragStart(e))
-    this.listen(span, 'dragend', (e) => this.handleDragEnd(e))
-
-    this.moveCursorAfter(span)
-
-    e.target.value = ''
-
-    this.syncToTextarea()
+  serializeChildren(node) {
+    return Array.from(node.childNodes, child => this.serializeNode(child)).join("")
   }
 
-  insertSubjectVariable(e) {
-    const variableText = e.target.value
-    if (!variableText || !this.hasSubjectInputTarget) return
+  serializeNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent
+    if (node.nodeType !== Node.ELEMENT_NODE) return ""
+    if (node.classList.contains("protected-variable")) return node.dataset.placeholder
+    if (node.localName === "br") return "\n"
 
-    const input = this.subjectInputTarget
-    const start = input.selectionStart ?? input.value.length
-    const end = input.selectionEnd ?? start
-
-    input.value = `${input.value.slice(0, start)}${variableText}${input.value.slice(end)}`
-    input.focus()
-    input.setSelectionRange(start + variableText.length, start + variableText.length)
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-    e.target.value = ""
+    const content = this.serializeChildren(node)
+    return BLOCK_ELEMENTS.has(node.localName) && !content.endsWith("\n") ? content + "\n" : content
   }
 
   handleSyntaxChange() {
     if (this.syntaxSelectTarget.value === "liquid" && this.previousSyntax !== "liquid" && this.hasStandardPlaceholders()) {
-      const confirmed = window.confirm("Existing Standard placeholders will not convert. Re-insert variables from the dropdown after switching.")
+      const confirmed = window.confirm("Changing the format leaves the existing details as written. Review them before saving.")
       if (!confirmed) {
         this.syntaxSelectTarget.value = this.previousSyntax
-        this.updateVariableOptions()
         return
       }
     }
-
     this.previousSyntax = this.syntaxSelectTarget.value
-    this.updateVariableOptions()
-    this.updateSyntaxHelp()
+    this.updateSyntaxControls()
   }
 
-  updateVariableOptions() {
-    const syntax = this.syntaxSelectTarget.value
-
-    this.updateSelectOptions(this.variableSelectTarget, syntax)
-    if (this.hasSubjectVariableSelectTarget) {
-      this.updateSelectOptions(this.subjectVariableSelectTarget, syntax)
+  updateSyntaxControls() {
+    const liquid = this.syntaxSelectTarget.value === "liquid"
+    for (const { picker } of this.fields) {
+      for (const option of picker.options) {
+        if (!option.dataset.legacyPlaceholder) continue
+        option.disabled = liquid && option.dataset.variableKind === "optional"
+        option.value = liquid && !option.disabled ? option.dataset.liquidPlaceholder : option.dataset.legacyPlaceholder
+      }
     }
-  }
-
-  updateSelectOptions(select, syntax) {
-    Array.from(select.options).forEach((option) => {
-      if (!option.dataset.legacyPlaceholder) return
-
-      option.disabled = syntax === "liquid" && option.dataset.variableKind === "optional"
-      option.value = syntax === "liquid" && !option.disabled ? option.dataset.liquidPlaceholder : option.dataset.legacyPlaceholder
-      option.textContent = syntax === "liquid" && !option.disabled ? option.dataset.liquidLabel : option.dataset.legacyLabel
-      if (option.disabled) option.textContent = `${option.dataset.legacyLabel} (Standard only)`
-    })
-  }
-
-  updateSyntaxHelp() {
-    const syntax = this.syntaxSelectTarget.value
-
-    this.toggleTarget(this.standardHelpTargets, syntax !== "liquid")
-    this.toggleTarget(this.liquidHelpTargets, syntax === "liquid")
-    this.toggleTarget(this.convertPanelTargets, syntax === "liquid")
-  }
-
-  toggleTarget(targets, visible) {
-    targets.forEach((target) => target.classList.toggle("hidden", !visible))
+    for (const panel of [...this.liquidHelpTargets, ...this.convertPanelTargets]) {
+      panel.classList.toggle("hidden", !liquid)
+    }
   }
 
   convertStandardPlaceholders() {
-    const conversions = this.placeholderConversions()
-    let replacements = 0
-
-    if (this.hasSubjectInputTarget) {
-      const [convertedSubject, subjectReplacements] = this.convertText(this.subjectInputTarget.value, conversions)
-      this.subjectInputTarget.value = convertedSubject
-      replacements += subjectReplacements
-    }
-
-    const [convertedBody, bodyReplacements] = this.convertText(this.textareaTarget.value, conversions)
-    this.textareaTarget.value = convertedBody
-    replacements += bodyReplacements
-
-    this.renderProtectedVariables()
-    if (replacements === 0) {
-      window.alert("No matching Standard placeholders were found.")
-    }
-  }
-
-  placeholderConversions() {
     const conversions = new Map()
+    for (const option of this.variableSelectTarget.options) {
+      const { variableName, variableKind, liquidPlaceholder } = option.dataset
+      if (variableName && variableKind !== "optional") conversions.set(variableName, liquidPlaceholder)
+    }
 
-    Array.from(this.variableSelectTarget.options).forEach((option) => {
-      if (!option.dataset.legacyPlaceholder || !option.dataset.liquidPlaceholder || !option.dataset.variableName) return
-      if (option.dataset.variableKind === "optional") return
-
-      conversions.set(option.dataset.variableName, option.dataset.liquidPlaceholder)
-    })
-
-    return conversions
-  }
-
-  convertText(text, conversions) {
     let replacements = 0
-    const converted = text.replace(/%[<{]([a-zA-Z_][a-zA-Z0-9_]*)[>}]s?/g, (match, name) => {
-      if (!conversions.has(name)) return match
-
-      replacements += 1
-      return conversions.get(name)
-    })
-
-    return [converted, replacements]
+    for (const field of this.fields) {
+      field.input.value = field.input.value.replace(/%<([\w.]+)>s|%{([\w.]+)}/g, (match, named, bare) => {
+        const replacement = conversions.get(named || bare)
+        if (!replacement) return match
+        replacements++
+        return replacement
+      })
+      this.renderField(field)
+    }
+    if (replacements === 0) window.alert("There are no matching details to convert.")
   }
 
   hasStandardPlaceholders() {
-    const subject = this.hasSubjectInputTarget ? this.subjectInputTarget.value : ""
-    const body = this.textareaTarget.value
-    return /%[<{][a-zA-Z_][a-zA-Z0-9_]*[>}]s?/.test(`${subject}\n${body}`)
-  }
-
-  insertTextAtSelection(text) {
-    const selection = window.getSelection()
-    if (!selection.rangeCount) {
-      this.editorTarget.appendChild(document.createTextNode(text))
-      return
-    }
-
-    const range = selection.getRangeAt(0)
-    range.deleteContents()
-    const textNode = document.createTextNode(text)
-    range.insertNode(textNode)
-    range.setStartAfter(textNode)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-  }
-
-  rememberEditorSelection() {
-    const selection = window.getSelection()
-    if (!selection.rangeCount) return
-
-    const range = selection.getRangeAt(0)
-    if (!this.rangeBelongsToEditor(range)) return
-
-    this.lastEditorRange = range.cloneRange()
-  }
-
-  rangeForVariableInsertion() {
-    const selection = window.getSelection()
-
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0)
-      if (this.rangeBelongsToEditor(range)) {
-        this.lastEditorRange = range.cloneRange()
-        return range
-      }
-    }
-
-    if (this.lastEditorRange && this.rangeBelongsToEditor(this.lastEditorRange)) {
-      const restoredRange = this.lastEditorRange.cloneRange()
-      selection.removeAllRanges()
-      selection.addRange(restoredRange)
-      return restoredRange
-    }
-
-    const endRange = document.createRange()
-    endRange.selectNodeContents(this.editorTarget)
-    endRange.collapse(false)
-    selection.removeAllRanges()
-    selection.addRange(endRange)
-    this.lastEditorRange = endRange.cloneRange()
-    return endRange
-  }
-
-  rangeBelongsToEditor(range) {
-    const container = range.commonAncestorContainer
-    return container === this.editorTarget || this.editorTarget.contains(container)
-  }
-
-  moveCursorAfter(node) {
-    const selection = window.getSelection()
-    const range = document.createRange()
-    range.setStartAfter(node)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    this.lastEditorRange = range.cloneRange()
-    this.editorTarget.focus()
-  }
-
-  
-  renderProtectedVariables() {
-    const text = this.textareaTarget.value
-    
-    const variablePattern = /(%<[a-zA-Z0-9_.]+>s|\{\{\-?\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\s*\-?\}\})/g
-    const parts = text.split(variablePattern)
-    
-    const html = parts.map((part) => {
-      if (part.match(/^%<[a-zA-Z0-9_.]+>s$/) || part.match(/^\{\{\-?\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\s*\-?\}\}$/)) {
-        return `<span class="protected-variable" draggable="true" contenteditable="false">${this.escapeHtml(part)}</span>`
-      } else {
-        return this.escapeHtml(part)
-      }
-    }).join("")
-    
-    this.editorTarget.innerHTML = html
-    this.editorTarget.querySelectorAll('.protected-variable').forEach(variable => {
-      this.listen(variable, 'dragstart', (e) => this.handleDragStart(e))
-      this.listen(variable, 'dragend', (e) => this.handleDragEnd(e))
-    })
-  }
-
-  syncToTextarea() {
-    const content = this.serializeEditorChildren(this.editorTarget)
-      .replace(/\u00a0/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .replace(/\n+$/, "")
-
-    this.textareaTarget.value = content
-  }
-
-  serializeEditorChildren(node) {
-    return Array.from(node.childNodes)
-      .map(child => this.serializeEditorNode(child))
-      .join("")
-  }
-
-  serializeEditorNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent
-    if (node.nodeType !== Node.ELEMENT_NODE) return ""
-    if (node.classList?.contains("protected-variable")) return node.textContent
-    if (node.tagName.toLowerCase() === "br") return "\n"
-
-    const content = this.serializeEditorChildren(node)
-    if (BLOCK_ELEMENTS.has(node.tagName.toLowerCase())) {
-      return content.endsWith("\n") ? content : `${content}\n`
-    }
-
-    return content
-  }
-  
-  escapeHtml(text) {
-    const div = document.createElement("div")
-    div.textContent = text
-    return div.innerHTML
+    return this.fields.some(({ input }) => /%<[\w.]+>s|%{[\w.]+}/.test(input.value))
   }
 }

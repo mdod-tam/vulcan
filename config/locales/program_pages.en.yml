@@ -1,0 +1,24 @@
+en:
+  program_pages:
+    help:
+      title: "Help with MAT"
+      body: "Contact MAT for help with your account, application, or documents."
+      action: "Contact MAT"
+    apply:
+      title: "Apply for MAT"
+      body: "Sign in to start or continue your application. Create an account if you’re new to MAT."
+      action: "Sign in"
+    eligibility:
+      title: "MAT eligibility"
+      body: "Contact MAT to ask if you qualify and what documents you need."
+      action: "Contact MAT"
+    how_it_works:
+      title: "How MAT works"
+      body: "MAT reviews your application and contacts you about next steps."
+      action: "Apply for MAT"
+    contact:
+      title: "Contact MAT"
+      body: "Get help with your account, application, or equipment."
+      email: "Email"
+      phone: "Phone"
+      videophone: "Videophone"

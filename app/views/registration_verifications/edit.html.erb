@@ -113,8 +113,7 @@
                           { prompt: t('portal_self_service.registrations.language_prompt') },
                           class: 'form-input',
                           required: true,
-                          aria: { required: 'true', invalid: @user.errors[:locale].any?, errormessage: 'locale-error', describedby: 'language-hint' } %>
-          <p id="language-hint" class="form-hint"><%= t('portal_self_service.registrations.language_hint') %></p>
+                          aria: { required: 'true', invalid: @user.errors[:locale].any?, errormessage: 'locale-error' } %>
           <% if @user.errors[:locale].any? %>
             <p id="locale-error" role="alert" class="mt-1 text-sm text-danger-600"><%= @user.errors[:locale].join(', ') %></p>
           <% end %>

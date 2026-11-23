@@ -8,20 +8,14 @@ EmailTemplate.find_or_create_by!(name: 'vendor_notifications_w9_approved', forma
 
     Dear %<vendor_business_name>s,
 
-    We are pleased to inform you that your W9 form has been reviewed and approved.
+    We approved your W9. Check your vendor dashboard for any remaining steps to redeem vouchers.
 
-    %<status_box_text>s
-
-    W9 approval and vendor authorization are separate steps. Before you can process vouchers, your vendor account must also be authorized by the program. Check your vendor dashboard for any remaining onboarding steps.
-
-    If you have any questions or need assistance, please don't hesitate to contact our support team at %<support_email>s or call (410) 767-6960.
-
-    Thank you for your partnership.
+    For help, email %<support_email>s or call 410-767-6960.
 
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text vendor_business_name status_box_text footer_text support_email],
+    'required' => %w[header_text vendor_business_name support_email footer_text],
     'optional' => []
   }
   template.version = 1

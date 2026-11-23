@@ -38,7 +38,7 @@ class VendorNotificationsMailer < ApplicationMailer
     locale  = vendor_locale(vendor)
 
     text_template = find_text_template('vendor_notifications_payment_issued', locale: locale)
-    variables = build_payment_variables(invoice, vendor)
+    variables = build_payment_variables(invoice, vendor, locale: locale)
 
     send_template_email(recipient_email_for(vendor, own_email: true), text_template, variables)
   rescue StandardError => e
@@ -231,13 +231,16 @@ class VendorNotificationsMailer < ApplicationMailer
     }.compact
   end
 
-  def build_payment_variables(invoice, vendor)
+  def build_payment_variables(invoice, vendor, locale:)
+    check_number = invoice.check_number
+    check_number_line = I18n.t('vendor_notifications.payment_issued.check_number', number: check_number, locale: locale) if check_number.present?
     {
       vendor_business_name: vendor.business_name,
       invoice_number: invoice.invoice_number,
       total_amount_formatted: number_to_currency(invoice.total_amount),
       gad_invoice_reference: invoice.gad_invoice_reference || 'N/A',
-      check_number: invoice.check_number,
+      check_number: check_number,
+      check_number_line: check_number_line,
       support_email: ProgramContact.support_email
     }.compact
   end

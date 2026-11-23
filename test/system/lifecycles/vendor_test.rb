@@ -50,7 +50,7 @@ class VendorLifecycleTest < ApplicationSystemTestCase
     visit admin_vendor_path(@vendor)
     click_link 'Review W9'
     assert_field 'w9_review_reviewed_blob_id', with: submitted_blob.id.to_s, type: 'hidden'
-    click_button 'Load PDF Preview'
+    click_button 'Preview W9'
     assert_selector '[data-pdf-loader-target="container"] iframe[src]'
     click_button 'Approve'
     assert_text 'W9 review completed successfully'
@@ -70,11 +70,14 @@ class VendorLifecycleTest < ApplicationSystemTestCase
 
     system_test_switch_user(@vendor, bypass_mfa_enrollment: true)
     assert_selector 'h2#monthly-totals-heading'
-    assert_selector "table#monthly-totals-table[aria-labelledby='monthly-totals-heading']"
-    assert_selector 'table#monthly-totals-table caption.sr-only'
-    assert_selector '#chart-description.sr-only'
-    assert_selector "button[data-chart-toggle-target='button']"
-    assert_selector '#monthly-totals-chart', visible: :all
+    assert_selector 'table#monthly-totals-table caption', text: 'Monthly voucher totals for the past six months', visible: :all
+    assert_selector 'table#monthly-totals-table th[scope="col"]', text: /\AMonth\z/i
+    assert_no_selector '#chart-description'
+    assert_selector '#monthly-totals-chart #chart-description.sr-only', visible: :all
+    find_button('Show Chart').execute_script('this.focus()')
+    page.driver.browser.keyboard.type(:Space)
+    assert_selector 'button[aria-controls="monthly-totals-chart"][aria-expanded="true"]'
+    assert_selector '#monthly-totals-chart canvas[aria-describedby="chart-description"]'
     accepted_at = @vendor.terms_accepted_at
     tax_id = @vendor.business_tax_id
     phone = @vendor.phone
@@ -194,6 +197,11 @@ class VendorLifecycleTest < ApplicationSystemTestCase
 
   test 'production-style unpublished terms block new browser acceptance without blocking profile work' do
     system_test_sign_in(@vendor, bypass_mfa_enrollment: true)
+    visit vendor_portal_dashboard_path
+    page.driver.browser.keyboard.type(:Tab)
+    assert_selector 'a.skip-link:focus', text: 'Skip to main content'
+    page.driver.browser.keyboard.type(:Enter)
+    assert_selector 'main#vendor-main-content:focus'
     click_link 'Upload W9 on your profile'
     assert_text I18n.t('vendor_onboarding.terms.unavailable')
     assert_no_field 'users_vendor_terms_accepted'

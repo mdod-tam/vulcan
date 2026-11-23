@@ -28,7 +28,7 @@ class WebauthnRegistrationTest < ApplicationSystemTestCase
     click_button 'Continue to Key Activation'
 
     assert_current_path credential_success_two_factor_authentication_path(type: 'webauthn')
-    assert_text 'Setup Complete!'
+    assert_text 'Security key added'
     assert_equal ['My Laptop'], @user.reload.webauthn_credentials.pluck(:nickname)
     take_screenshot('webauthn-registration-success', html: true)
   end

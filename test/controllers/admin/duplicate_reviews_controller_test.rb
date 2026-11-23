@@ -265,7 +265,7 @@ module Admin
         assert_select '[data-testid="record-comparison-badges"] span', text: 'Most recent login', count: 1
         assert_select '[data-testid="record-comparison-badges"] span', text: 'No applications', count: 1
         assert_select '[data-testid="record-comparison-badges"] span', text: '1 application', count: 1
-        assert_select 'legend', text: 'Canonical record and login identity'
+        assert_select 'legend', text: 'Choose which account to keep'
         assert_select '[data-testid="shared-merge-facts"]' do
           assert_select '[data-testid="shared-merge-fact"][data-fact="date_of_birth"]', text: %r{04/12/1985.*Both records agree}m
           assert_select '[data-testid="shared-merge-fact"][data-fact="phone_type"]', text: /Voice.*Both records agree/m

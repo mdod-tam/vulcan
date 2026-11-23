@@ -239,7 +239,9 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     get constituent_portal_application_new_proof_path(application_id: @application.id, proof_type: 'income')
 
     assert_response :success
-    assert_includes response.body, "or call #{ProgramContact.support_phone}."
+    assert_select "details a[href='tel:#{ProgramContact.support_phone.delete('-')}']", text: ProgramContact.support_phone
+    assert_select "details a[href='mailto:#{ProgramContact.support_email}']", text: ProgramContact.support_email
+    assert_select 'input[type="file"][aria-describedby~="income-hint"][aria-describedby~="file-description"]'
     assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
   end
 

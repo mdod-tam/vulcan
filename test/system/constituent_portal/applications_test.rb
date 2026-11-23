@@ -72,6 +72,40 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_empty errors, "JavaScript errors present at #{context}"
   end
 
+  test 'proof uploads and equipment terms are operable from the keyboard' do
+    system_test_sign_in(@user)
+    visit new_constituent_portal_application_path
+
+    browser = page.driver.browser
+    browser_page = browser.page
+    assert_text 'Contact MAT for warranty repairs on equipment MAT lent you.'
+    assert_no_text 'Equipment Ownership'
+    find('#equipment-agreement-details summary').execute_script('this.focus()')
+    browser.keyboard.type(:Enter)
+    assert_selector '#equipment-agreement-details[open] summary:focus'
+    assert_text 'Equipment Ownership'
+    find('#disability-release-details summary').execute_script('this.focus()')
+    browser.keyboard.type(:Enter)
+    assert_selector '#disability-release-details[open] summary:focus'
+    assert_text 'including the capability to view your application in its entirety'
+    take_evidence_screenshot('application-keyboard-terms', full: true, html: true)
+
+    chooser_events = Queue.new
+    browser_page.command('Page.setInterceptFileChooserDialog', enabled: true)
+    subscription = browser_page.on('Page.fileChooserOpened') { |event| chooser_events << event }
+
+    find_by_id('application_maryland_resident').execute_script('this.focus()')
+    browser.keyboard.type(:Tab)
+    assert_selector '#application_residency_proof[type="file"]:focus'
+    browser.keyboard.type(:Space)
+    assert chooser_events.pop(timeout: 3), 'Space should open the native file picker'
+  ensure
+    if subscription
+      browser_page.off('Page.fileChooserOpened', subscription)
+      browser_page.command('Page.setInterceptFileChooserDialog', enabled: false)
+    end
+  end
+
   test 'a pending identity review warns on arrival and holds final submission disabled' do
     system_test_sign_in(@user)
     assert_text 'Dashboard', wait: 10
@@ -81,7 +115,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     visit new_constituent_portal_application_path
 
     # The GET warning precedes file selection.
-    assert_selector '#pending-review-notice', text: /information associated with this application/i
+    assert_selector '#pending-review-notice', text: /Submission on hold/
     assert_no_selector '#error-summary'
     assert_selector 'input[name="submit_application"][disabled]'
 
@@ -110,7 +144,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
 
     visit edit_constituent_portal_application_path(draft)
 
-    assert_selector '#pending-review-notice', text: /information associated with this application/i
+    assert_selector '#pending-review-notice', text: /Submission on hold/
     assert_no_selector '#error-summary'
     assert_selector 'input[name="submit_application"][disabled]'
     assert_no_javascript_errors(js_errors, 'the blocked edit form')

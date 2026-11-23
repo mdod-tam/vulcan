@@ -1,4 +1,3 @@
-<%= render partial: 'shared/setup_success', locals: {
-  auth_method_name: params[:authenticator_type] == 'platform' ? 'Device (fingerprint or face)' : 'Security Key',
-  setup_another: true
-} %>
+<%= render 'shared/setup_success',
+           auth_method: (params[:authenticator_type] == 'platform' ? :device : :security_key),
+           setup_another: true %>

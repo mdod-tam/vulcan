@@ -81,7 +81,7 @@ module Admin
           }
         }, true);
       JS
-      click_button 'Load PDF Preview'
+      click_button 'Preview W9'
 
       frame = find('[data-pdf-loader-target="container"] iframe[data-turbo="false"][data-pdf-loaded="true"][src]')
       assert_equal vendor_w9_document_path(vendor, vendor.w9_form.blob), URI(frame[:src]).path
@@ -258,7 +258,7 @@ module Admin
       parent_origin = page.evaluate_script('window.location.origin')
       observe_preview_results
       within(find_by_id('body-editor-en').ancestor('form')) do
-        fill_in 'Email Subject (EN)', with: 'Unsaved subject'
+        find_by_id('email-template-subject-en').set('Unsaved subject')
         find_by_id('body-editor-en').set('<p id="draft-preview" style="color: #123456;">Unsaved body</p>' \
                                          '<script>window.previewScriptRan = true; parent.document.body.dataset.previewCompromised = "yes";</script>')
         click_button 'Preview Draft'
@@ -282,20 +282,20 @@ module Admin
         click_button 'Preview Draft'
       end
       within_frame('template-preview-en-document') do
-        assert_selector '[role="alert"]', text: /Insert Variable/
+        assert_selector '[role="alert"]', text: /Insert a detail|inserted details/
         assert_equal ['null', parent_origin], page.evaluate_script('[window.origin, window.location.origin]')
       end
       assert_selector '#template-preview-en [role="alert"][aria-atomic="true"]', text: /Preview unavailable.*correct the draft/
       assert_preview_results [false, true]
       assert_selector '#body-editor-en', text: '%<not_allowed>s'
-      assert_field 'Email Subject (EN)', with: 'Unsaved subject'
+      assert_selector '#email-template-subject-en', text: 'Unsaved subject'
       within(find_by_id('body-editor-en').ancestor('form')) { click_button 'Preview Draft' }
-      within_frame('template-preview-en-document') { assert_selector '[role="alert"]', text: /Insert Variable/ }
+      within_frame('template-preview-en-document') { assert_selector '[role="alert"]', text: /Insert a detail|inserted details/ }
       assert_selector '#template-preview-en [role="alert"]', text: /Preview unavailable.*correct the draft/
       assert_preview_results [false, true, true]
       take_screenshot('default-csp-invalid-html-draft', full: true, html: true)
       within(find_by_id('body-editor-en').ancestor('form')) do
-        fill_in 'Email Subject (EN)', with: 'Corrected subject'
+        find_by_id('email-template-subject-en').set('Corrected subject')
         find_by_id('body-editor-en').set('<p id="retry-preview">Corrected draft</p>')
         click_button 'Preview Draft'
       end
@@ -310,7 +310,7 @@ module Admin
       take_screenshot('default-csp-html-draft-retry', full: true, html: true)
 
       within(find_by_id('body-editor-es').ancestor('form')) do
-        fill_in 'Email Subject (ES)', with: 'Nuevo asunto'
+        find_by_id('email-template-subject-es').set('Nuevo asunto')
         find_by_id('body-editor-es').set('<p id="spanish-preview">Borrador nuevo</p>')
         click_button 'Preview Draft'
       end
@@ -325,6 +325,45 @@ module Admin
       take_screenshot('default-csp-spanish-html-draft', full: true, html: true)
     end
 
+    test 'email details show readable names and keep their values through undo preview and save' do
+      template = create(
+        :email_template, :html,
+        subject: 'Hello',
+        body: '<p>Welcome</p>',
+        variables: { required: [], optional: %w[constituent_first_name] },
+        updated_by: @admin
+      )
+      visit edit_admin_email_template_path(template)
+      assert_selector 'main', count: 1
+
+      within(find_by_id('body-editor-en').ancestor('form')) do
+        select 'Applicant first name', from: 'Insert a detail in the subject'
+        assert_selector '#email-template-subject-en:focus .protected-variable', text: 'Applicant first name'
+        assert_field 'email-template-subject-en-value', with: 'Hello%<constituent_first_name>s', type: 'hidden'
+
+        assert page.evaluate_script('document.queryCommandEnabled("undo")'), 'The edit should enter browser history'
+        page.driver.browser.page.command('Input.dispatchKeyEvent', type: 'rawKeyDown', key: 'z', code: 'KeyZ', commands: ['Undo'])
+        assert_no_selector '#email-template-subject-en .protected-variable'
+        assert_field 'email-template-subject-en-value', with: 'Hello', type: 'hidden'
+
+        find_by_id('email-template-subject-en').set('Hello, ')
+        select 'Applicant first name', from: 'Insert a detail in the subject'
+        select 'Applicant first name', from: 'Insert a detail in the message'
+        assert_selector '#body-editor-en .protected-variable', text: 'Applicant first name'
+        click_button 'Preview Draft'
+      end
+      within_frame('template-preview-en-document') do
+        assert_selector 'p', text: 'Subject Preview: Hello, Jamie'
+        assert_text 'Jamie'
+      end
+      take_screenshot('template-detail-editor', html: true, full: true)
+
+      within(find_by_id('body-editor-en').ancestor('form')) { click_button 'Save EN' }
+      assert_text 'EN template updated.'
+      assert_equal 'Hello, %<constituent_first_name>s', template.reload.subject
+      assert_includes template.body, '%<constituent_first_name>s'
+    end
+
     test 'an initial HTML srcdoc error can retry through the routed draft document' do
       template = html_template
       template.update_column(:body, '<p>%<not_allowed>s</p>')
@@ -334,7 +373,7 @@ module Admin
       observe_preview_results
       assert_selector '#template-preview-en [role="alert"]', text: /Preview unavailable.*correct the draft/
       within_frame('template-preview-en-document') do
-        assert_selector '[role="alert"]', text: /Insert Variable/
+        assert_selector '[role="alert"]', text: /Insert a detail|inserted details/
         assert_equal ['null', 'null', 'about:srcdoc'], page.evaluate_script('[window.origin, window.location.origin, window.location.href]')
       end
       assert_equal [], page.evaluate_script('window.previewResults')

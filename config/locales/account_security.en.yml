@@ -100,3 +100,21 @@ en:
       before starting again.
     completed_sign_in: Your account was created. Please sign in to continue.
     completed_notice_failed: Your account was created. The welcome email could not be queued.
+  credential_setup:
+    intro: "Choose how you’ll verify it’s you when you sign in."
+    description_device: "Use your device or a security key."
+    description_app: "Get a code from an authenticator app."
+    description_text: "Get a code by text."
+    recommended: "Recommended"
+    options: "Sign-in methods"
+    welcome: "Your account is ready."
+    sms_instruction: "Enter the 6-digit code we texted to %{number}. It expires in 10 minutes."
+    sms_help: "If the code doesn’t arrive, check the phone number or choose another sign-in method."
+    backup: "Add a backup sign-in method"
+    continue: "Continue to Dashboard"
+    no_keys: "No security keys added"
+    added:
+      device: "Device added"
+      security_key: "Security key added"
+      app: "Authenticator app added"
+      text: "Text message verification added"

@@ -11,6 +11,7 @@ es:
     secure_public:
       program_name: "Programa de Telecomunicaciones Accesibles de Maryland"
   shared:
+    skip_to_main_content: "Ir al contenido principal"
     # Mes primero también en español: el idioma no cambia el significado de la fecha.
     date_of_birth:
       label: "Fecha de nacimiento"
@@ -49,7 +50,6 @@ es:
       contact_label: "Correo electrónico o número de teléfono"
       error_heading: "Corrija los siguientes errores:"
       password_label: "Contraseña"
-      password_hint: "Ingrese su contraseña"
       submit: "Iniciar sesión"
       submitting: "Iniciando sesión..."
       submit_aria: "Iniciar sesión en su cuenta"
@@ -69,7 +69,7 @@ es:
     account_recovery:
       title: "Recuperación de llave de seguridad"
       note_label: "Nota:"
-      note: "Las llaves de seguridad perdidas no se pueden recuperar. Un administrador deberá verificar su identidad y restablecer su inscripción de 2FA."
+      note: "MAT debe verificar primero su identidad."
       contact_hint: "Use el correo electrónico o número de teléfono de su cuenta del portal para que un administrador pueda identificar la cuenta para revisión. Esto no envía un enlace de acceso a la cuenta."
       details_label: "Detalles adicionales"
       details_placeholder: "Proporcione detalles que ayuden a verificar su identidad (por ejemplo, motivo del restablecimiento, cuándo accedió por última vez al sistema, etc.)."
@@ -105,7 +105,6 @@ es:
       password_confirmation_label: "Confirmar contraseña"
       language_preference_label: "Preferencia de idioma"
       language_prompt: "Seleccione idioma"
-      language_hint: "Seleccione uno de los idiomas disponibles"
       language_options:
         en: "Inglés"
         es: "Español"
@@ -146,7 +145,7 @@ es:
           attributes:
             base:
               portal_self_registration_requires_email: "Una cuenta del portal requiere una dirección de correo electrónico. Si no tiene correo electrónico, comuníquese con MAT en %{support_email} o %{support_phone} para obtener ayuda con una solicitud en papel."
-              portal_self_registration_unavailable_contact: "No pudimos completar su registro con la información proporcionada. Comuníquese con el equipo MAT en %{support_email} o %{support_phone} para obtener ayuda."
+              portal_self_registration_unavailable_contact: "No pudimos completar su registro. Comuníquese con MAT en %{support_email} o al %{support_phone}."
             phone_type:
               portal_self_registration_phone_type_required: "debe seleccionarse cuando se proporciona un número de teléfono"
             date_of_birth:
@@ -181,7 +180,7 @@ es:
           attributes:
             base:
               certifying_professional_required: "Se requiere información del profesional certificador para enviar la solicitud."
-              pending_identity_review: "Esta solicitud aún no se puede enviar porque necesitamos revisar parte de la información asociada con esta solicitud. Mientras tanto, puede seguir editando y guardando el borrador. Comuníquese con el equipo de MAT si tiene preguntas."
+              pending_identity_review: "Comuníquese con el personal de MAT. El envío está en pausa. Puede guardar el borrador."
   activity_history:
     labels:
       training_scheduled: "Capacitación programada"
@@ -278,7 +277,6 @@ es:
       incomplete: "Complete todos los campos obligatorios antes de enviar."
       ready: "La solicitud está lista para enviar."
       detail: "Falta completar: %{items}."
-    income_proof_required: "Este comprobante es obligatorio para enviar su solicitud."
     form_labels:
       maryland_resident: "Certifico que soy residente de Maryland"
       household_size: "Tamaño del hogar"
@@ -336,9 +334,9 @@ es:
       refresh: 'El guardado automático no está disponible en esta página. Use "Save Application" para guardar sus cambios.'
       failed: "Algunos cambios todavía no se han guardado. Use \"Save Application\" para conservarlos."
     submission_gate:
-      pending_identity_review_status: "El envío no está disponible mientras revisamos la información asociada con esta solicitud. Todavía puede guardar su borrador."
+      pending_identity_review_status: "El envío está en pausa. Puede guardar el borrador."
       # El nombre del botón queda en inglés a propósito: este formulario todavía no está traducido.
-      refused_documents_notice: "Los documentos que había seleccionado no se adjuntaron. Selecciónelos de nuevo y use \"Save Application\" para conservarlos en su borrador."
+      refused_documents_notice: "Vuelva a elegir los archivos y seleccione \"Save Application\" para conservarlos en el borrador."
     proof_resubmission_requests:
       create:
         failure: "No se pudo enviar la solicitud segura para subir el documento."
@@ -404,7 +402,7 @@ es:
         no_longer_needed: "Ya no es necesario subir este documento. Comuníquese con el programa si tiene preguntas."
     certification_upload:
       messages:
-        provider_email_required: "Se requiere el correo electrónico del proveedor. Envíe primero un formulario de información del proveedor para recopilar información de contacto actualizada."
+        provider_email_required: "Falta el correo electrónico del profesional. Envíe un enlace a la persona solicitante o a su tutor para que lo ingrese."
         unsupported_channel: "Los enlaces seguros para subir certificaciones solo se pueden enviar por correo electrónico."
         cooldown_active: "Se envió recientemente un enlace seguro para subir la certificación. Espere %{minutes} minutos antes de enviar otro."
         request_created: "Solicitud segura para subir la certificación creada."
@@ -422,7 +420,7 @@ es:
         request_not_needed: "No se puede enviar un enlace seguro para subir la certificación porque esta solicitud está cerrada."
         no_longer_needed: "Ya no es necesario subir este documento. Comuníquese con el programa si tiene preguntas."
     alternate_contact:
-      portal_help: "Puede proporcionar una persona de contacto alternativa que pueda ayudar con su solicitud. Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
+      portal_help: "Una persona de contacto alternativa puede ayudarle con su solicitud. MAT no le enviará avisos sobre la solicitud ni enlaces seguros."
       admin_help: "Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
       admin_authorization_help: "Los contactos alternativos son solo informativos. No son destinatarios autorizados de la solicitud y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
     alternate_contact_relationship_types:
@@ -434,9 +432,9 @@ es:
       friend: "Amigo o amiga"
       other: "Otro"
     dependent_contact:
-      strategy_help: "Use la información de contacto del tutor cuando las comunicaciones seguras de flujo de trabajo para esta persona dependiente deban enviarse por defecto al tutor. Proporcione información de contacto separada de la persona dependiente cuando las comunicaciones seguras de flujo de trabajo puedan enviarse a la persona dependiente/solicitante."
-      guardian_email_help: "Las comunicaciones seguras de flujo de trabajo para la persona dependiente se enviarán por defecto al correo electrónico del tutor."
-      dependent_email_help: "Este correo electrónico se usará para comunicaciones sobre los beneficios de la persona dependiente. Las comunicaciones seguras de flujo de trabajo pueden enviarse por defecto a la persona dependiente/solicitante cuando este correo electrónico sea distinto del correo electrónico del tutor."
+      strategy_help: "Elija qué datos de contacto debe usar MAT para enviar avisos y enlaces seguros."
+      guardian_email_help: "Use el correo electrónico del tutor para los avisos y enlaces seguros de esta solicitud."
+      dependent_email_help: "Si ingresa un correo electrónico distinto, MAT puede enviar avisos y enlaces seguros a la persona dependiente."
       guardian_phone_help: "Las llamadas o mensajes de texto para la persona dependiente usarán el teléfono del tutor."
   admin:
     secure_link_row_action: "%{action} enlace de %{recipient}, enviado %{sent_at}"
@@ -466,7 +464,7 @@ es:
           guardian: "Tutor"
         panel:
           title: "Solicitudes seguras de información del proveedor"
-          description: "Envíe un enlace seguro para ingresar información de contacto del profesional certificador."
+          description: "Elija a quién enviar el enlace y cómo enviarlo."
           legend: "Destinatarios"
           channel_label: "Canal de entrega para %{recipient}"
           channel_prompt: "Seleccione un canal"
@@ -552,7 +550,7 @@ es:
         create:
           success: "Enlace seguro para subir la certificación enviado correctamente."
           failure: "No se pudo enviar el enlace seguro para subir la certificación."
-          provider_email_required: "No se puede enviar el formulario seguro para subir la certificación: falta el correo electrónico del proveedor. Envíe un formulario de información del proveedor a la persona solicitante o tutor para recopilar información de contacto actualizada."
+          provider_email_required: "Falta el correo electrónico del profesional. Envíe un enlace a la persona solicitante o a su tutor para que lo ingrese."
       unassign_trainer:
         confirm_title: "Quitar capacitador"
         confirm:
@@ -700,14 +698,14 @@ es:
       submission_options:
         paper: |-
           CÓMO ENVIAR ESTE DOCUMENTO:
-          Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
+          Envíe una copia por correo postal a:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
         online: |-
           CÓMO ENVIAR ESTE DOCUMENTO:
           1. Enlace seguro para cargar su %{proof_type_formatted}:
              %{secure_upload_url}
-          2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
+          2. O envíe una copia por correo postal a:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
     proof_rejected:
@@ -723,14 +721,14 @@ es:
       resubmission_options:
         paper: |-
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
-          Si le resulta más fácil, puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
+          Envíe una copia por correo postal a:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
         online: |-
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
           1. Enlace seguro para cargar una copia corregida de su %{proof_type_formatted}:
              %{secure_upload_url}
-          2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
+          2. O envíe una copia por correo postal a:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
       archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada."
@@ -761,6 +759,8 @@ es:
            %{download_form_url}
         2. Fax: Envíe el formulario actualizado al 410-767-4276
   vendor_notifications:
+    payment_issued:
+      check_number: "Número de cheque: %{number}"
     action_required: "Acción requerida"
     association_required: "Su asociación requiere un formulario W9 vigente."
     association_requirement_title: "Requisito de asociación"
@@ -980,8 +980,7 @@ es:
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
-      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   secure_provider_info_form_resends:
     new:
       title: "Solicitar Nuevo Enlace Seguro"
@@ -992,12 +991,11 @@ es:
     create:
       title: "Solicitud Recibida"
       heading: "Solicitud recibida"
-      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
+      body: "Si podemos enviar un enlace nuevo, usaremos los datos de contacto que tenemos registrados."
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
-      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   passwords:
     account_access_sms:
       message: "Enlace de acceso a la cuenta MAT para establecer su contraseña: %{reset_url} Este enlace vence en 20 minutos."
@@ -1042,8 +1040,7 @@ es:
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
-      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   secure_proof_form_resends:
     new:
       title: "Solicitar Nuevo Enlace Seguro"
@@ -1054,11 +1051,11 @@ es:
     create:
       title: "Solicitud Recibida"
       heading: "Solicitud recibida"
-      body: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
+      body: "Si podemos enviar un enlace nuevo, usaremos los datos de contacto que tenemos registrados."
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   secure_certification_forms:
     show:
       title: "Carga Segura de Certificación"
@@ -1082,8 +1079,7 @@ es:
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
-      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   secure_certification_form_resends:
     new:
       title: "Solicitar Nuevo Enlace Seguro"
@@ -1099,7 +1095,7 @@ es:
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro ya no está disponible. Para recibir ayuda con esta solicitud, comuníquese con el equipo de soporte de MAT."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   secure_w9_forms:
     show:
       title: "Carga de W9"
@@ -1123,8 +1119,7 @@ es:
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro para cargar el W9 ya no está disponible. Comuníquese con el equipo de soporte de MAT si todavía necesita ayuda con esta solicitud."
-      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   secure_w9_form_resends:
     new:
       title: "Solicitar Nuevo Enlace Seguro para W9"
@@ -1139,8 +1134,7 @@ es:
     unavailable:
       title: "Enlace Seguro No Disponible"
       heading: "Enlace seguro no disponible"
-      body: "Este enlace seguro para cargar el W9 ya no está disponible. Comuníquese con el equipo de soporte de MAT si todavía necesita ayuda con esta solicitud."
-      contact_info: "Envíe un correo electrónico a %{email} o llame al %{phone}."
+      contact_info_html: "Escriba a MAT a %{email} o llame al %{phone}."
   controllers:
     sessions:
       invalid_credentials: "Correo electrónico, número de teléfono o contraseña inválidos"
@@ -1152,6 +1146,15 @@ es:
       complete_two_factor_authentication:
         signin_pass_2fa: "Sesión iniciada correctamente."
   terms_and_conditions:
+    equipment_heading: "Acuerdo del equipo"
+    summary:
+      intro: "Maryland es dueño del equipo que presta. La persona solicitante puede usarlo para sus llamadas personales mientras viva en Maryland."
+      points:
+        - "Reserve el equipo para el uso de la persona solicitante. El acuerdo prohíbe venderlo, empeñarlo, prestarlo o regalarlo."
+        - "Comuníquese con MAT para reparaciones cubiertas por la garantía del equipo que MAT le prestó."
+        - "Informe a MAT si pierde el equipo. Maryland no reemplaza el equipo perdido. Si se lo roban, denúncielo a la policía de inmediato y envíe a MAT una copia del informe antes de que MAT pueda reemplazarlo."
+      more: "El acuerdo completo también cubre los requisitos de elegibilidad, la capacitación y las responsabilidades legales y económicas."
+      read_full: "Leer el acuerdo completo del equipo"
     title: "Acuerdo del Programa de Telecomunicaciones Accesibles de Maryland para la Aceptación de Propiedad Estatal para Uso Personal"
     intro: "Entiendo y acepto lo siguiente:"
     item_1_title: "1. Propiedad del Equipo"

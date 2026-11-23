@@ -1,7 +1,7 @@
 <a href="#main-content" class="skip-link">
   Skip to main content
 </a>
-<main class="container mx-auto px-4 py-8" role="main" id="main-content" tabindex="-1">
+<div class="container mx-auto px-4 py-8" id="main-content" tabindex="-1">
   <div class="max-w-7xl mx-auto">
     <%= render 'admin/shared/communications_section_nav', current: :email_templates %>
 
@@ -28,7 +28,7 @@
                 </p>
                 <p class="text-xs font-mono text-gray-600 break-all"><%= pair.name %></p>
                 <p class="text-xs text-gray-600">
-                  <%= pair.primary_row.format.titleize %> · <%= template_syntax_label(pair.primary_row) %> ·
+                  <%= pair.primary_row.format.titleize %> ·
                   <%= pair.locales.join(', ') %> · v<%= pair.primary_row.version %>
                 </p>
                 <div class="mt-1 flex flex-wrap gap-2">
@@ -90,4 +90,4 @@
       </div>
     <% end %>
   </div>
-</main>
+</div>

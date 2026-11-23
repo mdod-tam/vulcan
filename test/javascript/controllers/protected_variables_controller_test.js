@@ -11,28 +11,24 @@ describe("ProtectedVariablesController", () => {
           <option value="legacy_percent" selected>Standard</option>
           <option value="liquid">Liquid</option>
         </select>
-        <p data-protected-variables-target="standardHelp">Standard help</p>
         <div class="hidden" data-protected-variables-target="liquidHelp">Liquid help</div>
         <div class="hidden" data-protected-variables-target="convertPanel">
           <button type="button" data-action="protected-variables#convertStandardPlaceholders">Convert</button>
         </div>
         <input data-protected-variables-target="subjectInput" value="Subject %<name>s">
+        <div data-protected-variables-target="subjectEditor" contenteditable="true" hidden></div>
         <select data-protected-variables-target="subjectVariableSelect">
           <option value="">-- Select a variable to insert --</option>
           <option value="%<name>s"
                   data-variable-name="name"
                   data-variable-kind="required"
                   data-legacy-placeholder="%<name>s"
-                  data-liquid-placeholder="{{ name }}"
-                  data-legacy-label="Name - %<name>s"
-                  data-liquid-label="Name - {{ name }}">Name - %<name>s</option>
+                  data-liquid-placeholder="{{ name }}">Name</option>
           <option value="%<nickname>s"
                   data-variable-name="nickname"
                   data-variable-kind="optional"
                   data-legacy-placeholder="%<nickname>s"
-                  data-liquid-placeholder="{{ nickname }}"
-                  data-legacy-label="Nickname - %<nickname>s"
-                  data-liquid-label="Nickname - {{ nickname }}">Nickname - %<nickname>s</option>
+                  data-liquid-placeholder="{{ nickname }}">Nickname</option>
         </select>
         <textarea data-protected-variables-target="textarea">Hello {{- user.first_name -}} and %<name>s</textarea>
         <div data-protected-variables-target="editor"></div>
@@ -42,16 +38,13 @@ describe("ProtectedVariablesController", () => {
                   data-variable-name="name"
                   data-variable-kind="required"
                   data-legacy-placeholder="%<name>s"
-                  data-liquid-placeholder="{{ name }}"
-                  data-legacy-label="Name - %<name>s"
-                  data-liquid-label="Name - {{ name }}">Name - %<name>s</option>
+                  data-liquid-placeholder="{{ name }}">Name</option>
           <option value="%<nickname>s"
                   data-variable-name="nickname"
                   data-variable-kind="optional"
                   data-legacy-placeholder="%<nickname>s"
-                  data-liquid-placeholder="{{ nickname }}"
-                  data-legacy-label="Nickname - %<nickname>s"
-                  data-liquid-label="Nickname - {{ nickname }}">Nickname - %<nickname>s</option>
+                  data-liquid-placeholder="{{ nickname }}">Nickname</option>
+          <option value="{{ user.first_name }}" data-variable-name="user.first_name">First name</option>
         </select>
       </div>
     `
@@ -70,21 +63,22 @@ describe("ProtectedVariablesController", () => {
   test("reconnection owns each listener once and disconnect removes it", () => {
     const element = document.querySelector('[data-controller="protected-variables"]')
     const controller = application.getControllerForElementAndIdentifier(element, 'protected-variables')
-    const sync = jest.spyOn(controller, 'syncToTextarea')
+    const sync = jest.spyOn(controller, 'syncField')
     controller.disconnect()
     controller.connect()
     element.dispatchEvent(new Event('submit'))
-    expect(sync).toHaveBeenCalledTimes(1)
+    expect(sync).toHaveBeenCalledTimes(2)
     controller.disconnect()
     element.dispatchEvent(new Event('submit'))
-    expect(sync).toHaveBeenCalledTimes(1)
+    expect(sync).toHaveBeenCalledTimes(2)
   })
 
   test("protects Liquid trim output tags", () => {
     const variables = Array.from(document.querySelectorAll(".protected-variable")).map((node) => node.textContent)
 
-    expect(variables).toContain("{{- user.first_name -}}")
-    expect(variables).toContain("%<name>s")
+    expect(variables).toContain("First name")
+    expect(variables).toContain("Name")
+    expect(document.querySelector('[data-placeholder="{{- user.first_name -}}"]').textContent).toBe("First name")
   })
 
   test("updates variable option values when syntax changes", () => {
@@ -99,8 +93,7 @@ describe("ProtectedVariablesController", () => {
     expect(subjectVariableOption.value).toBe("%<name>s")
     expect(optionalVariableOption.disabled).toBe(false)
     expect(optionalSubjectOption.disabled).toBe(false)
-    expect(variableOption.textContent).toBe("Name - %<name>s")
-    expect(document.querySelector("[data-protected-variables-target='standardHelp']").classList).not.toContain("hidden")
+    expect(variableOption.textContent).toBe("Name")
     expect(document.querySelector("[data-protected-variables-target='liquidHelp']").classList).toContain("hidden")
     expect(document.querySelector("[data-protected-variables-target='convertPanel']").classList).toContain("hidden")
 
@@ -109,12 +102,11 @@ describe("ProtectedVariablesController", () => {
 
     expect(variableOption.value).toBe("{{ name }}")
     expect(subjectVariableOption.value).toBe("{{ name }}")
-    expect(variableOption.textContent).toBe("Name - {{ name }}")
+    expect(variableOption.textContent).toBe("Name")
     expect(optionalVariableOption.value).toBe("%<nickname>s")
     expect(optionalVariableOption.disabled).toBe(true)
-    expect(optionalVariableOption.textContent).toBe("Nickname - %<nickname>s (Standard only)")
+    expect(optionalVariableOption.textContent).toBe("Nickname")
     expect(optionalSubjectOption.disabled).toBe(true)
-    expect(document.querySelector("[data-protected-variables-target='standardHelp']").classList).toContain("hidden")
     expect(document.querySelector("[data-protected-variables-target='liquidHelp']").classList).not.toContain("hidden")
     expect(document.querySelector("[data-protected-variables-target='convertPanel']").classList).not.toContain("hidden")
   })
@@ -122,13 +114,20 @@ describe("ProtectedVariablesController", () => {
   test("inserts selected variable into subject at cursor", () => {
     const subjectInput = document.querySelector("[data-protected-variables-target='subjectInput']")
     const subjectSelect = document.querySelector("[data-protected-variables-target='subjectVariableSelect']")
-    subjectInput.value = "Hello "
-    subjectInput.setSelectionRange(6, 6)
+    const editor = document.querySelector("[data-protected-variables-target='subjectEditor']")
+    editor.textContent = "Hello friend"
+    const range = document.createRange()
+    range.setStart(editor.firstChild, 6)
+    range.collapse(true)
+    window.getSelection().removeAllRanges()
+    window.getSelection().addRange(range)
 
     subjectSelect.value = "%<name>s"
     subjectSelect.dispatchEvent(new Event("change"))
 
-    expect(subjectInput.value).toBe("Hello %<name>s")
+    expect(subjectInput.value).toBe("Hello %<name>sfriend")
+    expect(editor.querySelector(".protected-variable").textContent).toBe("Name")
+    expect(editor.textContent).toBe("Hello Namefriend")
     expect(subjectSelect.value).toBe("")
   })
 
@@ -195,7 +194,7 @@ describe("ProtectedVariablesController", () => {
     syntaxSelect.value = "liquid"
     syntaxSelect.dispatchEvent(new Event("change"))
 
-    expect(window.confirm).toHaveBeenCalledWith("Existing Standard placeholders will not convert. Re-insert variables from the dropdown after switching.")
+    expect(window.confirm).toHaveBeenCalledWith("Changing the format leaves the existing details as written. Review them before saving.")
     expect(syntaxSelect.value).toBe("legacy_percent")
     expect(variableOption.value).toBe("%<name>s")
   })
@@ -215,7 +214,7 @@ describe("ProtectedVariablesController", () => {
 
     expect(subjectInput.value).toBe("Subject {{ name }}")
     expect(textarea.value).toBe("Hello {{ name }}\nOptional %<nickname>s\nUnknown %<not_allowed>s")
-    expect(Array.from(document.querySelectorAll(".protected-variable")).map((node) => node.textContent)).toContain("{{ name }}")
+    expect(document.querySelector('[data-placeholder="{{ name }}"]').textContent).toBe("Name")
   })
 
   test("pastes plain text and syncs it without HTML formatting", () => {
@@ -237,11 +236,35 @@ describe("ProtectedVariablesController", () => {
     expect(editor.innerHTML).toBe("Pasted\nText")
   })
 
+  test("copies and pastes a detail without changing what the template submits", () => {
+    const body = document.querySelector("[data-protected-variables-target='editor']")
+    const subject = document.querySelector("[data-protected-variables-target='subjectEditor']")
+    const subjectInput = document.querySelector("[data-protected-variables-target='subjectInput']")
+    const range = document.createRange()
+    range.selectNode(body.querySelector('[data-placeholder="%<name>s"]'))
+    window.getSelection().removeAllRanges()
+    window.getSelection().addRange(range)
+    const clipboard = new Map()
+    const copy = new Event("copy", { cancelable: true })
+    Object.defineProperty(copy, "clipboardData", { value: { setData: (type, value) => clipboard.set(type, value) } })
+    body.dispatchEvent(copy)
+
+    const paste = new Event("paste", { cancelable: true })
+    Object.defineProperty(paste, "clipboardData", { value: { getData: type => clipboard.get(type) } })
+    subject.textContent = "Hello "
+    window.getSelection().removeAllRanges()
+    subject.dispatchEvent(paste)
+
+    expect(copy.defaultPrevented).toBe(true)
+    expect(subject.textContent).toBe("Hello Name")
+    expect(subjectInput.value).toBe("Hello %<name>s")
+  })
+
   test("preserves pasted block formatting when syncing to textarea", () => {
     const editor = document.querySelector("[data-protected-variables-target='editor']")
     const textarea = document.querySelector("[data-protected-variables-target='textarea']")
 
-    editor.innerHTML = '<div>First paragraph</div><p>Second <span class="protected-variable" contenteditable="false">%&lt;name&gt;s</span><br>third line</p><div><span>Fourth line</span></div>'
+    editor.innerHTML = '<div>First paragraph</div><p>Second <span class="protected-variable" contenteditable="false" data-placeholder="%&lt;name&gt;s">Name</span><br>third line</p><div><span>Fourth line</span></div>'
 
     editor.dispatchEvent(new Event("input"))
 

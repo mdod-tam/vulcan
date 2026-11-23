@@ -14,24 +14,23 @@ es:
     states:
       missing_w9:
         title: "Cargue su W9"
-        body: "Agregue su W9 en su perfil. El personal debe revisar el W9 y autorizar por separado su cuenta de proveedor antes de que pueda canjear vales."
+        body: "MAT debe aprobar su W9 y autorizar su cuenta antes de que pueda canjear vales."
         action: "Cargar el W9 en su perfil"
       awaiting_w9_review:
         title: "Su W9 está en espera de revisión"
-        body: "El personal revisará el W9 que presentó. No puede canjear vales hasta que su W9 actual esté aprobado y su cuenta de proveedor esté autorizada."
+        body: "Podrá canjear vales cuando MAT apruebe su W9 y autorice su cuenta."
       rejected_w9:
         title: "Su W9 necesita una corrección"
-        body: "Lea el motivo en el aviso de su W9 y cargue un archivo corregido en su perfil o mediante su enlace seguro. El personal debe revisar el nuevo archivo antes de que pueda canjear vales."
+        body: "Lea el motivo en el aviso sobre su W9 y suba un formulario corregido."
         action: "Cargar un W9 corregido"
       awaiting_authorization:
         title: "W9 aprobado; la autorización del proveedor está pendiente"
-        body: "Su W9 ha sido aprobado. El personal del programa debe autorizar por separado su cuenta de proveedor antes de que pueda canjear vales. Comuníquese con el programa si necesita información."
+        body: "MAT debe autorizar su cuenta antes de que pueda canjear vales."
       suspended:
         title: "Su cuenta de proveedor está suspendida"
         body: "No puede canjear vales mientras su cuenta esté suspendida, aunque su W9 esté aprobado. Comuníquese con el programa para saber qué debe hacer."
       ready:
         title: "Ya puede canjear vales"
-        body: "Su W9 actual está aprobado y el programa ha autorizado su cuenta de proveedor. Ya puede procesar un vale."
         action: "Procesar un vale"
       terms_unpublished:
         title: "Los términos para proveedores aún no están disponibles"

@@ -213,7 +213,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
   end
 
-  test 'a Spanish registration email says there are no authorized vendors in Spanish' do
+  test 'a Spanish registration email explains how to start an application' do
     use_real_email_templates('application_notifications_registration_confirmation')
     Users::Vendor.stubs(:active).returns(Users::Vendor.none)
 
@@ -221,8 +221,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       ApplicationNotificationsMailer.registration_confirmation(create(:constituent, locale: 'es')).deliver_now.body.decoded
     end
 
-    assert_includes body, I18n.t('application_notifications.registration_confirmation.no_active_vendors', locale: :es)
-    assert_not_includes body, I18n.t('application_notifications.registration_confirmation.no_active_vendors', locale: :en)
+    assert_includes body, 'Su cuenta de MAT está lista. Inicie sesión para comenzar su solicitud.'
+    assert_not_includes body, 'MINORISTAS AUTORIZADOS'
   end
 
   %w[en es].each do |locale|

@@ -8,3 +8,8 @@ es:
     evaluations:
       recommendations:
         catalog_heading: "Productos recomendados del catálogo"
+        details_help: "La persona solicitante o su tutor leerán este texto tal como lo escriba. Indique qué recomienda y qué hacer después. Si ningún producto es adecuado, explique por qué."
+      working_notes:
+        title: "Notas de trabajo privadas"
+        label: "Notas de trabajo privadas"
+        help: "Use este espacio para anotar los intentos de contacto, la coordinación de citas y la preparación."

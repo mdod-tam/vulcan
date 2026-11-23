@@ -86,7 +86,7 @@
            <%= f.check_box :maryland_resident,
                class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                required: true,
-               "aria-required": "true" %>
+               'aria-required': 'true' %>
            <%= f.label :maryland_resident, t('applications.form_labels.maryland_resident', locale: form_message_locale),
                class: "ml-2 block text-sm text-gray-700" %>
          </div>
@@ -166,15 +166,11 @@
          <div class="flex items-start">
            <%= f.check_box :self_certify_disability,
                { 
-                 class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
-                 "aria-describedby": "disability-certification-description"
+                 class: 'mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded'
                }, "1", "0" %>
            <%= f.label :self_certify_disability, t('applications.form_labels.self_certify_disability', locale: form_message_locale),
                        class: 'ml-2 block text-sm text-gray-700' %>
          </div>
-         <p id="disability-certification-description" class="form-hint">
-           If you have a disability, please self-certify by checking the box above.
-         </p>
 
          <fieldset class="space-y-2" data-requires-one-checkbox="true" aria-describedby="portal-edit-disability-type-help">
            <legend class='text-sm text-gray-700 font-medium'><%= t('applications.form_labels.disability_type', locale: form_message_locale) %></legend>
@@ -188,14 +184,10 @@
                <div class="flex items-center">
                  <%= f.check_box "#{disability}_disability",
                      checked: disability_checked?("#{disability}_disability", applicant_user),
-                     class: "h-4 w-4 text-primary-600 border-gray-300 rounded",
-                     "aria-describedby": "#{disability}-description" %>
+                     class: 'h-4 w-4 text-primary-600 border-gray-300 rounded' %>
                  <%= f.label "#{disability}_disability", disability.to_s.titleize,
                      class: "ml-2 text-sm text-gray-700" %>
                </div>
-               <span id="<%= disability %>-description" class="sr-only">
-                 Check if you have a <%= disability %> disability
-               </span>
              <% end %>
            </div>
          </fieldset>
@@ -209,7 +201,7 @@
 
         <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
-          <p class="text-sm text-gray-700"><%= t("applications.alternate_contact.portal_help") %></p>
+          <p class="text-sm text-gray-700"><%= t('applications.alternate_contact.portal_help', locale: form_message_locale) %></p>
          
          <div class="space-y-4">
            <div>
@@ -254,10 +246,7 @@
            <div>
              <%= f.label :residency_proof, t('applications.form_labels.residency_proof', locale: form_message_locale),
                  class: "form-label required-label" %>
-             <p id="residency-hint" class="form-hint mb-2">
-               Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
-               <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>
-             </p>
+             <%= render 'proof_guidance', proof: :residency, flow: :edit, locale: form_message_locale %>
              <%= render 'shared/document_upload', form: f, model: @application, field: :residency_proof, blob: @retained_proofs&.dig('residency'),
                                                   input_id: 'application_residency_proof', described_by: 'residency-hint' %>
            </div>
@@ -266,9 +255,7 @@
            <div>
              <%= f.label :income_proof, t('applications.form_labels.income_proof', locale: form_message_locale),
                  class: "form-label required-label" %>
-             <p id="income-hint" class="form-hint mb-2">
-               Upload SSI/SSDI documentation, recent pay stubs, or tax forms
-             </p>
+             <%= render 'proof_guidance', proof: :income, flow: :edit, locale: form_message_locale %>
              <%= render 'shared/document_upload', form: f, model: @application, field: :income_proof, blob: @retained_proofs&.dig('income'),
                                                   input_id: 'application_income_proof', described_by: 'income-hint' %>
            </div>
@@ -277,9 +264,7 @@
            <div>
              <%= f.label :id_proof, t('applications.form_labels.id_proof', locale: form_message_locale),
                  class: "form-label required-label" %>
-             <p id="id-hint" class="form-hint mb-2">
-               Upload a government-issued photo ID such as a driver's license, state ID card, or passport
-             </p>
+             <%= render 'proof_guidance', proof: :id, flow: :edit, locale: form_message_locale %>
              <%= render 'shared/document_upload', form: f, model: @application, field: :id_proof, blob: @retained_proofs&.dig('id'),
                                                   input_id: 'application_id_proof', described_by: 'id-hint' %>
            </div>
@@ -287,20 +272,7 @@
        </section>
      </div>
 
-     <div class="px-6 py-4 bg-gray-50">
-       <h3 class="font-semibold mb-2 text-gray-900">MAT Statement of Terms and Conditions Agreement</h3>
-       <div class="max-h-60 overflow-y-auto mb-4 p-4 bg-white rounded border border-gray-200">
-         <%= render "terms_and_conditions" %>
-       </div>
-       <div class="flex items-start">
-         <%= f.check_box :terms_accepted,
-             id: "terms_accepted",
-             required: true,
-             class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
-         <%= f.label :terms_accepted, t('applications.form_labels.terms_accepted', locale: form_message_locale),
-                     for: 'terms_accepted', class: 'ml-2 block text-sm text-gray-700' %>
-       </div>
-     </div>
+     <%= render 'equipment_agreement', form: f, locale: form_message_locale %>
 
      <div class="px-6 py-4 bg-gray-50">
        <p class="mb-3 text-sm text-gray-700"><%= t('applications.form_labels.icc_disclosure', locale: form_message_locale) %></p>

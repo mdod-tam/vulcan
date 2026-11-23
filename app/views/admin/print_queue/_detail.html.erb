@@ -1,5 +1,5 @@
 <%# locals: (error: nil) -%>
-<main id="print-letter-content" class="container mx-auto px-4 py-8">
+<div id="print-letter-content" class="container mx-auto px-4 py-8">
   <%= link_to 'Back to print queue', admin_print_queue_index_path, class: 'text-primary-700 underline' %>
   <h1 class="mt-4 text-2xl font-bold">Letter #<%= @letter.id %></h1>
   <% if error %>
@@ -68,7 +68,10 @@
     <% end %>
     <div class="mt-4 flex flex-wrap items-start gap-3">
       <% if @letter_exportable %>
-        <p class="w-full text-sm text-gray-700"><%= 'Check the recipient and mailing address. ' unless @letter.released_at? %>Review the PDF before printing.</p>
+        <p class="w-full text-sm text-gray-700">
+          <%= 'Check the recipient and mailing address. ' unless @letter.released_at? %>
+          Downloaded copies can’t be recalled.
+        </p>
         <%= form_with url: release_admin_print_queue_path(@letter), method: :post,
                       data: { turbo: false, controller: 'print-release', print_release_batch_value: false,
                               action: 'submit->print-release#download' } do %>
@@ -78,6 +81,7 @@
         <% end %>
       <% end %>
       <% if @letter.pending? && @letter.released_at %>
+        <p class="w-full text-sm text-gray-700">After printing, select Mark as Printed.</p>
         <%= button_to 'Mark as Printed', mark_as_printed_admin_print_queue_path(@letter),
                       method: :post, class: 'btn btn-secondary' %>
       <% end %>
@@ -101,4 +105,4 @@
       <% end %>
     </div>
   </div>
-</main>
+</div>

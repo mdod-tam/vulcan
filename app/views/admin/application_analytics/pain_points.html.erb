@@ -1,16 +1,13 @@
-<% content_for :title, "Application Pain Point Analysis" %>
+<% content_for :title, 'Where draft applications stopped' %>
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-2xl font-semibold mb-6">Application Pain Point Analysis</h1>
+  <h1 class="text-2xl font-semibold mb-6">Where draft applications stopped</h1>
 
-  <p class="mb-4">
-    This report shows the last step visited by users who started an application but did not submit it (status: draft).
-    The steps are ordered by the number of users who last visited them, indicating potential "pain points" where users abandon the process.
-  </p>
+  <p class="mb-4">Shows the last recorded field for existing draft applications.</p>
 
   <% if @analysis_results.blank? %>
     <div class="bg-warning-100 border border-warning-400 text-warning-700 px-4 py-3 rounded relative" role="alert">
-      <strong class="font-bold">No Data:</strong> No draft applications with a recorded last visited step were found.
+      No drafts have a recorded last field.
     </div>
   <% else %>
     <div class="card overflow-x-auto">
@@ -18,10 +15,10 @@
         <thead class="bg-gray-50">
           <tr>
             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Last Visited Step (Field Name)
+              Last field
             </th>
             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Number of Draft Applications
+              Draft applications
             </th>
           </tr>
         </thead>
@@ -29,7 +26,7 @@
           <% @analysis_results.each do |step, count| %>
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                <%= step.humanize.titleize %> (<%= step %>)
+                <%= t("applications.form_labels.#{step}", default: Application.human_attribute_name(step)) %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <%= count %>

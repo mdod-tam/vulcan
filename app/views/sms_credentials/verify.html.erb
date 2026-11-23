@@ -1,8 +1,8 @@
+<% locale = current_user&.effective_message_locale || I18n.locale # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <div class="max-w-4xl mx-auto px-4 py-8">
   <div class="card p-8">
     <div class="text-center mb-8">
       <h1 class="text-3xl font-bold text-gray-800">Text Message Verification</h1>
-      <p class="mt-3 text-gray-600">We've sent a 6-digit code by text to your phone.</p>
     </div>
 
     <!-- Step Indicator -->
@@ -27,9 +27,8 @@
 
     <div class="max-w-md mx-auto">
       <div class="bg-info-50 p-4 rounded-lg mb-6">
-        <p class="text-sm text-info-800">
-          We've sent a 6-digit code by text to <strong><%= @sms_phone_number %></strong>.
-          Enter the code below to complete the setup.
+        <p id="text-code-help" class="text-sm text-info-800">
+          <%= t('credential_setup.sms_instruction', locale: locale, number: @sms_phone_number) %>
         </p>
       </div>
 
@@ -45,9 +44,9 @@
                 inputmode: "numeric", 
                 autocomplete: "one-time-code",
                 autofocus: true,
-                maxlength: 6 %>
+                maxlength: 6,
+                aria: { describedby: 'text-code-help' } %>
           </div>
-          <p class="mt-2 text-sm text-gray-500">Enter the 6-digit code from the text message.</p>
         </div>
 
         <div class="flex items-center justify-between pt-4">
@@ -71,20 +70,6 @@
       </div>
     </div>
 
-    <div class="mt-8 max-w-md mx-auto bg-warning-50 border border-warning-200 rounded-lg p-4">
-      <div class="flex">
-        <div class="flex-shrink-0">
-          <svg class="h-5 w-5 text-warning-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clip-rule="evenodd" />
-          </svg>
-        </div>
-        <div class="ml-3">
-          <h3 class="text-sm font-medium text-warning-800">About text message codes</h3>
-          <div class="mt-2 text-sm text-warning-700">
-            <p>The code is valid for 10 minutes. If you don't receive the code within a few minutes, ensure your phone number is correct or try another authentication method.</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <p class="mt-6 text-sm text-gray-700 max-w-md mx-auto"><%= t('credential_setup.sms_help', locale: locale) %></p>
   </div>
 </div>

@@ -93,7 +93,7 @@
 
       <h3 class="text-base font-medium text-gray-900 mb-2"><%= shipments.any? ? 'Add another package' : 'Add a package' %></h3>
       <% if @transaction.fulfillment_local_pickup? %>
-        <p class="text-sm text-gray-600 mb-2">This purchase is set to local pickup. Saving a tracking number changes it to shipping.</p>
+        <p class="text-sm text-gray-600 mb-2">Saving a tracking number changes this order from pickup to shipping.</p>
       <% end %>
       <%= render 'vendor_portal/shipments/form', transaction: @transaction, shipment: @new_shipment, expected_version: @expected_version %>
     </section>

@@ -13,6 +13,9 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select 'h1', 'Edit Profile'
     assert_select 'form[action=?]', profile_path
+    assert_select 'main', count: 1
+    assert_select 'a.skip-link[href="#page-title"]'
+    assert_select 'h1#page-title[tabindex="-1"]'
   end
 
   test 'should update profile successfully' do

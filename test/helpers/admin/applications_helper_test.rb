@@ -18,6 +18,37 @@ module Admin
       )
     end
 
+    test 'income proof guidance shows the configured threshold for the household size' do
+      @application.income_proof_required = true
+      @application.household_size = 2
+      Policy.stubs(:get).with('fpl_2_person').returns(21_150)
+      Policy.stubs(:get).with('fpl_modifier_percentage').returns(400)
+
+      guidance = proof_review_guidance(@application, :income)
+
+      assert_includes guidance, 'currently receives retirement income or Social Security'
+      assert_includes guidance, 'at or below $84,600.00 for a household of 2'
+      assert_includes guidance, 'award letter must be dated this year'
+    end
+
+    test 'income proof guidance gives a next step when there is no household size' do
+      @application.income_proof_required = true
+      @application.household_size = nil
+      IncomeThresholdCalculationService.expects(:call).never
+
+      guidance = proof_review_guidance(@application, :income)
+
+      assert_includes guidance, 'currently receives retirement income or Social Security'
+      assert_includes guidance, 'Confirm the household size and income limit before approving based on earnings.'
+    end
+
+    test 'income proof guidance for iCanConnect uses its own income requirements' do
+      @application.income_proof_required = false
+      IncomeThresholdCalculationService.expects(:call).never
+
+      assert_equal 'For iCanConnect, check that the proof meets its income requirements.', proof_review_guidance(@application, :income)
+    end
+
     test 'proof review retry fields retain a submitted empty target and stable key' do
       stubs(:params).returns(ActionController::Parameters.new(
                                proof_type: 'disability_certification', status: 'rejected', decision_key: 'retry-key', reviewed_blob_id: ''

@@ -1,11 +1,7 @@
 <%# locals: (application:, recipient_options:, default_recipient_ids:, missing_managing_guardian:, purpose:, proof_type: nil) -%>
 <% description_id = "#{purpose}_request_description" %>
 <p class="text-sm text-gray-600 mb-4" id="<%= description_id %>">
-  <% if proof_type %>
-    Choose who should receive this proof upload link and how to send it. Text messages require an explicit channel choice.
-  <% else %>
-    <%= t('admin.applications.secure_request_forms.panel.description') %>
-  <% end %>
+  <%= t('admin.applications.secure_request_forms.panel.description') %>
 </p>
 
 <% if missing_managing_guardian %>
