@@ -181,7 +181,7 @@ module Admin
       assert_not en.enabled
       assert_not es.enabled
       assert_equal [1, 1], [en.delivery_generation, es.delivery_generation]
-      assert_match 'canceled', flash[:notice]
+      assert_match 'pair_toggle_test (EN and ES) is now off', flash[:notice]
     end
 
     test 'a stale template form does not reverse a newer change' do
@@ -220,11 +220,14 @@ module Admin
       template_pair('bulk_pair_one')
       template_pair('bulk_pair_two')
 
-      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-1' }
+      get admin_email_templates_path
+      form = css_select("#bulk-template-actions form[action='#{bulk_disable_admin_email_templates_path}']").sole
+      version = form.at_css('input[name="expected_version"]')['value']
+      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-1', expected_version: version }
 
       assert EmailTemplate.deliverable.none?(&:enabled)
       assert(EmailTemplate.fragments.all?(&:enabled))
-      assert_match "#{EmailTemplate.deliverable.distinct.count(:name)} templates changed", flash[:notice]
+      assert_match "Turned off #{EmailTemplate.deliverable.pluck(:name, :format).uniq.size} template groups", flash[:notice]
     end
 
     test 'all HTML preview surfaces use the same sandboxed document boundary' do
@@ -330,7 +333,7 @@ module Admin
       test "bulk #{enabled ? 'enable' : 'disable'} rolls back every pair and audit when a later pair fails" do
         template_pair('atomic_bulk_first')
         last, = template_pair('atomic_bulk_last')
-        EmailDelivery::ControlWriter.set_all_template_pairs(enabled: !enabled, actor: @admin, operation_id: 'bulk-prepare')
+        EmailDelivery::ControlWriter.set_all_template_pairs(enabled: !enabled, actor: @admin, **bulk_template_params('bulk-prepare'))
         before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
         callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == last.id }
         EmailTemplate.set_callback(:update, :after, callback)
@@ -338,7 +341,7 @@ module Admin
         assert_no_difference('Event.count') do
           assert_no_enqueued_jobs(only: Letters::ReconcilePendingJob) do
             patch(enabled ? bulk_enable_admin_email_templates_path : bulk_disable_admin_email_templates_path,
-                  headers: default_headers, params: { operation_id: 'bulk-failure' })
+                  headers: default_headers, params: bulk_template_params('bulk-failure'))
           end
         end
 
@@ -352,17 +355,37 @@ module Admin
 
     test 'a retried bulk command cannot reverse a later bulk change' do
       template_pair('bulk_retry')
-      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-off' }
-      patch bulk_enable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-on' }
+      first_request = bulk_template_params('bulk-off')
+      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: first_request
+      patch bulk_enable_admin_email_templates_path, headers: default_headers, params: bulk_template_params('bulk-on')
       before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
 
       assert_no_difference('Event.count') do
-        patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-off' }
+        patch bulk_disable_admin_email_templates_path, headers: default_headers, params: first_request
       end
 
       assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       assert_equal 1, Event.where(action: 'email_templates_bulk_disabled').with_metadata(:operation_id, 'bulk-off').count
-      assert_match '0 templates changed', flash[:notice]
+      assert_match 'That change was already applied', flash[:notice]
+    end
+
+    test 'a bulk command cannot override settings changed and then restored since the form loaded' do
+      template_pair('bulk_stale')
+      stale_request = bulk_template_params('bulk-stale')
+      [false, true].each do |enabled|
+        EmailDelivery::ControlWriter.set_template_pair(name: 'bulk_stale', format: 'text', enabled: enabled,
+                                                       actor: @admin, operation_id: SecureRandom.uuid)
+      end
+      before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+
+      assert_no_difference('Event.count') do
+        assert_no_enqueued_jobs(only: Letters::ReconcilePendingJob) do
+          patch bulk_disable_admin_email_templates_path, headers: default_headers, params: stale_request
+        end
+      end
+
+      assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      assert_match 'Template settings changed. Check the counts and try again.', flash[:alert]
     end
 
     test 'rapid distinct edits each record an audit event and an unchanged resubmit records none' do
@@ -875,7 +898,7 @@ module Admin
                         subject: 'Hello {{ name }}',
                         body: 'Body {{ name }}')
 
-      patch bulk_disable_admin_email_templates_path, headers: default_headers
+      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: bulk_template_params
 
       assert_redirected_to admin_email_templates_path
       assert_not template.reload.enabled?
@@ -886,7 +909,7 @@ module Admin
       disabled_template = create(:email_template, :text, name: "bulk_disable_skip_#{SecureRandom.hex(4)}", enabled: false)
       disabled_updated_at = disabled_template.updated_at
 
-      patch bulk_disable_admin_email_templates_path, headers: default_headers
+      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: bulk_template_params
 
       assert_not enabled_template.reload.enabled
       assert_not disabled_template.reload.enabled
@@ -900,7 +923,7 @@ module Admin
                                     locale_needs_sync: true)
 
       assert_nothing_raised do
-        patch bulk_disable_admin_email_templates_path, headers: default_headers
+        patch bulk_disable_admin_email_templates_path, headers: default_headers, params: bulk_template_params
       end
 
       assert_not out_of_sync_template.reload.enabled
@@ -911,7 +934,7 @@ module Admin
       enabled_template = create(:email_template, :text, name: "bulk_enable_skip_#{SecureRandom.hex(4)}", enabled: true)
       enabled_updated_at = enabled_template.updated_at
 
-      patch bulk_enable_admin_email_templates_path, headers: default_headers
+      patch bulk_enable_admin_email_templates_path, headers: default_headers, params: bulk_template_params
 
       assert disabled_template.reload.enabled
       assert enabled_template.reload.enabled
@@ -924,10 +947,12 @@ module Admin
       get admin_email_templates_path, headers: default_headers
 
       assert_response :success
-      assert_select '#email-delivery p', text: /All controls email, printed letters and SMS\./
+      assert_select '#email-delivery h3', text: 'Outgoing correspondence is on'
       assert_not_includes response.body, 'historical fax callbacks'
       assert_select '#email-delivery [data-email-control=?]', EmailDelivery::GLOBAL_CONTROL
       assert_select '#email-delivery [data-email-control]', EmailDelivery::CONTROL_NAMES.size
+      assert_select '#template-settings #bulk-template-actions summary', text: /Bulk template actions/
+      assert_select '#email-delivery #bulk-template-actions', count: 0
       assert_select '#templates-proof-heading', text: 'Proof'
       assert_select "##{'template-application_notifications_proof_approved-text'.parameterize}"
     end
@@ -968,6 +993,10 @@ module Admin
     end
 
     private
+
+    def bulk_template_params(operation_id = SecureRandom.uuid)
+      { operation_id: operation_id, expected_version: EmailDelivery::ControlWriter.bulk_version_for(EmailTemplate.deliverable.to_a) }
+    end
 
     def assert_private_preview_policy(draft: false)
       policy = response.headers.fetch('Content-Security-Policy')

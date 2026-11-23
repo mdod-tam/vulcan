@@ -238,6 +238,9 @@
     </div>
     <p id="<%= editor_help_id %>" class="form-hint">
       Edit message text in the body editor. Paste plain text when possible.
+      <% if email_template.text? && (email_template.fragment? || EmailDelivery::Catalog.letter_action_for(email_template.name)) %>
+        <span class="block">Printed letters support Latin, Cyrillic, Chinese, Japanese, and Korean text. Leave out emoji.</span>
+      <% end %>
     </p>
   </div>
 

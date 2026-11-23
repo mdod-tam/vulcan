@@ -78,8 +78,7 @@ module Applications
     end
 
     def generate_pdf
-      pdf = Prawn::Document.new
-      pdf.font 'Helvetica'
+      pdf = Letters::PdfDocument.new
       pdf.text 'Disability Certification Form', size: 18, style: :bold, align: :center
       pdf.move_down 20
       pdf.text "Applicant: #{application.constituent_full_name}"

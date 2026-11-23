@@ -24,7 +24,7 @@ module EmailDelivery
       record_event(
         actor: actor,
         action: action,
-        metadata: { mail_action: mail_action, reason: decision.reason, request_id: request_id }.compact
+        metadata: { mail_action: mail_action, reason: decision.reason, request_id: request_id, unsupported_codepoint: decision.unsupported_codepoint }.compact
       )
     rescue StandardError => e
       Rails.logger.error("EmailDelivery: could not record #{action} for #{mail_action}: #{e.class}")

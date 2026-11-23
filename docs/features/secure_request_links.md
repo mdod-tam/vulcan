@@ -22,7 +22,7 @@ Audit events and delivery tracking name a link with `secure_request_form_id` for
 | `secure_form_link_expiration_hours` | 48 | How long a new link stays usable. The provider information email and the proof and provider information text messages state this value; proof, certification, and W9 emails do not. |
 | `secure_form_resend_cooldown_hours` | 1 | How soon another link can be issued after the latest open one: per recipient for proof and provider information, per application for certification, and per vendor for W9. A submitted or revoked link starts no cooldown. |
 
-`RecordSecureFormExpirationsJob` runs hourly in production ([schedule](../../config/recurring.yml)). It records one expiration event for each expired proof, certification, or W9 link that is still open, then sets `expiration_recorded_at` so later runs skip that form. Provider information links do not record an expiration event.
+`RecordSecureFormExpirationsJob` runs hourly in production ([schedule](../../config/recurring.yml)). It records an event for expired, open proof links sent by email or text, certification links, and W9 links, then sets `expiration_recorded_at`. Paper proof requests and provider information requests are excluded.
 
 ## Issuing a link
 
@@ -37,6 +37,14 @@ All four public resend endpoints use the `proof_submission` web rate limit. If b
 A link that carries a secure URL must actually be delivered. All four issuing services (proof, provider information, certification, W9) check the [email controls](../infrastructure/email_system.md#delivery-controls) before creating a link for an email recipient: if all email, the email's category, or its template is off, no link, token, revocation, or status change is created and the service reports the email as suppressed. If the email is stopped after the link was prepared, the service revokes the unsent link as `delivery_suppressed`, starts no resend cooldown, and a certification request moves back from requested when that request put it there. Missing or unreadable email settings are operational errors, not intentional suppression. An early configuration refusal creates no email request, while other letter or SMS recipients still proceed. A late configuration refusal uses the delivery-failure cleanup, as a transport error does: the unsent link is revoked without a resend cooldown. When a proof rejection cannot issue its link, `ProofDecisionFollowUp` records `proof_resubmission_request_failed`, and the application history shows the reason; a suppressed email is marked `delivery_suppressed` there. The rejection that archives the application issues no link, because the applicant is sent the archive notice instead; that is not a failed request.
 
 Constituent links use the recipient's delivery locale for email, SMS, and pages. Provider certification emails and pages are English, because the applicant's locale says nothing about the provider's language. W9 links follow the vendor's locale.
+
+### Paper responses
+
+Proof and provider-information requests sent by letter give the recipient a postal or telephone response path. The letter does not contain the bearer URL. Its associated token expires on the usual schedule. Staff can still release the letter while the request is open and the application still needs the information.
+
+When a proof arrives by mail, staff use **Upload mailed proof** on the existing application. The file goes through the usual scan and enters proof review. Staff record provider information received by phone through the application editor. Recording a response closes matching paper requests and cancels letters that staff have yet to download.
+
+The print queue supports **Replace paper request** for the same logical recipient when the proof or provider information is still needed. Replacement prepares the new PDF before retiring the previous request. A preparation failure leaves the original subject to its current release checks. After a request closes, use **Mark as Printed** if it was printed. Otherwise discard the download and select **Discard unused copy**.
 
 ### Certification request state and counts
 

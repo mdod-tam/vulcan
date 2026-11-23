@@ -713,6 +713,7 @@ module Applications
     end
 
     test 'letter resend fails closed when the address is no longer complete' do
+      @application.update_columns(certifying_professional_name: nil)
       @application.user.update!(communication_preference: 'letter')
       ApplicationNotificationsMailer.unstub(:provider_info_requested)
       original = RequestProviderInfo.new(application: @application, actor: @actor).call
@@ -728,8 +729,10 @@ module Applications
       end
 
       assert_not result.success?
-      assert_predicate original.reload, :revoked?
-      assert PrintQueueItem.find_by!(secure_request_form_id: original.id).canceled?
+      assert_not original.reload.revoked?
+      old_item = PrintQueueItem.find_by!(secure_request_form_id: original.id)
+      assert_predicate old_item, :pending?
+      assert_equal 'delivery_identity_changed', old_item.delivery_decision.reason
     end
 
     # Defaults reject owner-ineligible routes as :no_contact_path before form creation.

@@ -165,16 +165,27 @@ module Admin
         )
         return
       end
+      if requested_letter_delivery?(notification_params) && !EmailDelivery::Routing.postal_recipient(recipient).complete_mailing_address?
+        handle_error_response(
+          html_redirect_path: admin_applications_path,
+          error_message: EmailDelivery::ControlPanel.reason_text(:incomplete_mailing_address)
+        )
+        return
+      end
 
       # No application exists to own this audit event. It comes first so no notice goes out unrecorded.
-      log_income_threshold_rejection(constituent_params, notification_params)
+      rejection = log_income_threshold_rejection(constituent_params, notification_params)
+      if requested_letter_delivery?(notification_params)
+        receipt = queue_rejection_letter(recipient, notification_params, rejection)
+        return redirect_to admin_paper_rejection_letter_path(receipt), status: :see_other
+      end
 
       ApplicationNotificationsMailer.income_threshold_exceeded(
         recipient,
         notification_params
       ).deliver_later
 
-      success_message = rejection_success_message(notification_params)
+      success_message = 'Rejection notification has been sent'
 
       handle_success_response(
         html_redirect_path: admin_applications_path,
@@ -603,8 +614,18 @@ module Admin
       preference.to_s.strip.downcase.presence
     end
 
-    def rejection_success_message(source_params)
-      requested_letter_delivery?(source_params) ? 'Rejection letter has been queued for printing' : 'Rejection notification has been sent'
+    def queue_rejection_letter(recipient, notification_params, rejection)
+      receipt = NotificationService.create_and_deliver!(
+        type: Notification::PAPER_REJECTION_LETTER_ACTION, recipient: current_user, actor: current_user, notifiable: recipient,
+        deliver: false, channel: :letter, metadata: { rejection_event_id: rejection.id }
+      )
+      denial, context = EmailDelivery.issuance('ApplicationNotificationsMailer#income_threshold_exceeded', channel: :letter, notification_id: receipt.id)
+      return receipt if denial
+
+      mail = ApplicationNotificationsMailer.income_threshold_exceeded(recipient, notification_params)
+      outcome = EmailDelivery.deliver_later(mail, context: context.merge('channel' => 'letter'))
+      receipt.mark_delivery_failed!(EmailDelivery::NotAccepted.new, channel: :letter) if outcome == :enqueue_failed
+      receipt
     end
   end
 end

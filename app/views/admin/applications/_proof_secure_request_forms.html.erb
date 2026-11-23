@@ -1,12 +1,26 @@
-<% proof_type = local_assigns.fetch(:proof_type).to_s %>
-<% secure_request_forms = local_assigns.fetch(:secure_request_forms) %>
+<%# locals: (proof_type:, secure_request_forms:) -%>
+
+<% if @application.proof_requestable_via_secure_form?(proof_type) && secure_request_forms.any?(&:recipient_channel_letter?) %>
+  <%= form_with url: admin_application_mailed_proof_path(@application), method: :post, multipart: true,
+                class: 'mt-4 space-y-2', data: { turbo: false } do |form| %>
+    <%= hidden_field_tag :proof_type, proof_type, id: nil %>
+    <%= form.label "#{proof_type}_proof", "Upload mailed #{proof_secure_request_forms_label(proof_type)}",
+                   for: "mailed-#{proof_type}-document", class: 'block text-sm font-semibold' %>
+    <p id="mailed-<%= proof_type %>-formats" class="text-sm text-gray-700">
+      <%= proof_upload_formats_label %>, up to <%= proof_upload_max_size_label %>.
+    </p>
+    <%= render 'shared/document_upload',
+               form: form, field: "#{proof_type}_proof", model: @application,
+               input_id: "mailed-#{proof_type}-document", described_by: "mailed-#{proof_type}-formats" %>
+    <%= form.submit 'Upload for review', class: 'btn btn-secondary' %>
+  <% end %>
+<% end %>
 
 <% if secure_request_forms.present? %>
-  <% proof_label = proof_secure_request_forms_label(proof_type) %>
 
   <div class="mt-4" data-testid="<%= proof_type %>-proof-secure-request-forms-panel">
     <h3 class="text-sm font-medium text-gray-700 mb-2">
-      <%= t('admin.applications.proof_secure_request_forms.panel.title', proof_type: proof_label) %>
+      <%= t('admin.applications.proof_secure_request_forms.panel.title', proof_type: proof_secure_request_forms_label(proof_type)) %>
     </h3>
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -47,28 +61,18 @@
               </td>
               <td class="px-3 py-3 text-gray-700"><%= secure_request_masked_contact(form) %></td>
               <td class="px-3 py-3 text-gray-700"><%= secure_request_channel_label(form) %></td>
-              <td class="px-3 py-3 text-gray-700"><span><%= secure_request_status_label(form) %></span>
-                <%= delivery_visibility(form) %></td>
+              <td class="px-3 py-3 text-gray-700"><%= secure_request_row_status(form) %></td>
               <td class="px-3 py-3 text-gray-700"><%= l(form.sent_at, format: :short) %></td>
-              <td class="px-3 py-3 text-gray-700"><%= l(form.expires_at, format: :short) %></td>
+              <td class="px-3 py-3 text-gray-700"><%= form.recipient_channel_letter? ? 'No link' : l(form.expires_at, format: :short) %></td>
               <td class="px-3 py-3 text-right">
-                <% if form.active? %>
-                  <%= button_to(
-                        t('admin.applications.proof_secure_request_forms.table.revoke'),
-                        admin_application_secure_request_form_revocation_path(@application, form),
-                        method: :post,
-                        form: {
-                          class: 'inline',
-                          data: {
-                            turbo_confirm: t('admin.applications.proof_secure_request_forms.table.revoke_confirm', proof_type: proof_label),
-                            turbo_frame: '_top'
-                          }
-                        },
-                        'aria-label': secure_link_row_action_label(t('admin.applications.proof_secure_request_forms.table.revoke'), form,
-                                                                   recipient: secure_request_issued_recipient_label(form)),
-                        class: 'btn btn-danger-outline btn-sm'
-                      ) %>
-                <% else %>
+                <% if (letter = form.print_queue_items.max_by(&:id)) %>
+                  <%= link_to "Review letter ##{letter.id}", admin_print_queue_path(letter),
+                              class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
+                <% end %>
+                <% if form.operator_revocable? %>
+                  <%= secure_request_close_button(@application, form,
+                                                  recipient: secure_request_issued_recipient_label(form), proof_type: proof_secure_request_forms_label(proof_type)) %>
+                <% elsif !letter %>
                   <span class="text-gray-500">
                     <%= t('admin.applications.proof_secure_request_forms.table.no_actions') %>
                   </span>

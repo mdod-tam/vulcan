@@ -44,20 +44,15 @@ module Applications
 
     def call
       with_recipient_issuance_errors do
-        Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id))
+        Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id)) unless resend_of
         return failure(message(:invalid_proof_type)) unless proof_kind
         return failure(message(:request_not_needed)) unless requestable_proof_state?
 
-        deliveries = prepare_requests do
+        send_requests do
           # Repeat the preliminary proof-state check under the issuance lock.
           raise SecureRequestIssuance::Refused, :request_not_needed unless requestable_proof_state?
           raise SecureRequestIssuance::Refused, :request_not_needed if @proof_review && !@proof_review.current_rejection?(application: application)
         end
-        delivery_result = deliver_requests(deliveries)
-        return delivery_result if delivery_result.failure?
-        return delivery_denial_result(deliveries) if denied_candidates.any?
-
-        success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
       end
     end
 
@@ -120,6 +115,10 @@ module Applications
         }.compact
       )
       notify_admins_of_income_request(issued.secure_request_form)
+      build_delivery(issued, candidate)
+    end
+
+    def build_delivery(issued, candidate)
       Delivery.new(
         secure_request_form: issued.secure_request_form,
         raw_token: issued.raw_token,
@@ -167,8 +166,9 @@ module Applications
 
     def sms_action = 'SmsService#proof_resubmission'
 
-    def deliver_letter(delivery)
-      EmailDelivery.deliver_now!(proof_request_mail(delivery, secure_upload_url: nil), context: delivery_context_for(delivery))
+    def deliver_letter(delivery, finalize_request: nil)
+      mailer = finalize_request ? ApplicationNotificationsMailer.with(finalize_letter_request: finalize_request) : ApplicationNotificationsMailer
+      EmailDelivery.deliver_now!(proof_request_mail(delivery, secure_upload_url: nil, mailer: mailer), context: delivery_context_for(delivery))
     end
 
     def delivery_failure_details(forms)
@@ -195,9 +195,9 @@ module Applications
 
     # The mailer must use the form's channel and encrypted contact snapshot, not the recipient's preferences.
     # letter_recipient supplies the resolver's address owner for print delivery.
-    def proof_request_mail(delivery, secure_upload_url:)
+    def proof_request_mail(delivery, secure_upload_url:, mailer: ApplicationNotificationsMailer)
       if delivery.proof_review.present?
-        ApplicationNotificationsMailer.proof_rejected(
+        mailer.proof_rejected(
           application,
           delivery.proof_review,
           secure_upload_url: secure_upload_url,
@@ -206,7 +206,7 @@ module Applications
           letter_recipient: delivery.candidate.address_owner
         )
       else
-        ApplicationNotificationsMailer.proof_requested(
+        mailer.proof_requested(
           application,
           proof_type,
           secure_upload_url: secure_upload_url,

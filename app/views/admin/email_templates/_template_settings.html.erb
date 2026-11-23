@@ -1,0 +1,27 @@
+<%# locals: (counts:, version:) -%>
+<section id="template-settings" aria-labelledby="template-settings-heading" class="card mb-4 p-4 sm:p-6">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h2 id="template-settings-heading" class="text-xl font-semibold text-gray-900"><%= email_delivery_t('template_settings') %></h2>
+      <p class="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-700">
+        <span><%= email_delivery_t('group_count', count: counts.values.sum) %></span>
+        <%= badge(email_delivery_t('count_on', count: counts.fetch(:on, 0)), :success) %>
+        <%= badge(email_delivery_t('count_off', count: counts.fetch(:off, 0)), :neutral) %>
+        <% if counts.fetch(:mixed, 0).positive? %>
+          <%= badge(email_delivery_t('count_mixed', count: counts.fetch(:mixed)), :attention) %>
+        <% end %>
+      </p>
+      <% if @show_print_queue_link %>
+        <%= link_to email_delivery_t('view_print_queue'), admin_print_queue_index_path, class: 'mt-2 inline-block text-primary-700 underline' %>
+      <% end %>
+    </div>
+    <details class="w-full sm:w-auto sm:max-w-md" id="bulk-template-actions">
+      <summary class="btn btn-secondary w-fit cursor-pointer"><%= email_delivery_t('bulk_actions') %><span aria-hidden="true">▾</span></summary>
+      <p class="my-3 text-sm text-gray-700"><%= email_delivery_t('bulk_scope') %></p>
+      <div class="flex flex-wrap gap-2">
+        <%= email_bulk_template_button(enabled: true, counts: counts, version: version) %>
+        <%= email_bulk_template_button(enabled: false, counts: counts, version: version) %>
+      </div>
+    </details>
+  </div>
+</section>

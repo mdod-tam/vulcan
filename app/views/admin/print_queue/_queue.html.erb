@@ -8,10 +8,10 @@
     <%= link_to 'Communication settings', admin_email_templates_path(anchor: 'email-delivery'), class: 'text-primary-700 underline' %>
     <%= link_to 'Back to Dashboard', admin_dashboard_path, class: 'text-primary-700 underline' %>
   </div>
-  <p class="mb-6 max-w-prose text-sm text-gray-700">Review each letter for accuracy.</p>
-
-  <%= render 'letters', letters: @pending_letters, title: 'Awaiting release', release: true, confirm: false %>
-  <%= render 'letters', letters: @released_letters, title: 'Released — awaiting print confirmation', release: true, confirm: true %>
-  <%= render 'letters', letters: @printed_letters, title: 'Recently printed', release: false, confirm: false %>
-  <%= render 'letters', letters: @canceled_letters, title: 'Recently canceled', release: false, confirm: false %>
+  <%= render 'attention' if @preparation_notices.any? || @attention_letters.any? %>
+  <%= render 'letters', letters: @pending_letters, title: 'Awaiting release', mode: :ready %>
+  <%= render 'letters', letters: @released_letters, title: 'Released — awaiting print confirmation', mode: :released %>
+  <%= render 'letters', letters: @mail_letters, title: 'Awaiting outgoing mail', mode: :mail %>
+  <%= render 'letters', letters: @printed_letters, title: 'Recently printed', mode: :history %>
+  <%= render 'letters', letters: @canceled_letters, title: 'Recently canceled', mode: :history %>
 </main>

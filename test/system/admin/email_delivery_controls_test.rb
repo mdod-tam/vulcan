@@ -15,21 +15,25 @@ module Admin
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
 
-      assert_text 'Outgoing communications'
-      assert_selector '#email-delivery [data-email-control]', count: EmailDelivery::CONTROL_NAMES.size
-      within('[data-email-control="communications.global"]') do
-        assert_text 'only factor is verified SMS'
-        assert_text 'recovery messages for all users'
-        assert_text 'SMS enrollment follows all controls.'
+      assert_text 'Outgoing correspondence is on'
+      assert_selector '#email-delivery [data-email-control]', count: EmailDelivery::CONTROL_NAMES.size, visible: :all
+      within('#sign-in-and-recovery-exceptions') do
+        assert_no_text 'only two-step verification method'
+        assert_selector 'summary', text: 'Sign-in and recovery exceptions'
+        page.execute_script("document.querySelector('#sign-in-and-recovery-exceptions summary').focus()")
+        page.driver.browser.keyboard.type(:Enter)
+        assert_text 'only two-step verification method'
+        assert_text 'All settings apply to text message setup.'
+        page.driver.browser.keyboard.type(:Enter)
+        assert_no_text 'only two-step verification method'
       end
-      within('[data-email-control="communications.sms"]') { assert_text 'Off also stops sign-in codes and SMS recovery.' }
-      assert_no_text 'All must be on for any channel to send.'
       take_screenshot('email-controls-index', html: true)
 
+      find('#communication-categories summary').click
       within('[data-email-control="email.category.proof"]') do
         accept_confirm(/unreleased letters will be canceled permanently/) { click_button 'Turn off' }
       end
-      assert_text 'Proof is now off. Matching messages and unreleased letters have been canceled.'
+      assert_text 'Proof is now off.'
       within('#templates-proof-heading + ul') do
         assert_text 'Blocked: proof communications are turned off'
       end
@@ -45,7 +49,7 @@ module Admin
 
       voucher_en = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', locale: 'en')
       visit new_test_email_admin_email_template_path(voucher_en)
-      assert_selector '#test-send-controls-note', text: 'Test emails follow All, Email, category and template settings.'
+      assert_selector '#test-send-controls-note', text: 'Test emails follow delivery settings.'
       fill_in 'Recipient Email Address', with: 'tester@example.com'
       click_button 'Send Test Email'
       assert_text 'Test email not sent: this template is turned off.'
@@ -53,12 +57,15 @@ module Admin
 
       visit admin_email_templates_path
       within('[data-email-control="communications.global"]') do
-        accept_confirm(/unreleased letters will be canceled/) { click_button 'Turn off' }
+        accept_confirm(/Some sign-in and recovery messages can still go out/) { click_button 'Turn off outgoing correspondence' }
       end
-      assert_text 'All outgoing communications is now off.'
-      within('[data-email-control="email.category.voucher"]') do
-        assert_text 'On'
-        assert_text 'Blocked: all outgoing communications are turned off'
+      assert_text 'Outgoing correspondence is now off.'
+      assert_text 'Outgoing correspondence is off'
+      assert_text 'Email, texts, and letter downloads are off.'
+      assert_button 'Resume outgoing correspondence'
+      within('[data-email-control="communications.letters"]') do
+        assert_text 'Blocked by master'
+        assert_text 'Saved on'
       end
       take_screenshot('email-controls-master-off', html: true)
       find('[data-email-control="communications.sms"]').scroll_to(:center)
@@ -66,7 +73,8 @@ module Admin
 
       page.current_window.resize_to(390, 844)
       visit admin_email_templates_path
-      assert_text 'Outgoing communications'
+      assert_text 'Outgoing correspondence is off'
+      assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth')
       take_screenshot('email-controls-phone-width', html: true)
     ensure
       page.current_window.resize_to(1200, 800)
@@ -104,15 +112,31 @@ module Admin
       take_screenshot('notification-untracked-no-panel', html: true)
     end
 
-    test 'a failed bulk change keeps settings and allows a fresh retry' do
+    test 'bulk changes confirm scope and require review before retrying failed or stale settings' do
       template = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', locale: :en)
+      application = create(:application)
+      context = EmailDelivery::Policy.capture(mail_action: 'ApplicationNotificationsMailer#proof_approved')
+      Letters::Delivery.queue!(recipient: application.user, application: application, letter_type: :proof_approved,
+                               context: context, actor: @admin) { StringIO.new('%PDF letter') }
+      group_count = EmailTemplate.deliverable.pluck(:name, :format).uniq.size
       before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
       callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == template.id }
       EmailTemplate.set_callback(:update, :after, callback)
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
 
-      accept_confirm { click_button 'Turn off all templates' }
+      disable_button = "#bulk-template-actions form[action='#{bulk_disable_admin_email_templates_path}'] button"
+      assert_no_link 'View print queue', href: admin_print_queue_index_path
+      assert_no_selector disable_button
+      page.execute_script("document.querySelector('#bulk-template-actions summary').focus()")
+      page.driver.browser.keyboard.type(:Enter)
+      assert_text 'Applies to email and print templates in all available languages.'
+      assert_no_text '0 mixed'
+      assert_selector disable_button, text: "Turn off #{group_count} template groups"
+      take_screenshot('email-controls-bulk-review', html: true)
+      dismiss_confirm(/template groups in all available languages/) { find(disable_button).click }
+      assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      accept_confirm { find(disable_button).click }
 
       assert_text I18n.t('admin.email_delivery.bulk_failed', locale: :en)
       assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
@@ -120,10 +144,29 @@ module Admin
       EmailTemplate.skip_callback(:update, :after, callback)
       callback = nil
 
-      accept_confirm { click_button 'Turn off all templates' }
+      find('#bulk-template-actions summary').click
+      EmailDelivery::ControlWriter.set_template_pair(name: template.name, format: template.format, enabled: false,
+                                                     actor: create(:admin), operation_id: SecureRandom.uuid)
+      current_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      accept_confirm { find(disable_button).click }
 
-      assert_text 'templates changed (each covers EN and ES).'
+      assert_text 'Template settings changed. Check the counts and try again.'
+      assert_equal current_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      take_screenshot('email-controls-bulk-stale', html: true)
+
+      find('#bulk-template-actions summary').click
+      remaining = group_count - 1
+      disable_label = "Turn off #{remaining} #{'template group'.pluralize(remaining)}"
+      assert_selector disable_button, text: disable_label
+      assert_button 'Turn on 1 template group'
+      take_screenshot('email-controls-bulk-remaining', html: true)
+      accept_confirm(/^#{Regexp.escape(disable_label)}/) { find(disable_button).click }
+
+      assert_text(/Turned off \d+ template groups?\./)
+      assert_link 'View print queue', href: admin_print_queue_index_path
       assert EmailTemplate.deliverable.none?(&:enabled)
+      find('#bulk-template-actions summary').click
+      assert_no_selector disable_button, visible: :all
       take_screenshot('email-controls-bulk-retried', html: true)
     ensure
       EmailTemplate.skip_callback(:update, :after, callback) if callback
@@ -151,6 +194,7 @@ module Admin
       sign_in(@admin, bypass_mfa_enrollment: true)
       visit admin_email_templates_path
 
+      find('#communication-categories summary').click
       within('[data-email-control="email.category.proof"]') do
         accept_confirm(/canceled messages and letters stay canceled/) { click_button 'Turn on' }
       end
@@ -187,12 +231,14 @@ module Admin
       assert_equal 'main-content', page.evaluate_script('document.activeElement.id')
 
       %w[email.category.proof email.global].each do |name|
+        find('#communication-categories summary').click if name == 'email.category.proof'
         FeatureFlag.find_by!(name: name).destroy!
         within("[data-email-control='#{name}']") do
           accept_confirm { click_button 'Turn off' }
         end
 
         assert_text 'Communication settings could not be changed because the configuration is missing or invalid.'
+        find('#communication-categories summary').click if name == 'email.category.proof'
         within("[data-email-control='#{name}']") do
           assert_text 'Configuration error'
           assert_text 'Contact a system administrator'

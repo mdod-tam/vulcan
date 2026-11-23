@@ -1,0 +1,104 @@
+<%# locals: (error: nil) -%>
+<main id="print-letter-content" class="container mx-auto px-4 py-8">
+  <%= link_to 'Back to print queue', admin_print_queue_index_path, class: 'text-primary-700 underline' %>
+  <h1 class="mt-4 text-2xl font-bold">Letter #<%= @letter.id %></h1>
+  <% if error %>
+    <p role="alert" tabindex="-1" data-print-release-error class="mt-4 rounded bg-danger-50 p-4 text-danger-800"><%= error %></p>
+  <% end %>
+  <div class="card mt-4 p-6">
+    <dl class="space-y-2">
+      <div>
+        <dt class="inline font-semibold">Recipient:</dt>
+        <dd class="inline"><%= link_to @letter.constituent.full_name, admin_user_path(@letter.constituent), class: 'text-primary-700 underline' %></dd>
+      </div>
+      <div><dt class="inline font-semibold">Type:</dt> <dd class="inline"><%= print_letter_type_label(@letter) %></dd></div>
+      <div><dt class="inline font-semibold">Stage:</dt> <dd class="inline"><%= print_letter_stage(@letter) %></dd></div>
+      <div>
+        <dt class="font-semibold">Current mailing address</dt>
+        <dd>
+          <% if @letter.constituent.complete_mailing_address? %>
+            <% @letter.constituent.mailing_address_lines.each do |line| %>
+              <span class="block"><%= line %></span>
+            <% end %>
+          <% else %>
+            Incomplete address
+          <% end %>
+        </dd>
+      </div>
+      <% if @letter.application %>
+        <div>
+          <dt class="inline font-semibold">Source:</dt>
+          <dd class="inline"><%= link_to "Application ##{@letter.application_id}", admin_application_path(@letter.application), class: 'text-primary-700 underline' %></dd>
+        </div>
+      <% end %>
+      <% if @letter.released_at %>
+        <div><dt class="inline font-semibold">Released:</dt> <dd class="inline"><%= l(@letter.released_at, format: :long) %></dd></div>
+      <% end %>
+      <% if @letter.printed_at %>
+        <div>
+          <dt class="inline font-semibold">Printed:</dt>
+          <dd class="inline"><%= l(@letter.printed_at, format: :long) %><%= " by #{@letter.admin.full_name}" if @letter.admin %></dd>
+        </div>
+      <% end %>
+      <% if @letter.mail_handoff_at %>
+        <div>
+          <dt class="inline font-semibold">In outgoing mail:</dt>
+          <dd class="inline"><%= l(@letter.mail_handoff_at, format: :long) %> by <%= @letter.mail_handoff_by.full_name %></dd>
+        </div>
+      <% end %>
+      <% if @letter.canceled? %>
+        <div><dt class="inline font-semibold">Cancellation:</dt> <dd class="inline"><%= letter_delivery_reason(@letter, @letter.cancellation_reason) %></dd></div>
+      <% end %>
+    </dl>
+
+    <% if @letter.downloaded_copy_to_resolve? %>
+      <p class="mt-4 text-sm text-danger-800">The request is closed. Do not mail this copy.</p>
+    <% elsif (reason = @mail_refusals[@letter.id]) %>
+      <p class="mt-4 font-semibold text-danger-800"><%= "Do not mail. #{reason}" %></p>
+    <% elsif !@letter.canceled? && !@letter_exportable %>
+      <p class="mt-4 text-sm text-danger-800">
+        <% if @letter_decision.allowed? && @letter_replaceable %>
+          PDF missing. Replace this request.
+        <% elsif @letter_decision.allowed? %>
+          PDF missing. Prepare and mail this letter by hand.
+        <% else %>
+          <%= letter_delivery_reason(@letter, @letter_decision.reason) %>
+        <% end %>
+      </p>
+    <% end %>
+    <div class="mt-4 flex flex-wrap items-start gap-3">
+      <% if @letter_exportable %>
+        <p class="w-full text-sm text-gray-700"><%= 'Check the recipient and mailing address. ' unless @letter.released_at? %>Review the PDF before printing.</p>
+        <%= form_with url: release_admin_print_queue_path(@letter), method: :post,
+                      data: { turbo: false, controller: 'print-release', print_release_batch_value: false,
+                              action: 'submit->print-release#download' } do %>
+          <%= submit_tag(@letter.released_at ? 'Download PDF again' : 'Release and download PDF',
+                         class: 'btn btn-primary', data: { print_release_target: 'submit' }) %>
+          <p data-print-release-target="status" role="status" class="mt-2 text-sm text-gray-700"></p>
+        <% end %>
+      <% end %>
+      <% if @letter.pending? && @letter.released_at %>
+        <%= button_to 'Mark as Printed', mark_as_printed_admin_print_queue_path(@letter),
+                      method: :post, class: 'btn btn-secondary' %>
+      <% end %>
+      <% if @letter.released_at? && print_queue_selectable?(@letter) && print_queue_can_mail?(@letter, @mail_refusals) %>
+        <%= button_to 'Mark in outgoing mail', mark_in_outgoing_mail_admin_print_queue_index_path,
+                      params: { letter_ids: [@letter.id] }, class: 'btn btn-primary' %>
+      <% end %>
+      <% if @letter.awaiting_mail_handoff? %>
+        <%= button_to('Discard printed copy', discard_printed_copy_admin_print_queue_path(@letter),
+                      class: 'btn btn-danger-outline', form: { data: { turbo_confirm: 'Did you discard this copy?' } }) %>
+      <% end %>
+      <% if @letter.pending? %>
+        <%= button_to(@letter.downloaded_copy_to_resolve? ? 'Discard unused copy' : 'Cancel letter', cancel_admin_print_queue_path(@letter),
+                      method: :post, class: 'btn btn-danger-outline',
+                      form: { data: { turbo_confirm: print_letter_cancel_confirmation(@letter) } }) %>
+      <% end %>
+      <% if @letter_replaceable %>
+        <%= button_to 'Replace paper request', replace_request_admin_print_queue_path(@letter),
+                      method: :post, class: 'btn btn-secondary',
+                      form: { data: { turbo_confirm: secure_request_replacement_confirmation(@letter.secure_request_form, letter: @letter) } } %>
+      <% end %>
+    </div>
+  </div>
+</main>

@@ -8,6 +8,7 @@
 # A stub can report success without storing an attachment.
 class ProofAttachmentService
   class IncomeUpdateUnavailable < ArgumentError; end
+  class ProofNoLongerNeeded < ArgumentError; end
 
   AttachmentEventContext = Struct.new(
     :application, :proof_type, :status, :submission_method,
@@ -144,10 +145,19 @@ class ProofAttachmentService
     private
 
     def perform_attachment_flow(result, params)
+      if params[:require_requestable]
+        application = params.fetch(:application)
+        application.lock!
+        raise ProofNoLongerNeeded unless application.proof_requestable_via_secure_form?(params.fetch(:proof_type))
+      end
+
       flow_data = prepare_flow_data(params)
 
       prepare_income_update!(flow_data)
       attach_and_verify_initial_save(flow_data.application, flow_data.proof_type, flow_data.attachment_param)
+      if params[:require_requestable]
+        Applications::PostalRequestClosure.fulfill!(application: flow_data.application, kind: "#{flow_data.proof_type}_proof_resubmission", actor: params[:admin])
+      end
       context, event_metadata = log_attachment_events_from_flow_data(flow_data, params)
       result[:proof_review] = record_attachment_approval(context) if context.status.to_s == 'approved'
       result[:blob_size] = flow_data.blob_size

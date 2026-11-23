@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Letters
   class DeliveryTest < ActiveSupport::TestCase
+    include PdfTextHelper
+
     setup do
       @admin = create(:admin)
       ensure_system_audit_actor!
@@ -45,6 +47,67 @@ module Letters
         assert_raises(RuntimeError) { queue { raise 'render failed' } }
       end
       assert queue.persisted?
+    end
+
+    test 'an ordinary letter override rejects an incomplete postal recipient before admission' do
+      @recipient.update!(physical_address_1: nil)
+      options = { household_size: 2, annual_income: 100_000, communication_preference: 'letter' }
+
+      assert_no_difference ['PrintQueueItem.count', 'ActiveStorage::Blob.count'] do
+        error = assert_raises(EmailDelivery::ConfigurationError) do
+          ApplicationNotificationsMailer.income_threshold_exceeded(@recipient, options).deliver_now
+        end
+        assert_equal 'incomplete_mailing_address', error.reason.to_s
+      end
+
+      @recipient.update!(physical_address_1: '123 Main St')
+      assert_difference('PrintQueueItem.count', 1) do
+        ApplicationNotificationsMailer.income_threshold_exceeded(@recipient, options).deliver_now
+      end
+    end
+
+    test 'text letters embed fonts for mixed names and refuse unsupported scripts' do
+      @recipient.update!(first_name: "Łucja Jose\u0301 Александра 李 さとう 한글", communication_preference: :letter)
+      assert_difference('PrintQueueItem.count', 1) do
+        ApplicationNotificationsMailer.account_created(@recipient).deliver_now
+      end
+      bytes = PrintQueueItem.where(constituent: @recipient).sole.pdf_letter.download
+      assert bytes.include?('NotoSans-Regular'), 'Expected the embedded Noto Sans font'
+      assert bytes.include?('NotoSansCJKJP-Regular'), 'Expected the embedded Noto Sans CJK font'
+      assert_no_match(%r{/BaseFont /Helvetica}, bytes)
+
+      @recipient.update!(first_name: 'حسن')
+      assert_no_difference('PrintQueueItem.count') do
+        error = assert_raises(EmailDelivery::ConfigurationError) { ApplicationNotificationsMailer.account_created(@recipient).deliver_now }
+        assert_equal 'unsupported_letter_text', error.reason.to_s
+        assert_equal 'U+062D', error.unsupported_codepoint
+        assert_no_match(/حسن/, error.message)
+      end
+      event = Event.where(action: 'email_delivery_configuration_error').order(:id).last
+      assert_equal 'U+062D', event.metadata['unsupported_codepoint']
+      assert_no_match(/حسن/, event.metadata.to_json)
+    end
+
+    test 'a Spanish letter drops invisible paste characters and embeds its Latin font' do
+      first_name = "Ma\u200Br\u200Eí\u00ADa"
+      @recipient.update!(first_name: first_name, last_name: 'Núñez', locale: :es, communication_preference: :letter)
+
+      assert_difference('PrintQueueItem.count', 1) { ApplicationNotificationsMailer.account_created(@recipient).deliver_now }
+      bytes = PrintQueueItem.where(constituent: @recipient).sole.pdf_letter.download
+
+      assert_includes bytes, '/FontFile2'
+      assert_no_match(%r{/BaseFont /Helvetica}, bytes)
+      assert_includes extracted_pdf_text(bytes), 'María Núñez'
+      assert_equal first_name, @recipient.reload.first_name
+    end
+
+    test 'other direction controls and unsupported emoji are still refused' do
+      { "\u202E" => 'U+202E', '😀' => 'U+1F600' }.each do |character, codepoint|
+        error = assert_raises(EmailDelivery::ConfigurationError) { PdfDocument.new.text("abc#{character}def") }
+        assert_equal codepoint, error.unsupported_codepoint
+        assert_includes error.message, codepoint
+        assert_not_includes error.message, character
+      end
     end
 
     test 'export records release separately from physical print confirmation' do
@@ -127,7 +190,8 @@ module Letters
       items = [queue, queue(request_key: 'second')]
       items.last.pdf_letter.blob.service.delete(items.last.pdf_letter.blob.key)
 
-      assert_raises(ActiveStorage::FileNotFoundError) { Delivery.export!(items.map(&:id), actor: @admin) }
+      error = assert_raises(Delivery::ReleaseDenied) { Delivery.export!(items.map(&:id), actor: @admin) }
+      assert_equal [items.last.id], error.reasons.keys
       assert(PrintQueueItem.where(id: items.map(&:id)).all? { |item| item.released_at.nil? })
     end
 

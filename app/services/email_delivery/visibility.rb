@@ -26,10 +26,9 @@ module EmailDelivery
       return if items.empty?
 
       ActiveRecord::Associations::Preloader.new(records: items, associations: %i[constituent application secure_request_form]).call
-      active_ids = SecureRequestForm.active.where(id: items.filter_map(&:secure_request_form_id)).pluck(:id).to_set
       # Shared controls/templates are read once. This cache is display-only; release rechecks under locks.
       PrintQueueItem.cache do
-        items.each { |item| item.preloaded_delivery_state = item.display_delivery_state(active_request_ids: active_ids) }
+        items.each { |item| item.preloaded_delivery_state = item.display_delivery_state }
       end
     end
 

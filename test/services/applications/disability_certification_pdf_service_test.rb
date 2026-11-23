@@ -76,7 +76,10 @@ module Applications
           item = result.data.reload
           assert_equal [@application.id, @application.user_id, @admin.id, 'disability_certification_form', 'pending'],
                        [item.application_id, item.constituent_id, item.admin_id, item.letter_type, item.status]
-          text = inflated_pdf_text(item.pdf_letter.download)
+          bytes = item.pdf_letter.download
+          assert_includes bytes, '/FontFile2'
+          assert_no_match(%r{/BaseFont /Helvetica}, bytes)
+          text = extracted_pdf_text(bytes)
           ['Disability Certification Form', 'Applicant: Maya Chen', 'DOB: January 15, 1980',
            'Name: Dr. Casey Reed', 'Email: casey@example.test', 'Phone: 410-555-0100', 'Fax: 410-555-0101'].each do |line|
             assert_includes text, line

@@ -14,6 +14,8 @@ module Admin
     # Email controls, then template pairs grouped by category, then shared components.
     def index
       @control_panel = EmailDelivery::ControlPanel.new
+      @show_print_queue_link = flash[:show_print_queue_link]
+      flash.delete(:show_print_queue_link)
     end
 
     # GET /admin/email_templates/:id
@@ -395,10 +397,12 @@ module Admin
     end
 
     def update_all_templates(enabled:)
-      count = EmailDelivery::ControlWriter.set_all_template_pairs(
-        enabled: enabled, actor: current_user, operation_id: params[:operation_id].presence || SecureRandom.uuid
+      result = EmailDelivery::ControlWriter.set_all_template_pairs(
+        enabled: enabled, actor: current_user, operation_id: params[:operation_id].presence || SecureRandom.uuid,
+        expected_version: params[:expected_version]
       )
-      redirect_to admin_email_templates_path, notice: t('admin.email_delivery.bulk_result', count: count, locale: :en)
+      flash[:show_print_queue_link] = true if result.letters_affected
+      redirect_to admin_email_templates_path, **helpers.email_bulk_template_flash(result, enabled: enabled)
     rescue ActiveRecord::ActiveRecordError => e
       Rails.logger.error("Template bulk change failed: #{e.class}")
       redirect_to admin_email_templates_path, alert: t('admin.email_delivery.bulk_failed', locale: :en)

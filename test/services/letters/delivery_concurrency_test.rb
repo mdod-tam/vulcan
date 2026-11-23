@@ -150,6 +150,42 @@ module Letters
       [holder, contender].compact.each { |thread| reap_thread(thread, timeout: 5, suppress_errors: true) }
     end
 
+    test 'print confirmation waiting on a cancellation cannot overwrite it' do
+      item = queue { StringIO.new('%PDF letter') }
+      Delivery.export!([item.id], actor: @admin)
+      released_at = item.reload.released_at
+      ready = Queue.new
+      release = Queue.new
+      holder_pids = Queue.new
+      confirmation = Queue.new
+      holder = on_own_connection do
+        holder_pids << backend_pid
+        PrintQueueItem.transaction do
+          Delivery.cancel!(item, reason: 'operator_canceled', actor: @admin)
+          ready << true
+          release.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pids, thread: holder)
+      wait_for_signal(ready, thread: holder)
+      contender_pids = Queue.new
+      contender = on_own_connection do
+        contender_pids << backend_pid
+        Delivery.mark_printed!([item.id], actor: @admin)
+      rescue Delivery::ReleaseDenied => e
+        confirmation << e
+      end
+      confirm_blocked_then_release(wait_for_signal(contender_pids, thread: contender), holder_pid: holder_pid,
+                                                                                       release_queue: release, holder_thread: holder, contender_thread: contender)
+      assert_instance_of Delivery::ReleaseDenied, confirmation.pop(true)
+      assert_predicate item.reload, :canceled?
+      assert_equal released_at, item.released_at
+      assert_nil item.printed_at
+    ensure
+      release << true if holder&.alive?
+      [holder, contender].compact.each { |thread| reap_thread(thread, timeout: 5, suppress_errors: true) }
+    end
+
     private
 
     def queue(&)

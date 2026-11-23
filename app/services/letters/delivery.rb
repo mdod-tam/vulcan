@@ -16,15 +16,18 @@ module Letters
 
     Export = Data.define(:bytes, :filename, :content_type)
 
-    def self.queue!(recipient:, application:, letter_type:, context:, actor: nil, secure_request_form: nil, request_key: nil) # rubocop:disable Metrics/ParameterLists
+    def self.queue!(recipient:, application:, letter_type:, context:, actor: nil, secure_request_form: nil, request_key: nil, finalize_request: nil) # rubocop:disable Metrics/ParameterLists
       action = context&.dig('mail_action')
       EmailDelivery.verify!(action, context: context, channel: 'letter')
+      # A replacement gets a new request ID at admission. This key keeps the preview ID.
+      # Checking the original request under lock prevents duplicate replacements.
       key = [action, application&.id, recipient.id, request_key || context.fetch('request_id')].join(':')
       existing = PrintQueueItem.find_by(delivery_key: key)
       return retry_item!(existing) if existing
 
       recipient.reload
       application&.reload
+      verify_mailing_address!(recipient, action)
       identity = PrintQueueItem.identity_for(recipient: recipient, application: application, secure_request_form: secure_request_form)
       pdf = yield
       raise 'Letter renderer did not produce a PDF' unless pdf
@@ -33,11 +36,11 @@ module Letters
       item = PrintQueueItem.new(constituent: recipient, application: application, letter_type: letter_type, admin: actor,
                                 delivery_key: key, delivery_context: context, delivery_identity: identity,
                                 secure_request_form: secure_request_form)
-      admit!(item, blob)
+      admit!(item, blob, finalize_request: finalize_request)
     rescue ActiveRecord::RecordNotUnique
       retry_item!(PrintQueueItem.find_by!(delivery_key: key))
     rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
-      decision = e.is_a?(EmailDelivery::ConfigurationError) ? EmailDelivery::Decision.configuration_error(e.reason) : EmailDelivery::Decision.suppressed(e.reason)
+      decision = e.is_a?(EmailDelivery::ConfigurationError) ? e.decision : EmailDelivery::Decision.suppressed(e.reason)
       EmailDelivery::Outcome.record_not_sent(decision, context: context&.merge('channel' => 'letter'), mail_action: action)
       raise
     ensure
@@ -51,20 +54,38 @@ module Letters
     end
     private_class_method :clean_render_artifacts
 
-    def self.admit!(item, blob)
+    def self.verify_mailing_address!(recipient, action)
+      return unless EmailDelivery::Catalog.mail_action(action)&.routing == :preference
+      return if recipient.complete_mailing_address?
+
+      reason = :incomplete_mailing_address
+      raise EmailDelivery::ConfigurationError.new(EmailDelivery::ControlPanel.reason_text(reason), reason: reason)
+    end
+    private_class_method :verify_mailing_address!
+
+    def self.admit!(item, blob, finalize_request: nil)
       context = item.delivery_context
-      EmailDelivery::Policy.with_locked_controls([context], channel: :letter) do
-        User.where(id: item.constituent_id).lock.load
+      EmailDelivery::Policy.with_locked_controls([context], channel: :letter, requires_new: finalize_request.present?) do
+        # The callback issues the successor and retires the previous request in this transaction.
+        finalize_request&.call(item)
+        User.where(id: [item.constituent_id, item.secure_request_form&.recipient_id]).order(:id).lock.load
         item.application&.lock!
+        lock_recipient_relationships([item.application]) if item.secure_request_form
         item.secure_request_form&.lock!
         item.constituent.reload
+        verify_mailing_address!(item.constituent, context['mail_action'])
+        raise ApplicationMailer::DeliverySkipped.new(reason: 'request_no_longer_active') if item.secure_request_form && !item.secure_request_form.postal_request_open?
+
         identity = PrintQueueItem.identity_for(recipient: item.constituent, application: item.application, secure_request_form: item.secure_request_form)
         raise ApplicationMailer::DeliverySkipped.new(reason: 'delivery_identity_changed') unless identity == item.delivery_identity
+        if item.secure_request_form && !item.secure_request_form.postal_recipient_authorized?(application: item.application, address_owner_id: item.constituent_id)
+          raise ApplicationMailer::DeliverySkipped.new(reason: 'letter_recipient_ineligible')
+        end
 
         EmailDelivery.verify!(context['mail_action'], context: context, channel: :letter)
         item.pdf_letter.attach(blob)
         item.save!
-        Notification.find_by(id: context['notification_id'])&.record_delivery_handoff!(channel: :letter, state: :queued)
+        Notification.find_by(id: item.delivery_context['notification_id'])&.record_delivery_handoff!(channel: :letter, state: :queued)
       end
       item
     end
@@ -96,20 +117,71 @@ module Letters
       end
     end
 
-    def self.cancel!(item, reason:, actor: nil)
-      with_locked_items([item]) { |locked| locked.first.cancel_unreleased!(reason: reason, actor: actor) }
-      record_refusal(item, EmailDelivery::Decision.suppressed(reason)) if item.reload.canceled?
+    def self.mark_in_outgoing_mail!(ids, actor:)
+      items = load_items!(ids)
+      with_locked_items(items, controls: true) do |locked|
+        refusals = locked.reject(&:mail_handoff_at?).each_with_object({}) do |item, rejected|
+          if (reason = mail_handoff_refusal(item))
+            rejected[item.id] = reason
+          end
+        end
+        raise ReleaseDenied, refusals if refusals.any?
+
+        locked.each { |item| item.confirm_mail_handoff!(actor: actor) }
+      end
     end
+
+    def self.mail_handoff_refusal(item)
+      return 'This letter was canceled.' if item.canceled?
+      return 'Print only.' unless item.outgoing_letter?
+      return 'Release this letter first.' unless item.released_at?
+      return 'This copy was discarded.' if item.mail_discarded_at?
+
+      decision = item.delivery_decision
+      return if decision.allowed?
+
+      EmailDelivery::ControlPanel.reason_text(decision.reason).upcase_first
+    end
+
+    def self.discard_printed_copy!(item, actor:)
+      with_locked_items([item]) { |locked| locked.sole.discard_printed_copy!(actor: actor) }
+    end
+
+    def self.close_follow_up!(item, actor:)
+      with_locked_items([item]) { |locked| locked.sole.close_follow_up!(actor: actor) }
+    end
+
+    def self.cancel!(item, reason:, actor: nil, unreleased_only: false)
+      with_locked_items([item]) do |locked|
+        current = locked.first
+        next false if unreleased_only && current.released_at?
+
+        cancel_locked!(current, reason: reason, actor: actor)
+      end
+    end
+
+    # Issuance holds the application, prior forms, and all pending letter recipients.
+    def self.cancel_replaced_requests!(request_ids, actor:)
+      cancel_request_letters!(PrintQueueItem.pending, request_ids, actor: actor)
+    end
+
+    # The response/revocation writer has already locked and closed these forms.
+    def self.cancel_closed_requests!(request_ids, actor:)
+      cancel_request_letters!(PrintQueueItem.unreleased, request_ids, actor: actor)
+    end
+
+    def self.cancel_request_letters!(scope, request_ids, actor:)
+      scope.where(secure_request_form_id: request_ids).order(:id).lock.each do |item|
+        cancel_locked!(item, reason: 'request_no_longer_active', actor: actor)
+      end
+    end
+    private_class_method :cancel_request_letters!
 
     # Merge owns the user/application locks already. Cancellation preserves the artifact's old owner.
     def self.cancel_for_recipient_change!(recipient_id:, actor:)
       items = PrintQueueItem.unreleased.where(constituent_id: recipient_id).order(:id).to_a
       with_locked_items(items) do |locked|
-        locked.count do |item|
-          canceled = item.cancel_unreleased!(reason: 'delivery_identity_changed', actor: actor)
-          record_refusal(item, EmailDelivery::Decision.suppressed(:delivery_identity_changed)) if canceled
-          canceled
-        end
+        locked.count { |item| !item.released_at? && cancel_locked!(item, reason: 'delivery_identity_changed', actor: actor) }
       end
     end
 
@@ -120,10 +192,18 @@ module Letters
           next unless current&.pending? && current.released_at.nil?
 
           decision = current.delivery_decision
-          record_refusal(current, decision) if decision.suppressed? && current.cancel_unreleased!(reason: decision.reason, actor: nil)
+          cancel_locked!(current, reason: decision.reason, actor: nil) if decision.suppressed?
         end
       end
     end
+
+    def self.cancel_locked!(item, reason:, actor:)
+      return false unless item.cancel_pending!(reason: reason, actor: actor)
+
+      record_refusal(item, EmailDelivery::Decision.suppressed(reason)) unless item.released_at?
+      true
+    end
+    private_class_method :cancel_locked!
 
     def self.load_items!(ids)
       selected = Array(ids).map(&:to_s).uniq
@@ -139,9 +219,11 @@ module Letters
     def self.with_locked_items(items, controls: false, &block)
       operation = lambda do
         PrintQueueItem.transaction do
-          User.where(id: items.map(&:constituent_id)).order(:id).lock.load
-          Application.where(id: items.map(&:application_id)).order(:id).lock.load
-          SecureRequestForm.where(id: items.map(&:secure_request_form_id)).order(:id).lock.load
+          requests = SecureRequestForm.where(id: items.map(&:secure_request_form_id)).order(:id)
+          User.where(id: items.map(&:constituent_id) + requests.pluck(:recipient_id)).order(:id).lock.load
+          applications = Application.where(id: items.map(&:application_id)).order(:id).lock.to_a
+          lock_recipient_relationships(applications) if items.any?(&:secure_request_form_id?)
+          requests.lock.load
           locked = PrintQueueItem.where(id: items.map(&:id)).order(:id).lock.to_a
           block.call(locked)
         end
@@ -153,6 +235,11 @@ module Letters
       end
     end
     private_class_method :with_locked_items
+
+    def self.lock_recipient_relationships(applications)
+      GuardianRelationship.where(dependent_id: applications.compact.map(&:user_id)).order(:id).lock.load
+    end
+    private_class_method :lock_recipient_relationships
 
     def self.decisions_for(items)
       items.each_with_object({}) do |item, refusals|
@@ -166,8 +253,10 @@ module Letters
       items.each do |item|
         next unless (decision = refusals[item.id])
 
-        cancel!(item, reason: decision.reason, actor: actor) if decision.suppressed? && item.released_at.nil?
-        record_refusal(item, decision) unless item.canceled?
+        canceled_now = decision.suppressed? && item.released_at.nil? &&
+                       cancel!(item, reason: decision.reason, actor: actor, unreleased_only: true)
+        item.reload
+        record_refusal(item, decision) if !canceled_now && (!item.canceled? || item.released_at?)
       end
       raise(ReleaseDenied, refusals.transform_values { |decision| EmailDelivery::ControlPanel.reason_text(decision.reason) })
     end
@@ -195,16 +284,23 @@ module Letters
       missing = items.reject { |item| item.pdf_letter.attached? }
       raise(ReleaseDenied, missing.to_h { |item| [item.id, 'The PDF is missing. Issue a new letter.'] }) if missing.any?
 
-      return Export.new(bytes: items.first.pdf_letter.download, filename: items.first.pdf_filename, content_type: 'application/pdf') if items.one?
+      return Export.new(bytes: download_pdf!(items.first), filename: items.first.pdf_filename, content_type: 'application/pdf') if items.one?
 
       bytes = Zip::OutputStream.write_buffer do |zip|
         items.each do |item|
           zip.put_next_entry(item.pdf_filename)
-          zip.write(item.pdf_letter.download)
+          zip.write(download_pdf!(item))
         end
       end.string
       Export.new(bytes: bytes, filename: "letters_#{Time.current.to_date.iso8601}.zip", content_type: 'application/zip')
     end
     private_class_method :build_export
+
+    def self.download_pdf!(item)
+      item.pdf_letter.download
+    rescue ActiveStorage::FileNotFoundError
+      raise ReleaseDenied, { item.id => 'The PDF is missing. Issue a new letter.' }
+    end
+    private_class_method :download_pdf!
   end
 end

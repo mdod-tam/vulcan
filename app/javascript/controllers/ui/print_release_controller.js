@@ -3,6 +3,7 @@ import { Turbo } from "@hotwired/turbo-rails"
 
 export default class extends Controller {
   static targets = ["all", "letter", "submit", "status"]
+  static values = { batch: { type: Boolean, default: true } }
 
   connect() {
     this.selectionChanged()
@@ -14,12 +15,20 @@ export default class extends Controller {
   }
 
   selectionChanged() {
-    const selected = this.letterTargets.filter(letter => letter.checked).length
+    const selection = this.letterTargets.filter(letter => letter.checked)
+    const selected = selection.length
     if (this.hasAllTarget) {
       this.allTarget.checked = selected > 0 && selected === this.letterTargets.length
       this.allTarget.indeterminate = selected > 0 && selected < this.letterTargets.length
     }
-    this.submitTargets.forEach(button => { button.disabled = selected === 0 })
+    this.submitTargets.forEach(button => {
+      button.disabled = (this.batchValue && selected === 0) ||
+        (button.dataset.mail === "true" && selection.some(letter => letter.dataset.canMail !== "true"))
+      if (button.dataset.countLabel) {
+        button.dataset.defaultLabel ||= button.textContent
+        button.textContent = selected > 0 ? button.dataset.countLabel.replace("{count}", selected) : button.dataset.defaultLabel
+      }
+    })
   }
 
   async download(event) {
@@ -58,9 +67,9 @@ export default class extends Controller {
       link.click()
       link.remove()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
-      if (this.element.isConnected) Turbo.visit(window.location.href, { action: "replace" })
+      if (this.element.isConnected) Turbo.visit(response.headers.get("Content-Location") || window.location.href, { action: "replace" })
     } catch (_error) {
-      this.statusTarget.textContent = "The download could not be confirmed. Refresh the queue to check release status, then try downloading again."
+      this.statusTarget.textContent = "Couldn’t confirm the download. Refresh to check release status before retrying."
     } finally {
       this.busy = false
       controls.forEach(([control, disabled]) => { control.disabled = disabled })

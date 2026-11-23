@@ -38,6 +38,7 @@ module Reports
 
     def current_metrics
       stage_counts = approved_stage_counts
+      print_queue_count = PrintQueueItem.outstanding.count + PrintQueueItem.follow_up_needed.count + Notification.letter_preparation_attention.count
       {
         open_applications_count: Application.active.count,
         pending_services_count: Application.status_approved.count,
@@ -51,7 +52,7 @@ module Reports
           filter.fetch(:stages).sum { |stage| stage_counts[stage] }
         end,
         approved_training_waiting_count: self.class.approved_training_waiting_count,
-        print_queue_pending_count: PrintQueueItem.unreleased.count
+        print_queue_pending_count: print_queue_count
       }
     end
 

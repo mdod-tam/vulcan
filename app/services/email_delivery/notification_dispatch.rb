@@ -80,7 +80,7 @@ module EmailDelivery
         process_notification_mail(notification, mailer_class, method_name, requested_channel: requested_channel)
       end
     rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
-      decision = e.is_a?(EmailDelivery::ConfigurationError) ? EmailDelivery::Decision.configuration_error(e.reason) : EmailDelivery::Decision.suppressed(e.reason)
+      decision = e.is_a?(EmailDelivery::ConfigurationError) ? e.decision : EmailDelivery::Decision.suppressed(e.reason)
       notification.mark_delivery_not_sent!(decision, channel: inferred_actual_delivery_channel(notification))
       ['none', notification.reload.metadata['delivery_route_reason']]
     end
@@ -94,6 +94,7 @@ module EmailDelivery
 
       raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
 
+      notification.update_metadata!(:letter_preparation_requested, true) if actual_delivery_channel == 'letter' && mail_delivery.is_a?(ActionMailer::MessageDelivery)
       outcome = queue_mail_delivery(mail_delivery)
       raise StandardError, "Mail job for '#{notification.action}' could not be queued" if outcome == :enqueue_failed
 

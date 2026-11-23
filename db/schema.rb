@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_19_230000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_22_233000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -769,10 +769,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_230000) do
     t.datetime "canceled_at"
     t.string "cancellation_reason"
     t.bigint "secure_request_form_id"
+    t.datetime "mail_handoff_at"
+    t.bigint "mail_handoff_by_id"
+    t.datetime "mail_discarded_at"
+    t.datetime "follow_up_closed_at"
     t.index ["admin_id"], name: "index_print_queue_items_on_admin_id"
     t.index ["application_id"], name: "index_print_queue_items_on_application_id"
     t.index ["constituent_id"], name: "index_print_queue_items_on_constituent_id"
     t.index ["delivery_key"], name: "index_print_queue_items_on_delivery_key", unique: true, where: "(delivery_key IS NOT NULL)"
+    t.index ["mail_handoff_by_id"], name: "index_print_queue_items_on_mail_handoff_by_id"
     t.index ["secure_request_form_id"], name: "index_print_queue_items_on_secure_request_form_id"
     t.check_constraint "letter_type >= 0 AND letter_type <= 13", name: "check_print_queue_items_on_letter_type"
   end
@@ -1439,6 +1444,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_19_230000) do
   add_foreign_key "print_queue_items", "secure_request_forms"
   add_foreign_key "print_queue_items", "users", column: "admin_id"
   add_foreign_key "print_queue_items", "users", column: "constituent_id"
+  add_foreign_key "print_queue_items", "users", column: "mail_handoff_by_id"
   add_foreign_key "product_resources", "products"
   add_foreign_key "proof_reviews", "applications"
   add_foreign_key "proof_reviews", "users", column: "admin_id"

@@ -22,27 +22,34 @@ module EmailDelivery
   # A required control row is missing or cannot be read. Never a reason to send.
   class ConfigurationError < StandardError
     MESSAGE = 'Communication settings are missing or misconfigured'
-    attr_reader :reason
+    attr_reader :reason, :unsupported_codepoint
 
-    def initialize(message = MESSAGE, reason: nil)
+    def initialize(message = MESSAGE, reason: nil, unsupported_codepoint: nil)
       @reason = reason
+      @unsupported_codepoint = unsupported_codepoint
       super(message)
     end
+
+    def decision = Decision.configuration_error(reason, unsupported_codepoint: unsupported_codepoint)
   end
 
   class NotAccepted < StandardError; end
 
-  Decision = Data.define(:outcome, :reason) do
+  Decision = Data.define(:outcome, :reason, :unsupported_codepoint) do
+    def initialize(unsupported_codepoint: nil, **)
+      super
+    end
+
     def self.allowed = new(outcome: :allowed, reason: nil)
     def self.suppressed(reason) = new(outcome: :suppressed, reason: reason.to_s)
-    def self.configuration_error(reason) = new(outcome: :configuration_error, reason: reason.to_s)
+    def self.configuration_error(reason, unsupported_codepoint: nil) = new(outcome: :configuration_error, reason: reason.to_s, unsupported_codepoint:)
 
     def allowed? = outcome == :allowed
     def suppressed? = outcome == :suppressed
     def configuration_error? = outcome == :configuration_error
 
     def raise_if_configuration_error!
-      raise ConfigurationError.new(reason: reason) if configuration_error?
+      raise ConfigurationError.new(reason: reason, unsupported_codepoint: unsupported_codepoint) if configuration_error?
     end
   end
 

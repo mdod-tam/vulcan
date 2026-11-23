@@ -95,6 +95,7 @@ group :test do
   gem 'database_cleaner-active_record'
   gem 'minitest-rails', '~> 8.1'
   gem 'mocha', '~> 3.1', require: false
+  gem 'pdf-reader', '~> 2.16', require: false
   gem 'rails-controller-testing'
   gem 'zlib', require: false
 end

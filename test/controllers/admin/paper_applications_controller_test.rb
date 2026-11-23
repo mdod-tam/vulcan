@@ -14,7 +14,7 @@ module Admin
       setup_paper_application_context
 
       def @controller.redirect_to(*args)
-        flash[:notice] = args.include?(:letter) ? 'Rejection letter has been queued for printing' : 'Rejection notification has been sent'
+        flash[:notice] = args.include?(:letter) ? 'Rejection letter submitted for preparation' : 'Rejection notification has been sent'
         super
       end
     end
@@ -1211,7 +1211,7 @@ module Admin
       assert_equal 'dependent.recipient@example.com', captured_recipient['email']
     end
 
-    test 'should send rejection letter notification' do
+    test 'the rejection letter receipt shows preparation and links the admitted letter' do
       recipient_email = "john.doe.#{SecureRandom.hex(4)}@example.com"
       create(:constituent, email: recipient_email, phone: '555-123-4567')
 
@@ -1226,8 +1226,82 @@ module Admin
         additional_notes: 'Income exceeds threshold'
       }
 
-      assert_redirected_to admin_applications_path
-      assert_match 'Rejection letter has been queued for printing', flash[:notice]
+      receipt = Notification.paper_rejection_letters.find_by!(recipient: @admin)
+      assert_redirected_to admin_paper_rejection_letter_path(receipt)
+      follow_redirect!
+      assert_select 'p', text: 'Waiting for PDF'
+      assert_select 'a', text: 'Refresh status'
+
+      perform_enqueued_jobs(only: EmailDelivery::MailDeliveryJob)
+      get admin_paper_rejection_letter_path(receipt)
+      assert_select 'p', text: 'Ready to print'
+      assert_select 'a', text: 'Review letter'
+    end
+
+    test 'a refused rejection letter shows its status on the named receipt' do
+      recipient = create(:constituent)
+      EmailDelivery::ControlWriter.set(name: EmailDelivery::CHANNEL_CONTROLS.fetch('letter'), enabled: false, actor: @admin, operation_id: SecureRandom.uuid)
+
+      assert_no_enqueued_jobs(only: EmailDelivery::MailDeliveryJob) do
+        post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+          first_name: recipient.first_name, last_name: recipient.last_name, email: recipient.email,
+          household_size: '2', annual_income: '100000', communication_preference: 'letter'
+        }
+      end
+      follow_redirect!
+      assert_select 'p', text: 'Letter not queued'
+      assert_select 'p', text: 'Printed letters are turned off'
+      assert_select 'button', text: 'Record as mailed', count: 0
+
+      receipt = Notification.paper_rejection_letters.find_by!(recipient: @admin)
+      assert_no_difference -> { Event.where(auditable: receipt, action: 'paper_rejection_mailed_manually').count } do
+        post record_manual_mail_admin_paper_rejection_letter_path(receipt)
+      end
+      assert_equal 'Can’t record mailing for this letter.', flash[:alert]
+      assert_nil receipt.reload.metadata['mailed_manually_at']
+    end
+
+    test 'a preparation error can be resolved by recording manual mailing once' do
+      recipient = create(:constituent, first_name: 'สวัสดี')
+      post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+        first_name: recipient.first_name, last_name: recipient.last_name, email: recipient.email,
+        household_size: '2', annual_income: '100000', communication_preference: 'letter'
+      }
+      receipt = Notification.paper_rejection_letters.find_by!(recipient: @admin)
+      error = assert_raises(EmailDelivery::ConfigurationError) { perform_enqueued_jobs(only: EmailDelivery::MailDeliveryJob) }
+      assert_no_match(/สวัสดี/, error.message)
+      assert_equal 'U+0E2A', receipt.reload.metadata.dig('delivery_error', 'unsupported_codepoint')
+      get admin_paper_rejection_letter_path(receipt)
+      assert_select 'p', text: /Unsupported character \(U\+0E2A\)/
+      assert_select 'button', text: 'Record as mailed'
+
+      assert_difference -> { Event.where(auditable: receipt, action: 'paper_rejection_mailed_manually').count }, 1 do
+        2.times { post record_manual_mail_admin_paper_rejection_letter_path(receipt) }
+      end
+      assert_equal 'Already marked as mailed.', flash[:notice]
+      follow_redirect!
+      assert_select 'p', text: 'Mailed by hand'
+    end
+
+    test 'a rejection letter receipt with no recorded outcome links to the print queue' do
+      receipt = create(:notification, action: Notification::PAPER_REJECTION_LETTER_ACTION, recipient: @admin,
+                                      notifiable: create(:constituent), delivery_status: nil)
+
+      get admin_paper_rejection_letter_path(receipt)
+
+      assert_select "a[href='#{admin_print_queue_index_path}']", text: 'Check the print queue'
+    end
+
+    test 'the receipt names the correspondence category that blocked the letter' do
+      recipient = create(:constituent)
+      EmailDelivery::ControlWriter.set(name: EmailDelivery.category_control(:application), enabled: false, actor: @admin, operation_id: SecureRandom.uuid)
+
+      post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+        first_name: recipient.first_name, last_name: recipient.last_name, email: recipient.email,
+        household_size: '2', annual_income: '100000', communication_preference: 'letter'
+      }
+      follow_redirect!
+      assert_select 'p', text: 'Application communications are turned off'
     end
 
     test 'send_rejection_notification is gated when income collection is disabled' do

@@ -43,7 +43,7 @@ es:
     recipient_statuses:
       suppressed: No enviado
       letter_blocked: No enviado
-      letter_canceled: No enviado
+      letter_canceled: Carta cancelada
       bounced: Fallo de entrega
       docuseal: Invitación para firmar solicitada
     statuses:
@@ -57,8 +57,8 @@ es:
       complained: Marcado como correo no deseado
       unknown: Entrega desconocida
       letter_printed: Carta marcada como impresa
-      letter_released: Carta liberada para impresión
-      letter_canceled: Carta cancelada antes de liberarse
+      letter_released: Carta liberada
+      letter_canceled: Carta cancelada
       sms_submitted: Mensaje de texto enviado al proveedor
       docuseal: Invitación de DocuSeal solicitada
       letter_blocked: Carta bloqueada — esperando cancelación
@@ -82,7 +82,6 @@ es:
       letter_printed: El personal marcó la carta como impresa; no se ha confirmado
         su recepción.
       letter_released: La carta se liberó al proceso de impresión.
-      letter_canceled: La carta se canceló antes de liberarse.
       sms_submitted: El mensaje de texto se envió a su proveedor; aquí no se confirma
         su recepción.
       docuseal: DocuSeal gestiona esta invitación. Los datos de Postmark no confirman

@@ -1,4 +1,4 @@
-<%# locals: (letters:, title:, release:, confirm:) -%>
+<%# locals: (letters:, title:, mode:) -%>
 <section class="mb-8" aria-label="<%= title %>">
   <h2 class="mb-3 text-xl font-semibold"><%= title %> (<%= letters.size %>)</h2>
   <% if letters.empty? %>
@@ -6,50 +6,78 @@
   <% else %>
     <%= form_with url: download_batch_admin_print_queue_index_path, method: :post,
                   data: { turbo: false, controller: 'print-release', action: 'submit->print-release#download' } do %>
-      <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50 text-left text-sm">
-            <tr>
-              <% if release %>
-                <th scope="col" class="p-3">
-                  <input type="checkbox" aria-label="Select all letters in <%= title %>" data-print-release-target="all"
-                         data-action="change->print-release#selectAll" class="h-4 w-4 rounded border-gray-400 text-primary-700">
-                </th>
-              <% end %>
-              <th scope="col" class="p-3">Letter</th>
-              <th scope="col" class="p-3">Recipient</th>
-              <th scope="col" class="p-3">Created</th>
-              <th scope="col" class="p-3">Details</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200 text-sm">
-            <% letters.each do |letter| %>
-              <tr>
-                <% if release %>
-                  <td class="p-3"><%= check_box_tag 'letter_ids[]', letter.id, @selected_letter_ids.include?(letter.id.to_s),
-                                                    data: { print_release_target: 'letter', action: 'change->print-release#selectionChanged' },
-                                                    id: "letter-#{letter.id}", aria: { label: "Select letter ##{letter.id} for #{letter.constituent.full_name}" },
-                                                    class: 'h-4 w-4 rounded border-gray-400 text-primary-700' %></td>
-                <% end %>
-                <td class="p-3"><%= letter.letter_type.humanize %> #<%= letter.id %></td>
-                <td class="p-3"><%= letter.constituent.full_name %></td>
-                <td class="p-3"><%= l(letter.created_at.to_date, format: :long) %></td>
-                <td class="p-3"><%= link_to "Review letter ##{letter.id}", admin_print_queue_path(letter), class: 'text-primary-700 underline' %></td>
-              </tr>
+      <%= hidden_field_tag :ids, params[:ids], id: nil if mode == :batch %>
+      <% if mode != :history && letters.any? { |letter| print_queue_selectable?(letter) } %>
+        <label class="mb-2 inline-flex min-h-11 cursor-pointer items-center gap-3 font-medium">
+          <input type="checkbox" aria-label="Select all letters in <%= title %>" data-print-release-target="all"
+                 data-action="change->print-release#selectAll" class="h-6 w-6 shrink-0 rounded border-gray-600">
+          Select all
+        </label>
+      <% end %>
+      <ul role="list" class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+        <% letters.each do |letter| %>
+          <li class="grid min-w-0 gap-2 p-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <% if mode != :history && print_queue_selectable?(letter) %>
+              <label class="flex min-h-11 min-w-0 cursor-pointer items-start gap-3">
+                <%= check_box_tag('letter_ids[]', letter.id, @selected_letter_ids.include?(letter.id.to_s),
+                                  id: "letter-#{letter.id}", class: 'mt-0.5 h-6 w-6 shrink-0 rounded border-gray-600',
+                                  data: { print_release_target: 'letter', action: 'change->print-release#selectionChanged',
+                                          can_mail: print_queue_can_mail?(letter, @mail_refusals) },
+                                  aria: { describedby: (dom_id(letter, :mail_warning) if @mail_refusals.key?(letter.id)) }) %>
+                <span class="break-words"><strong><%= print_letter_type_label(letter) %> #<%= letter.id %></strong><br><%= letter.constituent.full_name %></span>
+              </label>
+            <% else %>
+              <p class="break-words"><strong><%= print_letter_type_label(letter) %> #<%= letter.id %></strong><br><%= letter.constituent.full_name %></p>
             <% end %>
-          </tbody>
-        </table>
-      </div>
-      <% if release %>
+            <div class="text-gray-800">
+              <% if mode != :ready %>
+                <p class="font-medium"><%= print_letter_stage(letter) %></p>
+              <% end %>
+              <% if mode == :batch && !letter.outgoing_letter? && letter.pending? %>
+                <p>Print only</p>
+              <% end %>
+              <% if letter.mail_handoff_at %>
+                <p><%= l(letter.mail_handoff_at, format: :short) %> by <%= letter.mail_handoff_by.full_name %></p>
+              <% elsif letter.printed_at %>
+                <p><%= l(letter.printed_at, format: :short) %><%= " by #{letter.admin.full_name}" if letter.admin %></p>
+              <% elsif letter.canceled_at %>
+                <p><%= l(letter.canceled_at.to_date, format: :long) %></p>
+              <% elsif letter.released_at %>
+                <p>Released <%= l(letter.released_at.to_date, format: :long) %></p>
+              <% else %>
+                <p>Created <%= l(letter.created_at.to_date, format: :long) %></p>
+              <% end %>
+            </div>
+            <%= link_to "Review letter ##{letter.id}", admin_print_queue_path(letter), class: 'w-fit self-start text-primary-700 underline' %>
+            <% if (reason = @mail_refusals[letter.id]) %>
+              <p id="<%= dom_id(letter, :mail_warning) %>" class="font-semibold text-danger-800 sm:col-span-full"><%= "Do not mail. #{reason}" %></p>
+            <% end %>
+          </li>
+        <% end %>
+      </ul>
+      <% if mode != :history && letters.any? { |letter| print_queue_selectable?(letter) } %>
+        <% if mode == :ready %>
+          <p class="mt-3 text-gray-800">Check the addresses. Review the PDF before printing.</p>
+        <% elsif mode == :batch && letters.any?(&:pending?) %>
+          <p class="mt-3 text-gray-800">Review the PDF before printing.</p>
+        <% end %>
         <div class="mt-3 flex flex-wrap gap-3">
-          <%= submit_tag(confirm ? 'Download selected again' : 'Release and download selected', data: { print_release_target: 'submit' },
-                                                                                                class: 'btn btn-primary') %>
-          <% if confirm %>
-            <%= button_tag 'Mark selected as printed', type: :submit, formaction: mark_batch_as_printed_admin_print_queue_index_path,
-                                                       data: { print_release_target: 'submit' }, class: 'btn btn-success' %>
+          <% if mode != :ready && letters.any? { |letter| print_queue_selectable?(letter) && print_queue_can_mail?(letter, @mail_refusals) } %>
+            <%= button_tag('Mark in outgoing mail',
+                           type: :submit, formaction: mark_in_outgoing_mail_admin_print_queue_index_path,
+                           data: { print_release_target: 'submit', count_label: 'Mark {count} in outgoing mail', mail: true }, class: 'btn btn-primary') %>
+          <% end %>
+          <% if mode.in?(%i[batch released]) && letters.any?(&:pending?) %>
+            <%= button_tag('Mark selected as printed',
+                           type: :submit, formaction: mark_batch_as_printed_admin_print_queue_index_path,
+                           data: { print_release_target: 'submit', count_label: 'Mark {count} printed' }, class: 'btn btn-secondary') %>
+          <% end %>
+          <% if mode.in?(%i[ready released]) %>
+            <%= submit_tag(mode == :ready ? 'Release and download selected' : 'Download selected again',
+                           data: { print_release_target: 'submit' }, class: mode == :ready ? 'btn btn-primary' : 'btn btn-secondary') %>
           <% end %>
         </div>
-        <p data-print-release-target="status" role="status" class="mt-2 text-sm text-gray-700"></p>
+        <p data-print-release-target="status" role="status" class="mt-2 text-gray-800"></p>
       <% end %>
     <% end %>
   <% end %>

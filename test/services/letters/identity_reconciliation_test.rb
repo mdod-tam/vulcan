@@ -58,8 +58,8 @@ module Letters
       get admin_application_path(@application)
 
       assert_response :success
-      assert_select 'td span', text: I18n.t('outbound_delivery.letter_blocked')
-      assert_select 'td', text: I18n.t('outbound_delivery.letter_canceled'), count: 0
+      assert_select 'td [data-delivery-status="letter_blocked"] span', text: I18n.t('delivery_visibility.statuses.letter_blocked')
+      assert_select 'td [data-delivery-status="letter_canceled"]', count: 0
       assert_predicate item.reload, :pending?
       assert_nil item.canceled_at
     end
