@@ -257,6 +257,25 @@ module Admin
       end
     end
 
+    test 'equipment reports link to bids awaiting award' do
+      awaiting_award = Equipment::Bidding.new(actor: @admin).create!(
+        number: 'READY-BID', needs: [{ id: @need.id, quantity: 1, lock_version: @need.lock_version }]
+      )
+      unreserved = BidGroup.create!(number: 'UNRESERVED-BID', purpose: 'direct_to_constituents')
+      filtered_path = admin_bid_groups_path(state: 'awaiting_award')
+
+      get equipment_distribution_admin_reports_path
+
+      assert_response :success
+      assert_select 'a[href=?]', filtered_path, text: 'Bid groups awaiting award'
+
+      get filtered_path
+
+      assert_response :success
+      assert_select 'article a[href=?]', admin_bid_group_path(awaiting_award)
+      assert_select 'article a[href=?]', admin_bid_group_path(unreserved), count: 0
+    end
+
     test 'empty batch reviews return to the filtered queue and stock reviews retain context' do
       context = { tab: 'needs_ordering', application_id: @need.application_id.to_s, search: 'Selected constituent', program_group: 'deaf' }
       [new_admin_bid_group_path, new_admin_stock_allocation_path].each do |path|

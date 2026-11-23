@@ -111,6 +111,37 @@ module Admin
       assert_selector '#vendor-activity-heading summary', text: 'Voucher vendor activity'
     end
 
+    test 'admins filter the training-limit report by trainer' do
+      Policy.find_or_initialize_by(key: 'max_training_sessions').update!(value: 2, updated_by: @admin)
+      trainer = create(:trainer, first_name: 'Sam', last_name: 'Chen')
+      other_trainer = create(:trainer, first_name: 'Lee', last_name: 'Park')
+      constituent = create(:constituent, first_name: 'Morgan', last_name: 'Bell')
+      other_constituent = create(:constituent, first_name: 'Jordan', last_name: 'Ellis')
+      application = create(:application, :approved, :with_all_proofs,
+                           application_date: Date.current, user: constituent, assigned_trainer: trainer)
+      other_application = create(:application, :approved, :with_all_proofs,
+                                 application_date: Date.current, user: other_constituent, assigned_trainer: other_trainer)
+      create(:training_session, :completed, application:, trainer:)
+      create(:training_session, :completed, application: other_application, trainer: other_trainer)
+
+      visit admin_dashboard_path
+      click_link 'View trainings dashboard'
+
+      within '#training-limit' do
+        assert_link 'Morgan Bell'
+        assert_link 'Jordan Ellis'
+        select 'Sam Chen', from: 'Trainer'
+        click_button 'Apply trainer filter'
+      end
+
+      within '#training-limit' do
+        assert_no_link 'Jordan Ellis'
+        assert_link 'Morgan Bell'
+        assert_field 'Trainer', with: trainer.id.to_s
+      end
+      take_screenshot('admin-training-limit-filtered', html: true)
+    end
+
     private
 
     def report_link(label, heading: label)

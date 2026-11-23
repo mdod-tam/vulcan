@@ -90,9 +90,11 @@ Every password input renders through [`shared/_password_field`](../../app/views/
 
 ## Charts
 
-[`chart_controller.js`](../../app/javascript/controllers/charts/chart_controller.js) registers the bar, line, and scatter components in the application bundle. Each chart has its own relatively positioned container with a set height and an accessible label.
+[`chart_controller.js`](../../app/javascript/controllers/charts/chart_controller.js) registers the bar, line, and scatter components in the application bundle. Each chart has its own relatively positioned container with a set height.
 
-`connect()` creates one responsive chart. `disconnect()` destroys it. Chart.js handles resizing, device-pixel-ratio changes, and tooltips. Admin reports pass native Chart.js options and render a table with the same data. Horizontal bars use `indexAxis: "y"`.
+`connect()` creates one responsive chart. `disconnect()` destroys it. Chart.js handles resizing, device-pixel-ratio changes, and tooltips. Horizontal bars use `indexAxis: "y"`.
+
+Admin reports pass native Chart.js options and hide the canvases from assistive technology. The chart data is available in named tables under **View data** or alongside the chart.
 
 Existing bar charts pass primary and comparison data with matching category keys. The optional `yAxisLabel` titles the numeric axis for either orientation. Chart.js reads the canvas's actual computed styles for layout and tooltip placement.
 
