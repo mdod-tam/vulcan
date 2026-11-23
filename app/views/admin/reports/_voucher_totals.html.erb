@@ -1,0 +1,9 @@
+<%# locals: (report:) -%>
+<details class="card px-4 py-2" id="voucher-statistics-heading">
+  <summary class="w-fit cursor-pointer py-2 font-semibold text-primary-800">Fiscal year voucher totals</summary>
+  <%= render 'table', caption: 'Vouchers by fiscal year', headers: ['Measure', "#{report.current_fy_label} to date", report.previous_fy_label],
+                      rows: [['Vouchers issued', report.current_fy_vouchers, report.previous_fy_vouchers],
+                             ['Active and unused', report.current_fy_active_vouchers, report.previous_fy_active_vouchers],
+                             ['Expired', report.current_fy_expired_vouchers, report.previous_fy_expired_vouchers],
+                             ['Value when issued', number_to_currency(report.current_fy_voucher_value), number_to_currency(report.previous_fy_voucher_value)]] %>
+</details>

@@ -312,11 +312,12 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :reports, only: %i[index show] do
+    resources :reports, only: :index do
       collection do
         get :equipment_distribution
         get :evaluation_metrics
         get :vendor_performance
+        get :mfr
       end
     end
 

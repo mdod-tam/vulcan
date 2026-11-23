@@ -1,0 +1,42 @@
+<%# locals: (section:, period: nil, mfr: nil, service_view: nil) -%>
+<% content_for :head, tag.meta(name: 'turbo-cache-control', content: 'no-cache') %>
+<% content_for :skip_link, link_to('Skip to reports', '#main-content', class: 'skip-link') %>
+
+<header class="mb-5">
+  <h1 class="text-3xl font-bold text-gray-900">Reports</h1>
+  <nav class="mt-3 flex flex-wrap gap-1 border-b border-gray-200" aria-label="Reports">
+    <% Admin::ReportsHelper::REPORT_SECTIONS.each do |key, label| %>
+      <%= link_to label, report_path(key, **(period ? { period: period.length } : {})),
+                  aria: { current: ('page' if section == key) },
+                  class: class_names('px-3 py-2 text-sm border-b-2', 'border-primary-600 text-primary-800 font-semibold' => section == key,
+                                                                     'border-transparent text-gray-700 hover:text-primary-800' => section != key) %>
+    <% end %>
+  </nav>
+  <div class="mt-5 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-900" id="report-title">
+        <%= mfr ? 'Managing for Results (MFR)' : Admin::ReportsHelper::REPORT_SECTIONS.fetch(section) %>
+      </h2>
+      <p class="mt-1 text-sm text-gray-600">
+        <% if mfr %>
+          <%= report_date_range(FiscalYear.start_date_for(mfr.year)..FiscalYear.end_date_for(mfr.year)) %>
+        <% else %>
+          <%= report_date_range(period.dates) %>
+        <% end %>
+      </p>
+    </div>
+    <%= form_with url: report_path(section), method: :get, class: 'flex flex-wrap items-center gap-2' do |form| %>
+      <% if mfr %>
+        <%= form.label :year, 'Fiscal year', class: 'form-label' %>
+        <%= form.select :year, options_for_select(mfr.years.map { |year| [FiscalYear.label_for_start_year(year), year] }, mfr.year),
+                        {}, class: 'form-input w-auto' %>
+      <% else %>
+        <%= form.hidden_field :view, value: service_view if service_view %>
+        <%= form.label :period, 'Period', class: 'form-label' %>
+        <%= form.select :period, options_for_select(Reports::Period::MONTHS.map { |months| ["Past #{months} months", months] }, period.length),
+                        {}, class: 'form-input w-auto' %>
+      <% end %>
+      <%= form.button 'Apply', name: nil, class: 'btn btn-outline', aria: { label: (mfr ? 'Apply fiscal year' : 'Apply report period') } %>
+    <% end %>
+  </div>
+</header>

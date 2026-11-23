@@ -2,86 +2,45 @@
 
 module Admin
   class ReportsController < Admin::BaseController
-    def index
-      @vouchers_enabled = FeatureFlag.enabled?(:vouchers_enabled)
-      @report = Reports::FiscalYearReport.new
+    SERVICE_VIEWS = %w[appointments timing devices].freeze
 
-      load_equipment_by_type_data
-      load_mfr_reports_data
+    before_action :no_store
+    before_action :set_period, except: :mfr
+
+    def index
+      @activity = Reports::ApplicationActivity.new(@period)
+      @report = Reports::FiscalYearReport.new
     end
 
-    def show; end
+    def evaluation_metrics
+      @service_view = SERVICE_VIEWS.find { |view| view == params[:view] } || SERVICE_VIEWS.first
+      @metrics = Reports::ServiceActivity.new(@period).public_send(@service_view)
+      @report = Reports::FiscalYearReport.new if @service_view == 'appointments'
+    end
 
-    def equipment_distribution; end
+    def equipment_distribution
+      @activity = Reports::EquipmentActivity.new(@period)
+      @vouchers_enabled = FeatureFlag.enabled?(:vouchers_enabled)
+      @report = Reports::FiscalYearReport.new
+      @equipment_by_type = Reports::EquipmentByTypeReport.new(
+        period: params[:equipment_period], include_voucher_counts: @vouchers_enabled
+      ).call.data
+    end
 
-    def evaluation_metrics; end
+    def vendor_performance
+      @activity = Reports::EquipmentActivity.new(@period)
+      @report = Reports::FiscalYearReport.new if FeatureFlag.enabled?(:vouchers_enabled)
+    end
 
-    def vendor_performance; end
+    def mfr
+      @mfr = Reports::MfrReport.new(params[:year])
+      @measures = @mfr.comparison_rows
+    end
 
     private
 
-    def load_equipment_by_type_data
-      result = Reports::EquipmentByTypeReport.new(
-        period: params[:equipment_period],
-        include_voucher_counts: @vouchers_enabled
-      ).call
-
-      payload = equipment_by_type_payload(result)
-
-      @equipment_period = payload[:selected_period]
-      @equipment_period_options = payload[:period_options]
-      @equipment_period_label = payload[:period_label]
-      @equipment_by_type_rows = payload[:rows]
-      @equipment_by_type_chart_data = payload[:chart_data]
-      @equipment_by_type_error = payload[:error_message]
-    end
-
-    def equipment_by_type_payload(result)
-      return result.data if result.is_a?(BaseService::Result) && result.success?
-
-      default_payload = empty_equipment_by_type_payload
-      return default_payload unless result.is_a?(BaseService::Result)
-
-      result_payload = result.data.presence || {}
-      default_payload.merge(result_payload).merge(
-        error_message: result_payload[:error_message].presence || Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
-      )
-    end
-
-    def empty_equipment_by_type_payload
-      {
-        selected_period: 'current_fy',
-        period_options: {},
-        period_label: '',
-        rows: [],
-        chart_data: { non_voucher: {}, voucher: {} },
-        error_message: Reports::EquipmentByTypeReport::UNAVAILABLE_MESSAGE
-      }
-    end
-
-    def load_mfr_reports_data
-      result = Applications::ReportingService.new.generate_mfr_reports_data(
-        include_voucher_metrics: @vouchers_enabled
-      )
-      unless result.is_a?(BaseService::Result) && result.success?
-        @mfr_most_recent = empty_mfr_fy_payload
-        @mfr_preceding = empty_mfr_fy_payload
-        @mfr_chart_data = { current: {}, previous: {} }
-        return
-      end
-
-      @mfr_most_recent = result.data[:most_recent_fy]
-      @mfr_preceding = result.data[:preceding_fy]
-      @mfr_chart_data = result.data[:mfr_chart_data]
-    end
-
-    def empty_mfr_fy_payload
-      {
-        fy_label: '',
-        fy_period_label: '',
-        summary: {},
-        chart_data: {}
-      }
+    def set_period
+      @period = Reports::Period.new(params[:period])
     end
   end
 end

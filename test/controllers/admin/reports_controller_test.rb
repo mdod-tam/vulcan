@@ -10,17 +10,52 @@ module Admin
       FeatureFlag.disable!(:vouchers_enabled)
     end
 
-    test 'index includes simplified fiscal year report copy' do
-      get admin_reports_path
-      assert_response :success
-      assert_match(/created.*fiscal year/i, response.body)
-      assert_match(/Official Managing for Results \(MFR\) data for each fiscal year\./, response.body)
-      assert_match(/not MFR/i, response.body)
-      assert_no_match(/Overview sections count/i, response.body)
-      assert_no_match(/Official MFR throughput/i, response.body)
+    test 'all report pages are available to administrators and send no-store' do
+      assert @admin.can_train?
+      assert @admin.can_evaluate?
+      report_paths.each do |path|
+        get path
+        assert_response :success
+        assert_includes response.headers['Cache-Control'], 'no-store'
+        assert_select 'meta[name="turbo-cache-control"][content="no-cache"]'
+        assert_select 'nav[aria-label="Reports"] a[aria-current="page"]', count: 1
+        assert_select 'a.skip-link[href="#main-content"]', text: 'Skip to reports'
+        assert_select '#main-content[tabindex="-1"]'
+      end
     end
 
-    test 'index includes text-only service status breakdowns' do
+    test 'unauthenticated visitors and non-admin staff cannot view any report' do
+      sign_out
+      report_paths.each do |path|
+        get path
+        assert_authentication_required
+      end
+
+      %i[trainer evaluator constituent vendor].each do |role|
+        staff_member = create(role)
+        create(:role_capability, user: staff_member, capability: 'can_evaluate') if role == :trainer
+        create(:role_capability, user: staff_member, capability: 'can_train') if role == :evaluator
+        sign_in_for_integration_test(staff_member, bypass_mfa_enrollment: true)
+        report_paths.each do |path|
+          get path
+          assert_redirected_to root_path
+          assert_no_match(/data-chart-config-value|Top staff contributions/, response.body)
+        end
+      end
+    end
+
+    test 'period is capped and falls back to twelve months' do
+      get admin_reports_path(period: '3')
+      assert_response :success
+      chart = css_select('#review-backlog').first.parent.at_css('[data-chart-config-value]')
+      assert_equal 3, JSON.parse(chart['data-chart-config-value']).dig('data', 'labels').size
+
+      get admin_reports_path(period: { invalid: '999' })
+      assert_response :success
+      assert_select '#period option[selected][value="12"]'
+    end
+
+    test 'evaluations and training includes the fiscal-year service status breakdowns' do
       travel_to Time.zone.local(2026, 5, 1, 12, 0, 0) do
         create(:training_session, status: :requested, created_at: Time.zone.local(2025, 8, 1, 12, 0, 0))
         create(:training_session, :completed, created_at: Time.zone.local(2024, 8, 1, 12, 0, 0))
@@ -32,23 +67,57 @@ module Admin
         evaluation_request = create_reviewed_application(user: create(:constituent))
         evaluation_request.update!(evaluation_requested_at: 1.hour.ago)
 
-        get admin_reports_path
+        get evaluation_metrics_admin_reports_path
         assert_response :success
 
-        assert_select '#service-status-breakdown-heading', text: 'Service Status Breakdown'
-        assert_select 'caption', text: 'Training Sessions by Status', visible: false
-        assert_select 'caption', text: 'Evaluation Sessions by Status', visible: false
-        assert_definition_value 'Training requests awaiting session', '1'
-        assert_definition_value 'Evaluation requests awaiting session', '1'
+        assert_select '#service-status-breakdown-heading', text: 'Sessions by status'
+        assert_select 'caption', text: 'Training sessions by status'
+        assert_select 'caption', text: 'Evaluation sessions by status'
+        assert_select 'p', text: /Waiting now — 1 training request,\s+1 evaluation request\./
 
-        training_table = css_select('caption').find { |caption| caption.text.strip == 'Training Sessions by Status' }.ancestors('table').first
-        evaluation_table = css_select('caption').find { |caption| caption.text.strip == 'Evaluation Sessions by Status' }.ancestors('table').first
+        training_table = css_select('caption').find { |caption| caption.text.strip == 'Training sessions by status' }.ancestors('table').first
+        evaluation_table = css_select('caption').find { |caption| caption.text.strip == 'Evaluation sessions by status' }.ancestors('table').first
 
         assert_status_row training_table, 'Requested', current_fy: 1, previous_fy: 0
         assert_status_row training_table, 'Completed', current_fy: 0, previous_fy: 1
         assert_status_row evaluation_table, 'Scheduled', current_fy: 1, previous_fy: 0
         assert_status_row evaluation_table, 'No show', current_fy: 0, previous_fy: 1
       end
+    end
+
+    test 'empty views use one message and preserve monthly zeroes' do
+      %w[appointments timing devices].each do |view|
+        get evaluation_metrics_admin_reports_path(view:)
+        assert_response :success
+        assert_select '#main-content p', text: 'No results for these dates.', count: 1
+        assert_select '#main-content p', text: 'No data for this period.', count: 0
+      end
+
+      get evaluation_metrics_admin_reports_path
+      assert_select '#evaluation-appointments-completed-by-month + details tbody td', text: '0', count: 12
+
+      create(:evaluation, :completed)
+      get evaluation_metrics_admin_reports_path
+      assert_select '#main-content p', text: 'No results for these dates.', count: 0
+      assert_select '#training-hours-by-month + p', text: 'No activity for these dates.'
+      assert_select '#training-hours-by-trainer + p', text: 'No data for this period.'
+    end
+
+    test 'vendor report mentions the order limit only when it leaves orders out' do
+      application = create(:application, :approved, fulfillment_type: :equipment)
+      product = create(:product)
+      10.times do
+        create(:equipment_item, application:, product:, purchase_order: create(:purchase_order, vendor_name: 'Harbor Supply'))
+      end
+
+      get vendor_performance_admin_reports_path
+      assert_select 'section[aria-labelledby="oldest-orders-heading"] p', text: 'All dates.'
+      assert_select 'section[aria-labelledby="oldest-orders-heading"] tbody tr', count: 10
+
+      create(:equipment_item, application:, product:, purchase_order: create(:purchase_order, vendor_name: 'Harbor Supply'))
+      get vendor_performance_admin_reports_path
+      assert_select 'section[aria-labelledby="oldest-orders-heading"] p', text: 'All dates. Showing the 10 oldest.'
+      assert_select 'section[aria-labelledby="oldest-orders-heading"] tbody tr', count: 10
     end
 
     test 'voucher statistics count vouchers by issued_at' do
@@ -61,36 +130,23 @@ module Admin
                created_at: Time.zone.local(2024, 8, 1, 12, 0, 0),
                issued_at: Time.zone.local(2025, 8, 1, 12, 0, 0))
 
-        get admin_reports_path
+        get equipment_distribution_admin_reports_path
         assert_response :success
-
-        current_card = css_select('#current-fy-vouchers-heading').first.ancestors('div').first
-        previous_card = css_select('#previous-fy-vouchers-heading').first.ancestors('div').first
-
-        assert_card_definition_value current_card, 'Vouchers Issued:', '1'
-        assert_card_definition_value previous_card, 'Vouchers Issued:', '0'
+        assert_select '#voucher-statistics-heading tbody tr', text: /Vouchers issued\s+1\s+0/
       end
     end
 
-    test 'index hides voucher-only report sections when vouchers are disabled' do
-      get admin_reports_path
-      assert_response :success
-
+    test 'voucher report sections follow the voucher flag' do
+      get equipment_distribution_admin_reports_path
       assert_select '#voucher-statistics-heading', count: 0
+      get vendor_performance_admin_reports_path
       assert_select '#vendor-activity-heading', count: 0
-      assert_no_match(/Voucher Statistics Comparison/, response.body)
-      assert_no_match(/Vouchers issued during FY/, response.body)
-    end
 
-    test 'index renders voucher report sections when vouchers are enabled' do
       FeatureFlag.enable!(:vouchers_enabled)
-
-      get admin_reports_path
-      assert_response :success
-
-      assert_select '#voucher-statistics-heading', text: 'Voucher Statistics'
-      assert_select '#vendor-activity-heading', text: 'Vendor Activity'
-      assert_match(/Vouchers issued during FY/, response.body)
+      get equipment_distribution_admin_reports_path
+      assert_select '#voucher-statistics-heading summary', text: 'Fiscal year voucher totals'
+      get vendor_performance_admin_reports_path
+      assert_select '#vendor-activity-heading summary', text: 'Voucher vendor activity'
     end
 
     test 'vendor activity counts vendors with recorded transactions' do
@@ -98,12 +154,10 @@ module Admin
       create(:voucher_transaction, vendor: create(:vendor, :approved))
       create(:voucher_transaction, vendor: create(:vendor, :approved), created_at: 2.months.ago)
 
-      get admin_reports_path
+      get vendor_performance_admin_reports_path
       assert_response :success
-
-      summary = css_select('#vendor-summary-heading').first.ancestors('div').first
-      assert_card_definition_value summary, 'Active Vendors (All Time):', '2'
-      assert_card_definition_value summary, 'Active Vendors (Last 30 Days):', '1'
+      assert_select '#vendor-activity-heading tr', text: /All time\s+2/
+      assert_select '#vendor-activity-heading tr', text: /Past month\s+1/
     end
 
     test 'referral sources for the current fiscal quarter cover the whole calendar quarter' do
@@ -120,7 +174,7 @@ module Admin
         get admin_reports_path
 
         assert_response :success
-        assert_select '#referral-quarter-heading', text: 'Q4 FY26'
+        assert_select 'th', text: 'Q4 FY26'
         assert_equal({ 'First day' => 1, 'Last day' => 1 }, assigns(:report).referral_quarter_data)
       end
     end
@@ -135,7 +189,7 @@ module Admin
         create_shipped_equipment_application(product: tablet, shipped_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
         create_shipped_equipment_application(product: phone, shipped_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
 
-        get admin_reports_path
+        get equipment_distribution_admin_reports_path
         assert_response :success
 
         assert_select '#equipment-period-heading', text: 'FY26'
@@ -154,13 +208,13 @@ module Admin
         create_shipped_equipment_application(product: tablet, shipped_at: Time.zone.local(2026, 5, 10, 12, 0, 0))
         create_shipped_equipment_application(product: phone, shipped_at: Time.zone.local(2025, 8, 10, 12, 0, 0))
 
-        get admin_reports_path(equipment_period: 'current_month')
+        get equipment_distribution_admin_reports_path(equipment_period: 'current_month')
         assert_response :success
         assert_select '#equipment-period-heading', text: 'June 2026'
         assert_equipment_row 'Tablet', non_voucher_count: 1
         assert_equipment_row 'Smartphone', non_voucher_count: 1
 
-        get admin_reports_path(equipment_period: 'current_quarter')
+        get equipment_distribution_admin_reports_path(equipment_period: 'current_quarter')
         assert_response :success
         assert_select '#equipment-period-heading', text: 'Q4 FY26'
         assert_equipment_row 'Tablet', non_voucher_count: 2
@@ -187,7 +241,7 @@ module Admin
           quantity: 3
         )
 
-        get admin_reports_path(equipment_period: 'current_month')
+        get equipment_distribution_admin_reports_path(equipment_period: 'current_month')
         assert_response :success
 
         assert_equipment_row 'Tablet', non_voucher_count: 0, voucher_count: 3
@@ -210,7 +264,7 @@ module Admin
         )
       )
 
-      get admin_reports_path
+      get equipment_distribution_admin_reports_path
       assert_response :success
 
       equipment_section = css_select('#equipment-by-type-heading').first.ancestors('section').first
@@ -218,84 +272,53 @@ module Admin
       assert_no_match(/No equipment recorded for this period/, equipment_section.text)
     end
 
-    test 'MFR section table cell values match chart JSON payload' do
+    test 'MFR hides vouchers when neither displayed fiscal year has any and allows fiscal year selection' do
       FeatureFlag.enable!(:vouchers_enabled)
 
-      travel_to Date.new(2026, 8, 1) do
-        admin = create(:admin)
-        fy_time = Date.new(2025, 8, 1)
-
-        app = create(:application, :completed, :draft, :with_income_proof, :with_residency_proof, created_at: fy_time)
-        app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
-        change = ApplicationStatusChange.lifecycle.find_by(application: app, to_status: 'approved')
-        change.update!(changed_at: fy_time + 1.day)
-
-        get admin_reports_path
+      travel_to Time.zone.local(2026, 8, 1, 12) do
+        get mfr_admin_reports_path(year: 2024)
         assert_response :success
+        assert_select '#year option[selected]', text: 'FY25'
+        assert_select '#report-title', text: 'Managing for Results (MFR)'
+        assert_select '#mfr-data tbody tr', count: 3
+        Reports::MfrReport::MEASURES.each_key { |measure| assert_select 'th', text: measure }
+        assert_no_match(/Vouchers issued|Applications moved to approved/, response.body)
 
-        result = Applications::ReportingService.new.generate_mfr_reports_data
-        assert result.success?
-
-        most_recent = result.data[:most_recent_fy]
-        chart = result.data[:mfr_chart_data][:current]
-
-        tables = css_select('#mfr-data-heading').first.ancestors('section').first.css('table')
-        first_card_table = tables.first
-
-        most_recent[:chart_data].each do |label, value|
-          row = first_card_table.css('tbody tr').find { |tr| tr.css('td').first.text.strip == label }
-          assert_not_nil row, "expected table row for #{label}"
-          assert_equal value, row.css('td').last.text.strip.to_i
-        end
-
-        chart.each do |label, expected|
-          assert_equal expected, most_recent[:chart_data][label]
-        end
-
-        mfr_section = css_select('#mfr-data-heading').first.ancestors('section').first
-        chart_element = mfr_section.at_css('[data-chart-title-value="MFR throughput comparison"]')
-        assert_not_nil chart_element
-        assert_equal most_recent[:fy_label], chart_element['data-chart-dataset-label-value']
-        assert_equal result.data[:preceding_fy][:fy_label],
-                     chart_element['data-chart-comparison-label-value']
-        parsed_chart = JSON.parse(chart_element['data-chart-data-value'])
-        assert_equal chart, parsed_chart
+        chart = css_select('#mat-results-by-fiscal-year').first.parent.at_css('[data-chart-config-value]')
+        assert_equal %w[FY25 FY24], JSON.parse(chart['data-chart-config-value']).dig('data', 'datasets').pluck('label')
       end
     end
 
-    test 'MFR section omits voucher rows and chart payload when vouchers are disabled' do
-      travel_to Date.new(2026, 8, 1) do
-        get admin_reports_path
+    test 'MFR shows historical vouchers by issue date in the table and chart when vouchers are disabled' do
+      travel_to Time.zone.local(2026, 8, 1, 12) do
+        create(:voucher, :expired, issued_at: Time.zone.local(2023, 6, 30, 23, 59))
+        create(:voucher, issued_at: Time.zone.local(2023, 7, 1))
+
+        get mfr_admin_reports_path(year: 2022)
         assert_response :success
-
-        assert_no_match(/Vouchers issued during FY/, response.body)
-
-        mfr_section = css_select('#mfr-data-heading').first.ancestors('section').first
-        chart_element = mfr_section.at_css('[data-chart-title-value="MFR throughput comparison"]')
-        parsed_chart = JSON.parse(chart_element['data-chart-data-value'])
-        assert_not parsed_chart.key?('Vouchers issued during FY')
+        assert_select '#year option[selected]', text: 'FY23'
+        assert_select '#mfr-data tbody tr', text: /Vouchers issued\s+1\s+0/
+        chart = css_select('#mat-results-by-fiscal-year').first.parent.at_css('[data-chart-config-value]')
+        data = JSON.parse(chart['data-chart-config-value']).fetch('data')
+        voucher_counts = data.fetch('datasets').map { |dataset| dataset.fetch('data').last }
+        assert_equal 'Vouchers issued', data.fetch('labels').last
+        assert_equal [1, 0], voucher_counts
       end
     end
 
     private
+
+    def report_paths
+      [admin_reports_path, evaluation_metrics_admin_reports_path, evaluation_metrics_admin_reports_path(view: 'timing'),
+       evaluation_metrics_admin_reports_path(view: 'devices'), equipment_distribution_admin_reports_path,
+       vendor_performance_admin_reports_path, mfr_admin_reports_path]
+    end
 
     def assert_status_row(table, label, current_fy:, previous_fy:)
       row = table.css('tbody tr').find { |tr| tr.css('th').first.text.strip == label }
       assert_not_nil row, "expected service status row for #{label}"
       assert_equal current_fy.to_s, row.css('td')[0].text.strip
       assert_equal previous_fy.to_s, row.css('td')[1].text.strip
-    end
-
-    def assert_definition_value(label, value)
-      term = css_select('dt').find { |dt| dt.text.strip == label }
-      assert_not_nil term, "expected definition term for #{label}"
-      assert_equal value, term.parent.css('dd').first.text.strip
-    end
-
-    def assert_card_definition_value(card, label, value)
-      term = card.css('dt').find { |dt| dt.text.strip == label }
-      assert_not_nil term, "expected definition term for #{label}"
-      assert_equal value, term.parent.css('dd').first.text.strip
     end
 
     def assert_equipment_row(device_type, non_voucher_count:, voucher_count: nil)

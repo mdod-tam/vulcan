@@ -1,0 +1,10 @@
+<%# locals: (metrics:) -%>
+<% if metrics.values.any?(&:present?) %>
+  <%= report_product_chart('Products recommended by evaluator', metrics.fetch(:recommended),
+                           category: 'Evaluator', unit: 'Recommendations', people_on_axis: true, data_label: 'recommended products') %>
+  <%= report_product_chart('Devices covered in training', metrics.fetch(:trained), category: 'Device', unit: 'Sessions', data_label: 'training by device') %>
+  <%= report_product_chart('Repeat training by device', metrics.fetch(:repeat_training),
+                           category: 'Device', unit: 'Sessions', note: 'Same person and device.') %>
+<% else %>
+  <%= report_no_results %>
+<% end %>

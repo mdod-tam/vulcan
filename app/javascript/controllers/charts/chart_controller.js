@@ -1,13 +1,16 @@
 import { Controller } from "@hotwired/stimulus"
 import {
-  Chart, BarController, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend
+  Chart, BarController, BarElement, LineController, LineElement, PointElement, ScatterController,
+  CategoryScale, LinearScale, Title, Tooltip, Legend
 } from "chart.js"
 
-Chart.register(BarController, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend)
+Chart.register(BarController, BarElement, LineController, LineElement, PointElement, ScatterController,
+  CategoryScale, LinearScale, Title, Tooltip, Legend)
 
 export default class extends Controller {
   static targets = ["canvas"]
   static values = {
+    config: Object,
     data: Object,
     comparisonData: Object,
     datasetLabel: { type: String, default: "Current Fiscal Year" },
@@ -20,6 +23,16 @@ export default class extends Controller {
   }
 
   connect() {
+    const config = this.hasConfigValue ? this.configValue : this.barConfig()
+    this.chart = new Chart(this.canvasTarget, config)
+  }
+
+  disconnect() {
+    this.chart?.destroy()
+    this.chart = null
+  }
+
+  barConfig() {
     const labels = Object.keys(this.dataValue)
     const datasets = [{
       label: this.datasetLabelValue,
@@ -61,11 +74,6 @@ export default class extends Controller {
         }
       }
     }
-    this.chart = new Chart(this.canvasTarget, { type: "bar", data: { labels, datasets }, options })
-  }
-
-  disconnect() {
-    this.chart?.destroy()
-    this.chart = null
+    return { type: "bar", data: { labels, datasets }, options }
   }
 }

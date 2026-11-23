@@ -73,6 +73,15 @@ test('compact charts omit legend and title', async () => {
   expect(config.options.plugins.title.display).toBe(false)
 })
 
+test('uses server-provided native chart options without adding resize or event hooks', async () => {
+  const native = { type: 'scatter', data: { datasets: [{ label: 'Vendor', data: [{ x: 2, y: 7 }] }] },
+    options: { responsive: true, maintainAspectRatio: false } }
+  const config = await mount(`data-chart-config-value='${JSON.stringify(native)}'`)
+
+  expect(config).toEqual(native)
+  expect(Chart).toHaveBeenCalledTimes(1)
+})
+
 test('empty and hidden charts construct eagerly', async () => {
   const config = await mount('style="display:none"')
   expect(config.data.datasets).toHaveLength(1)

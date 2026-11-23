@@ -1,0 +1,9 @@
+<%# locals: (values:) -%>
+<dl class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+  <% values.each do |label, value| %>
+    <div class="card flex min-w-0 flex-col p-4">
+      <dt class="text-sm text-gray-700"><%= label %></dt>
+      <dd class="-order-1 text-2xl font-semibold tabular-nums text-gray-900"><%= report_number(value) %></dd>
+    </div>
+  <% end %>
+</dl>

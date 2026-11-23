@@ -29,21 +29,26 @@ module Admin
       assert_current_path admin_dashboard_path
     end
 
-    test 'application and equipment filters submit through Stimulus under the default policy' do
-      visit admin_applications_path
+    test 'application and equipment filters work under the default policy' do
+      visit admin_applications_path(view: 'all')
       select 'Draft', from: 'Status:'
       assert_current_path(/status=draft/)
-      select 'Current FY', from: 'Date Range:'
+      select 'Current FY', from: 'Created during:'
       assert_current_path(/date_range=current_fy/)
       check 'Show only dependent applications'
       assert_current_path(/for_minors=true/)
       assert_no_parent_violations
       take_screenshot('default-csp-application-filters', full: true, html: true)
 
-      visit admin_reports_path
-      select find('#equipment_period option[value="current_month"]').text, from: 'Period:'
+      create(:equipment_item, shipped_at: Date.current, tracking_number: 'REPORT-CSP')
+      visit equipment_distribution_admin_reports_path
+      within('section[aria-labelledby="equipment-by-type-heading"]') do
+        select find('#equipment_period option[value="current_month"]').text, from: 'Equipment period'
+        click_button 'Apply'
+      end
       assert_current_path(/equipment_period=current_month/)
       assert_selector '#equipment-period-heading', text: Time.current.strftime('%B %Y')
+      assert_selector 'section[aria-labelledby="equipment-by-type-heading"] canvas[width][height]'
       assert_no_parent_violations
       take_screenshot('default-csp-equipment-period', full: true, html: true)
     end

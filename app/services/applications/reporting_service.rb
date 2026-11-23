@@ -67,34 +67,6 @@ module Applications
       failure("Error generating index chart data: #{e.message}", {})
     end
 
-    # MFR counts lifecycle transitions during completed fiscal years, not current status.
-    def generate_mfr_reports_data(include_voucher_metrics: true)
-      current_start_year = current_fiscal_year
-      most_recent_start_year = current_start_year - 1
-      preceding_start_year = current_start_year - 2
-
-      most_recent = build_mfr_fy_payload(
-        most_recent_start_year,
-        include_voucher_metrics: include_voucher_metrics
-      )
-      preceding = build_mfr_fy_payload(
-        preceding_start_year,
-        include_voucher_metrics: include_voucher_metrics
-      )
-
-      success(nil, {
-                most_recent_fy: most_recent,
-                preceding_fy: preceding,
-                mfr_chart_data: {
-                  current: most_recent[:chart_data],
-                  previous: preceding[:chart_data]
-                }
-              })
-    rescue StandardError => e
-      Rails.logger.error "Error generating MFR reports data: #{e.class.name}"
-      failure("Error generating MFR reports data: #{e.message}", {})
-    end
-
     private
 
     def snapshot_status_counts(cohort_range)

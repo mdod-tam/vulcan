@@ -3,54 +3,35 @@
 require 'application_system_test_case'
 
 class ChartLifecycleTest < ApplicationSystemTestCase
-  test 'all report charts and the lazy applications chart survive resizing and Turbo navigation' do
-    FeatureFlag.enable!(:vouchers_enabled)
-    product = create(:product, device_types: ['Tablet'])
-    application = create(:application, skip_proofs: true, status: :in_progress, fulfillment_type: :equipment)
-    create(:equipment_item, application: application, product: product, purchase_order: create(:purchase_order, sent_at: Date.current))
+  test 'report charts and the lazy applications chart survive resizing and Turbo navigation' do
+    order = create(:purchase_order, sent_at: 5.days.ago.to_date, vendor_name: 'Harbor Supply')
+    create(:equipment_item, purchase_order: order, shipped_at: 2.days.ago.to_date, tracking_number: 'REPORT-SHIPMENT')
+    create(:equipment_item, purchase_order: order)
     system_test_sign_in(create(:admin), bypass_mfa_enrollment: true)
-    visit admin_reports_path
-    assert_selector 'canvas', count: 15
-    assert_charts_sized(15)
-    capture('reports-vouchers-on-wide')
-    %w[Current Previous].product(%w[Applications Vouchers Services]).each do |period, subject|
-      assert_selector "[data-chart-title-value='#{period} FY #{subject}'] canvas"
-    end
-    assert_selector 'dt', text: 'Applications Created:', count: 2
-    assert_selector 'dt', text: 'Vouchers Issued:', count: 2
-    assert_selector '[data-chart-index-axis-value="y"] canvas'
+
+    visit vendor_performance_admin_reports_path
+    assert_charts_sized(2)
+    capture('reports-vendors-wide')
     page.current_window.resize_to(390, 844)
-    assert_charts_sized(15)
-    capture('reports-vouchers-on-narrow')
+    assert_charts_sized(2)
+    capture('reports-vendors-narrow')
     page.current_window.resize_to(1200, 800)
     page.driver.browser.page.command('Emulation.setDeviceMetricsOverride', width: 1198, height: 800, deviceScaleFactor: 2, mobile: false)
-    assert_charts_sized(15, dpr: 2)
+    assert_charts_sized(2, dpr: 2)
     page.driver.browser.page.command('Emulation.clearDeviceMetricsOverride')
     page.current_window.resize_to(1200, 800)
-    assert_charts_sized(15, dpr: 1)
+    assert_charts_sized(2, dpr: 1)
     capture('reports-after-dpr-change')
 
-    initial_controller_count = page.evaluate_script('Stimulus.controllers.length')
-    5.times do
-      turbo_visit(admin_applications_path)
-      assert_selector 'h1', text: 'Applications'
-      page.execute_script('document.getElementById("charts_section").scrollIntoView()')
-      assert_selector '#charts_section canvas'
+    3.times do
       turbo_visit(admin_reports_path)
-      assert_selector 'canvas', count: 15
-      assert_charts_sized(15)
-      assert_equal initial_controller_count, page.evaluate_script('Stimulus.controllers.length')
+      assert_selector '#review-backlog'
+      assert_charts_sized(page.all('canvas').size)
+      turbo_visit(vendor_performance_admin_reports_path)
+      assert_charts_sized(2)
     end
 
-    FeatureFlag.disable!(:vouchers_enabled)
-    visit admin_reports_path
-    assert_no_selector '#voucher-statistics-heading'
-    assert_no_selector '#vendor-activity-heading'
-    assert_selector 'canvas', count: 10
-    assert_charts_sized(10)
-    capture('reports-vouchers-off-wide')
-
-    visit admin_applications_path
+    turbo_visit(admin_applications_path)
     page.execute_script('document.getElementById("charts_section").scrollIntoView()')
     assert_selector '#charts_section canvas'
     assert_charts_sized(1)
@@ -132,7 +113,7 @@ class ChartLifecycleTest < ApplicationSystemTestCase
           cssWidth: canvas.getBoundingClientRect().width, cssHeight: canvas.getBoundingClientRect().height,
           parentWidth: parent.clientWidth, backingWidth: canvas.width, backingHeight: canvas.height,
           dpr: chart.currentDevicePixelRatio, instances: Object.keys(chart.constructor.instances).length,
-          description: !!document.getElementById(canvas.getAttribute('aria-describedby')) };
+          accessibility: canvas.getAttribute('aria-hidden') === 'true' || !!document.getElementById(canvas.getAttribute('aria-describedby')) };
       })
     JS
   end
@@ -146,7 +127,7 @@ class ChartLifecycleTest < ApplicationSystemTestCase
           (c['width'] - c['parentWidth']).abs <= 1 &&
           (c['backingWidth'] - (c['cssWidth'] * c['dpr'])).abs <= 2 &&
           (c['backingHeight'] - (c['cssHeight'] * c['dpr'])).abs <= 2 &&
-          c['instances'] == count && c['description'] && (!dpr || c['dpr'] == dpr)
+          c['instances'] == count && c['accessibility'] && (!dpr || c['dpr'] == dpr)
         end
 
         sleep 0.05

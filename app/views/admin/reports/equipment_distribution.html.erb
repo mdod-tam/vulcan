@@ -1,2 +1,44 @@
-<h1>Admin::Reports#equipment_distribution</h1>
-<p>Find me in app/views/admin/reports/equipment_distribution.html.erb</p>
+<div id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-4 py-8">
+  <%= render 'report_header', section: :equipment_distribution, period: @period %>
+  <div class="space-y-4">
+    <section aria-labelledby="equipment-open-heading">
+      <h3 id="equipment-open-heading" class="text-lg font-semibold">Open now</h3>
+      <p class="mb-2 text-sm text-gray-600">All dates.</p>
+      <% work = @activity.open_work # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <% report_equipment_stages.each do |stage, (label, path)| %>
+          <div class="card flex min-w-0 flex-col p-4">
+            <dt class="text-sm"><%= link_to label, path, class: 'text-primary-700 underline' %></dt>
+            <dd class="-order-1 text-2xl font-semibold tabular-nums text-gray-900"><%= report_number(work.fetch(stage).count) %></dd>
+            <% if work.fetch(stage).oldest_days %>
+              <dd class="mt-2 text-sm text-gray-600">Longest known wait: <%= report_days(work.fetch(stage).oldest_days) %></dd>
+            <% elsif work.fetch(stage).count.positive? %>
+              <dd class="mt-2 text-sm text-gray-600">Wait dates unavailable</dd>
+            <% end %>
+          </div>
+        <% end %>
+      </dl>
+    </section>
+    <section aria-labelledby="equipment-shipments-heading">
+      <h3 id="equipment-shipments-heading" class="mb-2 text-lg font-semibold">Shipments in this period</h3>
+      <% shipped = @activity.shipment_counts # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <%= render 'totals', values: { 'Units with shipment recorded' => shipped.sum, 'Average days for vendors to ship' => report_days(@activity.average_ship_time) } %>
+    </section>
+    <% has_shipments = shipped.any?(&:positive?) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+    <%= report_no_results unless has_shipments %>
+    <div class="grid gap-4 lg:grid-cols-2">
+      <%= report_chart('Units with shipment recorded by month', report_months(@period), { 'Units' => shipped },
+                       category: 'Month', unit: 'Units', data_label: 'units shipped by month', show_empty: has_shipments) %>
+      <%= report_chart('Vendor shipping time by month', report_months(@period), { 'Average' => @activity.ship_times },
+                       category: 'Month', unit: 'Days', type: 'line', show_zero: true, table_unit: 'days',
+                       note: 'From order sent to shipment.', show_empty: has_shipments) %>
+    </div>
+    <%= render 'equipment_by_type_section', vouchers_enabled: @vouchers_enabled, report_period: @period.length,
+                                            period: @equipment_by_type.fetch(:selected_period), period_options: @equipment_by_type.fetch(:period_options),
+                                            period_label: @equipment_by_type.fetch(:period_label), rows: @equipment_by_type.fetch(:rows),
+                                            chart_data: @equipment_by_type.fetch(:chart_data), error_message: @equipment_by_type[:error_message] %>
+    <% if @vouchers_enabled %>
+      <%= render 'voucher_totals', report: @report %>
+    <% end %>
+  </div>
+</div>

@@ -1,2 +1,20 @@
-<h1>Admin::Reports#evaluation_metrics</h1>
-<p>Find me in app/views/admin/reports/evaluation_metrics.html.erb</p>
+<div id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-4 py-8">
+  <%= render 'report_header', section: :evaluation_metrics, period: @period, service_view: @service_view %>
+  <nav class="mb-4 flex flex-wrap gap-2" aria-label="Evaluation and training reports">
+    <% Admin::ReportsHelper::SERVICE_VIEWS.each do |key, label| %>
+      <%= link_to label, evaluation_metrics_admin_reports_path(view: key, period: @period.length),
+                  aria: { current: ('page' if @service_view == key) },
+                  class: class_names('btn', 'btn-primary' => @service_view == key, 'btn-outline' => @service_view != key) %>
+    <% end %>
+  </nav>
+  <div class="space-y-4">
+    <% case @service_view %>
+    <% when 'appointments' %>
+      <%= render 'appointments', period: @period, metrics: @metrics, report: @report %>
+    <% when 'timing' %>
+      <%= render 'service_timing', period: @period, metrics: @metrics %>
+    <% when 'devices' %>
+      <%= render 'service_devices', metrics: @metrics %>
+    <% end %>
+  </div>
+</div>

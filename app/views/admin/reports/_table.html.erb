@@ -1,0 +1,24 @@
+<%# locals: (caption:, headers:, rows:) -%>
+<% wide = headers.size > 3 # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<%= tag.div class: 'min-w-0 overflow-x-auto', tabindex: (0 if wide), role: ('group' if wide), aria: { label: (caption if wide) } do %>
+  <table class="<%= class_names('w-full divide-y divide-gray-200 text-sm [overflow-wrap:anywhere]', 'min-w-[36rem]' => wide) %>">
+    <caption class="sr-only"><%= caption %></caption>
+    <thead>
+      <tr class="text-gray-700">
+        <% headers.each_with_index do |label, index| %>
+          <th scope="col" class="px-2 py-2 <%= index.zero? ? 'text-left' : 'text-right' %>"><%= label %></th>
+        <% end %>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      <% rows.each do |label, *values| %>
+        <tr>
+          <th scope="row" class="px-2 py-2 text-left font-medium text-gray-900"><%= label %></th>
+          <% values.each do |value| %>
+            <td class="px-2 py-2 text-right tabular-nums text-gray-900"><%= report_number(value) %></td>
+          <% end %>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

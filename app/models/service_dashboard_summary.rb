@@ -26,6 +26,11 @@ class ServiceDashboardSummary
     }
   end
 
+  def average_scheduling_days(range)
+    seconds = scheduling_statistics(range).last
+    (seconds.to_f / 1.day).round(1) if seconds
+  end
+
   private
 
   def table
@@ -77,13 +82,15 @@ class ServiceDashboardSummary
                 sample_count:, unknown_dates: count - dated.count)
   end
 
-  def scheduling_statistics
+  def scheduling_statistics(range = nil)
     events = Event.arel_table
     scheduled = scheduling_events.where(events[:created_at].gteq(assignment_date)).select(events[:created_at].minimum).arel
     rows = @records.select(assignment_date.as('assigned_at'), scheduled.as('scheduled_at'))
     dates = Arel::Table.new(:recorded_service_waits)
-    @records.klass.unscoped.from(rows, :recorded_service_waits).where(dates[:assigned_at].not_eq(nil).and(dates[:scheduled_at].not_eq(nil)))
-            .pick(Arel.sql('COUNT(*)'), Arel.sql('AVG(EXTRACT(EPOCH FROM (scheduled_at - assigned_at)))'))
+    measurements = @records.klass.unscoped.from(rows, :recorded_service_waits)
+                           .where(dates[:assigned_at].not_eq(nil).and(dates[:scheduled_at].not_eq(nil)))
+    measurements = measurements.where(dates[:scheduled_at].between(range)) if range
+    measurements.pick(Arel.sql('COUNT(*)'), Arel.sql('AVG(EXTRACT(EPOCH FROM (scheduled_at - assigned_at)))'))
   end
 
   def completion_statistics

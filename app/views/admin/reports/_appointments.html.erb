@@ -1,0 +1,38 @@
+<%# locals: (period:, metrics:, report:) -%>
+<% visits = metrics.fetch(:visits_by_staff) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% hours = metrics.fetch(:hours_by_staff) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% has_results = visits.any? || hours.any? # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<%= report_no_results unless has_results %>
+<div class="grid gap-4 lg:grid-cols-2">
+  <%= report_chart('Evaluation appointments completed by month', report_months(period), { 'Appointments' => metrics.fetch(:visits_by_month) },
+                   category: 'Month', unit: 'Appointments', data_label: 'evaluation visits by month', show_empty: has_results) %>
+  <%= report_chart('Evaluation appointments completed by evaluator', visits.keys, { 'Appointments' => visits.values },
+                   category: 'Evaluator', unit: 'Appointments', horizontal: true, data_label: 'visits by evaluator', show_empty: has_results) %>
+  <%= report_chart('Training hours by month', report_months(period), { 'Hours' => metrics.fetch(:hours_by_month) },
+                   category: 'Month', unit: 'Hours', show_empty: has_results) %>
+  <%= report_chart('Training hours by trainer', hours.keys, { 'Hours' => hours.values },
+                   category: 'Trainer', unit: 'Hours', horizontal: true, show_empty: has_results) %>
+</div>
+
+<details class="card px-4 py-2">
+  <summary class="w-fit cursor-pointer py-2 font-semibold text-primary-800">Fiscal year service totals</summary>
+  <% years = ["#{report.current_fy_label} to date", report.previous_fy_label] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+  <%= render 'table', caption: 'Sessions by fiscal year', headers: ['Measure', *years],
+                      rows: [['Evaluation sessions', report.current_fy_evaluations, report.previous_fy_evaluations],
+                             ['Training sessions', report.current_fy_trainings, report.previous_fy_trainings]] %>
+  <h3 id="service-status-breakdown-heading" class="mt-4 font-semibold">Sessions by status</h3>
+  <p class="mt-2 text-sm text-gray-700">
+    Waiting now — <%= pluralize(report.training_requests_count, 'training request') %>,
+    <%= pluralize(report.evaluation_requests_count, 'evaluation request') %>.
+  </p>
+  <%= render 'table', caption: 'Training sessions by status', headers: ['Training status', *years],
+                      rows: TrainingSession.statuses.keys.map { |status|
+                        [status.humanize, report.current_fy_training_status_counts.fetch(status, 0),
+                         report.previous_fy_training_status_counts.fetch(status, 0)]
+                      } %>
+  <%= render 'table', caption: 'Evaluation sessions by status', headers: ['Evaluation status', *years],
+                      rows: Evaluation.statuses.keys.map { |status|
+                        [status.humanize, report.current_fy_evaluation_status_counts.fetch(status, 0),
+                         report.previous_fy_evaluation_status_counts.fetch(status, 0)]
+                      } %>
+</details>
