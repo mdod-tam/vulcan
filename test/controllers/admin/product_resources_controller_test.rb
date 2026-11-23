@@ -13,7 +13,7 @@ module Admin
     test 'admin manages resources on archived products and the product shows public authoring guidance' do
       get new_admin_product_product_resource_path(@product)
       assert_response :success
-      assert_includes response.body, 'Do not include personal or session information'
+      assert_select 'p', text: 'Saving publishes this resource. Leave out personal or session information.'
       assert_select 'input[type=file][accept=".pdf,application/pdf"]'
       assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
       assert_select '#product_resource_document' do |inputs|

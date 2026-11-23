@@ -18,7 +18,7 @@ module Evaluators
       within '#schedule-evaluation-form' do
         fill_in 'Evaluation Date/Time', with: past_time
         fill_in 'Location', with: ''
-        fill_in 'Working Notes', with: 'Call the contact person before arrival'
+        fill_in 'Private working notes', with: 'Call the contact person before arrival'
         click_button 'Schedule Evaluation'
       end
 
@@ -27,7 +27,7 @@ module Evaluators
       within '#schedule-evaluation-form' do
         assert_field 'Evaluation Date/Time', with: past_time
         assert_field 'Location', with: ''
-        assert_field 'Working Notes', with: 'Call the contact person before arrival'
+        assert_field 'Private working notes', with: 'Call the contact person before arrival'
       end
       take_screenshot('evaluator-schedule-restored', html: true, full: true)
 
@@ -35,7 +35,7 @@ module Evaluators
       within '#schedule-evaluation-form' do
         fill_in 'Evaluation Date/Time', with: future_time
         fill_in 'Location', with: 'Library'
-        fill_in 'Working Notes', with: 'Confirmed directly with the contact person'
+        fill_in 'Private working notes', with: 'Confirmed directly with the contact person'
         click_button 'Schedule Evaluation'
       end
 

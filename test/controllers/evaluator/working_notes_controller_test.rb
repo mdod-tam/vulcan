@@ -28,13 +28,13 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     assert_select '#working-notes-form textarea', text: @evaluation.working_notes
   end
 
-  test 'internal note fields use Working Notes labels and bold linked privacy hints' do
+  test 'internal note fields use private working notes labels and bold linked privacy hints' do
     get evaluators_evaluation_path(@evaluation)
 
-    assert_select '#working-notes-heading', text: 'Working Notes'
-    assert_select '#working-notes-form label', text: 'Working Notes'
-    assert_select '#schedule-evaluation-form label[for="schedule_evaluation_notes"]', text: 'Working Notes'
-    assert_select 'dt', text: 'Working Notes'
+    assert_select '#working-notes-heading', text: 'Private working notes'
+    assert_select '#working-notes-form label', text: 'Private working notes'
+    assert_select '#schedule-evaluation-form label[for="schedule_evaluation_notes"]', text: 'Private working notes'
+    assert_select 'dt', text: 'Private working notes'
     %w[working-notes-help schedule-notes-help cancel-notes-help].each do |id|
       assert_select "##{id} strong", text: 'Internal notes only.'
       assert_select "textarea[aria-describedby~='#{id}']"

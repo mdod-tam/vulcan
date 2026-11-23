@@ -37,12 +37,13 @@ module ConstituentPortal
       visit constituent_portal_application_new_proof_path(application, proof_type: :income)
 
       assert_selector 'h1', text: 'Subir nuevo comprobante de ingresos'
-      assert_text 'Su comprobante de ingresos debe mostrar claramente su nombre'
+      assert_selector '#income-hint', text: /Suba un documento que muestre el nombre de la persona solicitante/
+      assert_selector '#income_proof[aria-describedby~="income-hint"][aria-describedby~="file-description"]'
       assert_button 'Enviar documento'
-      find('summary', text: '¿Necesita ayuda para subir su documento?').click
-      assert_text 'Seleccione el documento en su dispositivo.'
-      assert_text 'Muestre toda la información requerida'
+      find('summary', text: 'Ayuda para subir un documento').click
+      assert_text 'Compruebe que el archivo se abra y que se pueda leer toda la información requerida.'
       assert_link ProgramContact.support_email
+      assert_link ProgramContact.support_phone
       assert_no_selector '.translation_missing'
       take_screenshot('proof-upload-help-mobile-es', full: true, html: true)
     end

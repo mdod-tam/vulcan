@@ -252,12 +252,14 @@ module Admin
                     'an existing dependent must not offer an editable date of birth'
 
       # The banner must distinguish a wrong selection from incorrect on-file identity.
-      assert_select 'body', text: /Existing dependent selected/i
-      assert_select 'body', text: /come from the dependent's existing record/i
-      assert_select 'body', text: /will not change them/i
-      assert_select 'body', text: /contact the MAT support team/i
-      assert_select 'body', text: /Do not create a new dependent/i
-      assert_select "button[data-action='applicant-type#changeDependent']", text: /Change Dependent/i
+      assert_select '#existing-dependent-summary' do
+        assert_select '[role=status]', text: /Existing dependent selected: #{Regexp.escape(dependent.full_name)}/
+        assert_select 'p', text: 'This form uses the name and date of birth on file.'
+        assert_select 'p', text: /If you picked the wrong person, select Change Dependent\./
+        assert_select 'p', text: /correct the existing record in Edit User before submitting\./
+        assert_select 'a[href=?][data-turbo-frame="_top"]', edit_admin_user_path(dependent), text: 'Edit User'
+        assert_select "button[data-action='applicant-type#changeDependent']", text: 'Change Dependent'
+      end
     end
 
     # An unconfirmed commit routes to the list because the application page could return not found.

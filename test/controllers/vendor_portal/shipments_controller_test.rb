@@ -29,7 +29,8 @@ module VendorPortal
     test 'recording a package on a pickup purchase says it is now shipping' do
       VoucherTransactions::FulfillmentService.new(transaction: @purchase, actor: @vendor).change_mode!(mode: :local_pickup, expected_version: 0)
       get vendor_portal_transaction_url(@purchase)
-      assert_select 'p', text: /set to local pickup. Saving a tracking number changes it to shipping/
+      assert_select 'section[aria-labelledby=packages-heading] p',
+                    text: 'Saving a tracking number changes this order from pickup to shipping.'
 
       post vendor_portal_transaction_shipments_url(@purchase), params: { fulfillment_version: 1, shipment: { tracking_number: 'AAA111' } }
 
