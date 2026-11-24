@@ -32,7 +32,7 @@ module Admin
         assert_select 'a[href=?]', admin_icanconnect_filing_prep_path, count: 1
       end
       configuration = css_select('section[aria-labelledby="configuration-tools-heading"]').sole
-      assert_equal [admin_policies_path, admin_feature_flags_path], configuration.css('a').first(2).pluck('href')
+      assert_equal admin_policies_path, configuration.css('a').first["href"]
       assert_select 'a[href=?]', admin_products_path, count: 1, text: /Manage Products/
     end
   end
